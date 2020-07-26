@@ -2060,7 +2060,7 @@ static int handle_message_reception(NBN_Message *message, NBN_Connection *connec
 
     if (channel->handle_message_reception(channel, message))
     {
-        log_trace("Received message %d : added to recv queue", message->header.id);
+        log_trace("Received message %d on channel %d : added to recv queue", message->header.id, channel->id);
 
         NBN_List_PushBack(connection->recv_queue, message);
 
