@@ -2352,7 +2352,7 @@ static NBN_OutgoingMessagePolicy get_reliable_ordered_outgoing_message_policy(NB
 
     if (!message->sent)
     {
-        int max_message_id = (reliable_ordered_channel->oldest_unacked_message_id + NBN_CHANNEL_BUFFER_SIZE) % 0xFFFF;
+        int max_message_id = (reliable_ordered_channel->oldest_unacked_message_id + (NBN_CHANNEL_BUFFER_SIZE - 1)) % 0xFFFF;
 
         if (SEQUENCE_NUMBER_GTE(channel->next_message_id, max_message_id))
             return NBN_SKIP_MESSAGE;
