@@ -160,5 +160,6 @@ void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *conn, NBN_Message *msg)
 {
     SoakMessage *soak_message = (SoakMessage *)msg->data;
 
-    log_debug("Soak message added to recv queue (conn id: %d, msg id: %d)", conn->id, soak_message->id);
+    log_debug("Soak message added to recv queue (conn id: %d, msg id: %d, soak msg id: %d)",
+        conn->id, msg->header.id, soak_message->id);
 }
