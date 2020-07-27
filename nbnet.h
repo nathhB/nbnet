@@ -401,6 +401,7 @@ typedef struct
     NBN_Channel base;
     uint16_t last_received_message_id;
     uint16_t oldest_unacked_message_id;
+    uint16_t most_recent_message_id;
     uint32_t recv_message_buffer[NBN_CHANNEL_BUFFER_SIZE];
     bool ack_buffer[NBN_CHANNEL_BUFFER_SIZE];
 } NBN_ReliableOrderedChannel;
@@ -1673,7 +1674,7 @@ static int handle_message_reception(NBN_Message *, NBN_Connection *);
 static int process_outgoing_message(NBN_Message *, NBN_Channel *, NBN_Packet *, NBN_Connection *, bool *);
 static void remove_message_from_send_queue(NBN_Connection *, NBN_Message *);
 static NBN_PacketEntry *insert_send_packet_entry(NBN_Connection *, uint16_t);
-static void insert_recved_packet_entry(NBN_Connection *, uint16_t);
+static bool insert_recved_packet_entry(NBN_Connection *, uint16_t);
 static NBN_PacketEntry *find_send_packet_entry(NBN_Connection *, uint16_t);
 static bool is_packet_received(NBN_Connection *, uint16_t);
 static NBN_Channel *get_message_channel(NBN_Connection *, NBN_Message *);
@@ -1746,7 +1747,10 @@ void NBN_Connection_Destroy(NBN_Connection *connection)
 int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet *packet)
 {
     decode_incoming_packet_header(connection, packet);
-    insert_recved_packet_entry(connection, packet->header.seq_number);
+
+    /* Ignore duplicated packets */
+    if (!insert_recved_packet_entry(connection, packet->header.seq_number))
+        return 0;
 
     if (SEQUENCE_NUMBER_GT(packet->header.seq_number, connection->last_received_packet_seq_number))
         connection->last_received_packet_seq_number = packet->header.seq_number;
@@ -2135,8 +2139,14 @@ static NBN_PacketEntry *insert_send_packet_entry(NBN_Connection *connection, uin
     return &connection->packet_send_buffer[index];
 }
 
-static void insert_recved_packet_entry(NBN_Connection *connection, uint16_t seq_number)
+static bool insert_recved_packet_entry(NBN_Connection *connection, uint16_t seq_number)
 {
+    uint16_t index = seq_number % NBN_MAX_PACKET_ENTRIES;
+
+    if (connection->packet_recv_seq_buffer[index] != 0xFFFFFFFF &&
+        connection->packet_recv_seq_buffer[index] == seq_number)
+      return false;
+
     /*
         Clear entries between the previous highest sequence numbers and new highest one
         to avoid entries staying inside the sequence buffer from before the sequence wrap around
@@ -2148,13 +2158,9 @@ static void insert_recved_packet_entry(NBN_Connection *connection, uint16_t seq_
             connection->packet_recv_seq_buffer[seq % NBN_MAX_PACKET_ENTRIES] = 0xFFFFFFFF;
     }
 
-    uint16_t index = seq_number % NBN_MAX_PACKET_ENTRIES;
-
-    /*if (connection->packet_recv_seq_buffer[index] != 0xFFFFFFFF)
-        return false;
-    */
-
     connection->packet_recv_seq_buffer[index] = seq_number;
+
+    return true;
 }
 
 static NBN_PacketEntry *find_send_packet_entry(NBN_Connection *connection, uint16_t seq_number)
@@ -2333,6 +2339,7 @@ NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(void)
 
     channel->last_received_message_id = 0;
     channel->oldest_unacked_message_id = 0;
+    channel->most_recent_message_id = 0;
 
     for (int i = 0; i < NBN_CHANNEL_BUFFER_SIZE; i++)
     {
@@ -2367,6 +2374,19 @@ static NBN_OutgoingMessagePolicy get_reliable_ordered_outgoing_message_policy(NB
 static bool handle_reliable_ordered_message_reception(NBN_Channel *channel, NBN_Message *message)
 {
     NBN_ReliableOrderedChannel *reliable_ordered_channel = (NBN_ReliableOrderedChannel *)channel;
+
+    if (message->header.id > reliable_ordered_channel->most_recent_message_id)
+    {
+        assert(message->header.id - reliable_ordered_channel->most_recent_message_id < NBN_CHANNEL_BUFFER_SIZE);
+
+        reliable_ordered_channel->most_recent_message_id = message->header.id;
+    }
+    else
+    {
+        if (reliable_ordered_channel->most_recent_message_id - message->header.id >= NBN_CHANNEL_BUFFER_SIZE)
+            return false;
+    }
+
     uint16_t index = message->header.id % NBN_CHANNEL_BUFFER_SIZE;
 
     if (reliable_ordered_channel->recv_message_buffer[index] != message->header.id)
@@ -2381,7 +2401,7 @@ static bool handle_reliable_ordered_message_reception(NBN_Channel *channel, NBN_
 
 static bool process_received_reliable_ordered_message(NBN_Channel *channel, NBN_Message *message)
 {
-    NBN_ReliableOrderedChannel *reliable_ordered_channel = (NBN_ReliableOrderedChannel *)channel;
+    NBN_ReliableOrderedChannel *reliable_ordered_channel = (NBN_ReliableOrderedChannel *)channel; 
 
     if (message->header.id == reliable_ordered_channel->last_received_message_id)
     {
