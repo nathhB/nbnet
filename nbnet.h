@@ -780,6 +780,7 @@ int NBN_Driver_GCli_SendPacket(NBN_Packet *);
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define ABS(v) (((v) > 0) ? (v) : -(v))
 
 #define SEQUENCE_NUMBER_GT(seq1, seq2) ((seq1 > seq2 && (seq1 - seq2) <= 32767) || (seq1 < seq2 && (seq2 - seq1) >= 32767))
 #define SEQUENCE_NUMBER_GTE(seq1, seq2) ((seq1 >= seq2 && (seq1 - seq2) <= 32767) || (seq1 <= seq2 && (seq2 - seq1) >= 32767))
@@ -2371,19 +2372,36 @@ static NBN_OutgoingMessagePolicy get_reliable_ordered_outgoing_message_policy(NB
     return NBN_SEND_REPEAT;
 }
 
+static unsigned int compute_message_id_delta(uint16_t id1, uint16_t id2)
+{
+    if (SEQUENCE_NUMBER_GT(id1, id2))
+        return (id1 > id2) ? id1 - id2 : (0xFFFF - id2) + id1;
+    else
+        return (id2 > id1) ? id2 - id1 : ((0xFFFF - id1) + id2) % 0xFFFF;
+}
+
 static bool handle_reliable_ordered_message_reception(NBN_Channel *channel, NBN_Message *message)
 {
     NBN_ReliableOrderedChannel *reliable_ordered_channel = (NBN_ReliableOrderedChannel *)channel;
+    unsigned int dt = compute_message_id_delta(message->header.id,
+            reliable_ordered_channel->most_recent_message_id);
 
-    if (message->header.id > reliable_ordered_channel->most_recent_message_id)
+    log_debug("Handle message reception (id: %d, most recent: %d, delta: %d)",
+        message->header.id, reliable_ordered_channel->most_recent_message_id, dt);
+
+    if (SEQUENCE_NUMBER_GT(message->header.id, reliable_ordered_channel->most_recent_message_id))
     {
-        assert(message->header.id - reliable_ordered_channel->most_recent_message_id < NBN_CHANNEL_BUFFER_SIZE);
+        assert(dt < NBN_CHANNEL_BUFFER_SIZE);
 
         reliable_ordered_channel->most_recent_message_id = message->header.id;
     }
     else
     {
-        if (reliable_ordered_channel->most_recent_message_id - message->header.id >= NBN_CHANNEL_BUFFER_SIZE)
+        /*
+            This is an old message that has already been received, probably coming from
+            an out of order late packet.
+        */
+        if (dt >= NBN_CHANNEL_BUFFER_SIZE)
             return false;
     }
 
