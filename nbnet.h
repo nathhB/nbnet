@@ -250,7 +250,14 @@ void NBN_MeasureStream_Reset(NBN_MeasureStream *);
 
 #define NBN_MAX_MESSAGE_CHANNELS 255 /* Maximum value of uint8_t, see message header */
 #define NBN_MAX_MESSAGE_TYPES 255 /* Maximum value of uint8_t, see message header */
-#define NBN_MSG_RESEND_DELAY_MS 100 /* Number of ms before a message is resent (reliable messages redundancy) */
+#define NBN_MESSAGE_RESEND_DELAY_MS 100 /* Number of ms before a message is resent (reliable messages redundancy) */
+
+/*
+ * Chunk size is the maximum number of bytes a packet can hold minus the size of the message header, minus the number
+ * of bytes to store the chunk size and minus 1 byte to store the chunk id.
+ */
+#define NBN_MESSAGE_CHUNK_MAX_SIZE \
+  (NBN_PACKET_MAX_DATA_SIZE - sizeof(NBN_MessageHeader) - ((BITS_REQUIRED(0, NBN_PACKET_MAX_DATA_SIZE) - 1) / 8 + 1) - 1)
 
 typedef int (*NBN_MessageSerializer)(void *, NBN_Stream *);
 typedef void *(*NBN_MessageBuilder)(void);
@@ -287,11 +294,11 @@ int NBN_Message_Measure(NBN_Message *, NBN_MessageSerializer, NBN_MeasureStream 
     Maximum allowed packet size (including header) in bytes.
     1024 is an arbitrary value chosen to be below the MTU in order to avoid packet fragmentation.
 */
-#define NBN_MAX_PACKET_SIZE 1024
+#define NBN_PACKET_MAX_SIZE 1024
 #define NBN_MAX_MESSAGES_PER_PACKET 255 /* Maximum value of uint8_t, see packet header */
 
 #define NBN_PACKET_HEADER_SIZE sizeof(NBN_PacketHeader)
-#define NBN_PACKET_DATA_SIZE (NBN_MAX_PACKET_SIZE - NBN_PACKET_HEADER_SIZE)
+#define NBN_PACKET_MAX_DATA_SIZE (NBN_PACKET_MAX_SIZE - NBN_PACKET_HEADER_SIZE)
 
 enum
 {
@@ -320,7 +327,7 @@ typedef struct
     NBN_PacketHeader header;
     NBN_PacketMode mode;
     bool sealed;
-    uint8_t buffer[NBN_MAX_PACKET_SIZE];
+    uint8_t buffer[NBN_PACKET_MAX_SIZE];
     unsigned int size; // in bytes
 
     // streams
@@ -330,7 +337,7 @@ typedef struct
 } NBN_Packet;
 
 void NBN_Packet_InitWrite(NBN_Packet *, uint32_t, uint16_t, uint16_t, uint32_t);
-int NBN_Packet_InitRead(NBN_Packet *, uint8_t[NBN_MAX_PACKET_SIZE], unsigned int);
+int NBN_Packet_InitRead(NBN_Packet *, uint8_t[NBN_PACKET_MAX_SIZE], unsigned int);
 int NBN_Packet_WriteMessage(NBN_Packet *, NBN_Message *, NBN_MessageSerializer);
 int NBN_Packet_Seal(NBN_Packet *);
 
@@ -1529,17 +1536,17 @@ void NBN_Packet_InitWrite(NBN_Packet *packet, uint32_t protocol_id, uint16_t seq
     packet->size = 0;
     packet->m_stream.number_of_bits = 0;
 
-    NBN_WriteStream_Init(&packet->w_stream, packet->buffer + NBN_PACKET_HEADER_SIZE, NBN_PACKET_DATA_SIZE);
+    NBN_WriteStream_Init(&packet->w_stream, packet->buffer + NBN_PACKET_HEADER_SIZE, NBN_PACKET_MAX_DATA_SIZE);
     NBN_MeasureStream_Init(&packet->m_stream);
 }
 
-int NBN_Packet_InitRead(NBN_Packet *packet, uint8_t buffer[NBN_MAX_PACKET_SIZE], unsigned int size)
+int NBN_Packet_InitRead(NBN_Packet *packet, uint8_t buffer[NBN_PACKET_MAX_SIZE], unsigned int size)
 {
     packet->mode = NBN_PACKET_MODE_READ;
     packet->sealed = false;
     packet->size = size;
 
-    memcpy(packet->buffer, buffer, NBN_MAX_PACKET_SIZE);
+    memcpy(packet->buffer, buffer, NBN_PACKET_MAX_SIZE);
 
     NBN_ReadStream header_r_stream;
 
@@ -1548,7 +1555,7 @@ int NBN_Packet_InitRead(NBN_Packet *packet, uint8_t buffer[NBN_MAX_PACKET_SIZE],
     if (serialize_packet_header(packet, (NBN_Stream *)&header_r_stream) < 0)
         return -1;
 
-    NBN_ReadStream_Init(&packet->r_stream, buffer + NBN_PACKET_HEADER_SIZE, NBN_PACKET_DATA_SIZE);
+    NBN_ReadStream_Init(&packet->r_stream, buffer + NBN_PACKET_HEADER_SIZE, NBN_PACKET_MAX_DATA_SIZE);
 
     return 0;
 }
@@ -1563,7 +1570,7 @@ int NBN_Packet_WriteMessage(NBN_Packet *packet, NBN_Message *message, NBN_Messag
     if (NBN_Message_Measure(message, message_serializer, &packet->m_stream) < 0)
         return NBN_PACKET_WRITE_ERROR;
 
-    if (packet->header.messages_count >= NBN_MAX_MESSAGES_PER_PACKET || packet->m_stream.number_of_bits > NBN_PACKET_DATA_SIZE * 8)
+    if (packet->header.messages_count >= NBN_MAX_MESSAGES_PER_PACKET || packet->m_stream.number_of_bits > NBN_PACKET_MAX_DATA_SIZE * 8)
     {
         packet->m_stream.number_of_bits = current_number_of_bits;
 
@@ -1831,11 +1838,54 @@ void NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
 {
     assert(connection->message != NULL);
 
-    log_trace("Enqueue message of type %d for channel %d", connection->message->header.type, connection->message->header.channel);
+    NBN_MeasureStream measure_stream;
+    NBN_MessageSerializer msg_serializer = connection->message_serializers[connection->message->header.id];
 
-    NBN_List_PushBack(connection->send_queue, connection->message);
+    NBN_MeasureStream_Init(&measure_stream);
+
+    unsigned int message_size = (NBN_Message_Measure(connection->message, msg_serializer, &measure_stream) - 1) / 8 + 1;
+
+    log_trace("Enqueue message of type %d for channel %d (%d bytes)",
+            connection->message->header.type, connection->message->header.channel, message_size);
+
+    if (message_size > NBN_PACKET_MAX_DATA_SIZE)
+    {
+        uint8_t *message_bytes = malloc(message_size);
+        NBN_WriteStream write_stream;
+
+        NBN_WriteStream_Init(&write_stream, message_bytes, message_size);
+
+        if (NBN_Message_SerializeHeader(&connection->message->header, &write_stream) < 0)
+            return -1;
+
+        if (msg_serializer(connection->message->data, write_stream) < 0)
+            return -1;
+
+        unsigned int chunks_count = ((message_size - 1) / NBN_MESSAGE_CHUNK_MAX_SIZE) + 1;
+
+        log_trace("Split message into %d chunks", chunks_count);
+
+        for (int i = 0; i < chunks_count; i++)
+        {
+            void *chunk_start = msg->data + (i * NBN_MESSAGE_CHUNK_MAX_SIZE);
+            unsigned int chunk_size = MIN(chunk_size, message_size - (i * NBN_MESSAGE_CHUNK_MAX_SIZE));
+            uint8_t chunk[NBN_MESSAGE_CHUNK_MAX_SIZE];
+
+            memcpy(chunk, chunk_start, chunk_size);
+
+            NBN_Connection_CreateOutgoingMessage(connection, NBN_MESSAGE_CHUNK_TYPE, connection->message.header.channel);
+        }
+
+        NBN_Message_Destroy(connection->message, true);
+    }
+    else
+    {
+        NBN_List_PushBack(connection->send_queue, connection->message);
+    } 
 
     connection->message = NULL;
+
+    return 0;
 }
 
 int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
