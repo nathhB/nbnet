@@ -2688,7 +2688,7 @@ static uint32_t build_protocol_id(const char *protocol_name)
 
 static int process_received_packet(NBN_Endpoint *endpoint, NBN_Packet *packet, NBN_Connection *connection)
 {
-    log_trace("Received packet %d (ack: %d, messages count: %d)", packet->header.seq_number, packet->header.ack, packet->header.messages_count);
+    log_trace("Received packet %d (conn id: %d, ack: %d, messages count: %d)", connection->id, packet->header.seq_number, packet->header.ack, packet->header.messages_count);
 
 #ifdef NBN_DEBUG
     NBN_Packet dup_packets[10];
