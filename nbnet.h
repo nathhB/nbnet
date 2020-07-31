@@ -1991,7 +1991,8 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
 
         current_node = current_node->next;
 
-        if (message->last_send_time >= 0 && connection->timer->elapsed_ms - message->last_send_time < NBN_MSG_RESEND_DELAY_MS)
+        if (message->last_send_time >= 0 &&
+                connection->timer->elapsed_ms - message->last_send_time < NBN_MESSAGE_RESEND_DELAY_MS)
             continue;
 
         NBN_Channel *channel = get_message_channel(connection, message);
