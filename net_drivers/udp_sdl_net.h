@@ -85,7 +85,7 @@ void NBN_Driver_GServ_Stop(void)
 
 int NBN_Driver_GServ_RecvPackets(void)
 {
-    UDPpacket *udp_packet = SDLNet_AllocPacket(NBN_MAX_PACKET_SIZE);
+    UDPpacket *udp_packet = SDLNet_AllocPacket(NBN_PACKET_MAX_SIZE);
 
     if (udp_packet == NULL)
         return -1;
@@ -240,7 +240,7 @@ void NBN_Driver_GCli_Stop(void)
 
 int NBN_Driver_GCli_RecvPackets(void)
 {
-    UDPpacket *udp_packet = SDLNet_AllocPacket(NBN_MAX_PACKET_SIZE);
+    UDPpacket *udp_packet = SDLNet_AllocPacket(NBN_PACKET_MAX_SIZE);
 
     if (udp_packet == NULL)
         return -1;
