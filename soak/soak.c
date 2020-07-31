@@ -158,8 +158,15 @@ int SoakMessage_Serialize(SoakMessage *msg, NBN_Stream *stream)
 
 void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *conn, NBN_Message *msg)
 {
-    SoakMessage *soak_message = (SoakMessage *)msg->data;
+    if (msg->header.type == NBN_MESSAGE_CHUNK_TYPE)
+    {
+        log_debug("Soak message chunk added to recv queue");
+    }
+    else
+    {
+        SoakMessage *soak_message = (SoakMessage *)msg->data;
 
-    log_debug("Soak message added to recv queue (conn id: %d, msg id: %d, soak msg id: %d)",
-        conn->id, msg->header.id, soak_message->id);
+        log_debug("Soak message added to recv queue (conn id: %d, msg id: %d, soak msg id: %d)",
+                conn->id, msg->header.id, soak_message->id);
+    }
 }

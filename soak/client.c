@@ -36,7 +36,7 @@ static int send_messages(void)
             }
 
             msg->id = next_msg_id++;
-            msg->data_length = rand() % SOAK_MESSAGE_MAX_DATA_LENGTH + 1;
+            msg->data_length = rand() % (SOAK_MESSAGE_MAX_DATA_LENGTH - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
 
             uint8_t *bytes = generate_random_bytes(msg->data_length);
 
@@ -128,7 +128,7 @@ static int tick(void)
             Soak_Stop();
             return 0;
 
-        case NBN_CONNECTED:
+        case NBN_CONNECTED: 
             connected = true;
             break;
 
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
         log_error("Failed to start game client. Exit");
 
         return 1;
-    }
+    } 
 
     int ret = Soak_MainLoop(tick);
 

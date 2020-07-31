@@ -360,6 +360,7 @@ int NBN_MessageChunk_Serialize(NBN_MessageChunk *, NBN_Stream *);
 #pragma region NBN_Channel
 
 #define NBN_CHANNEL_BUFFER_SIZE 1024
+#define NBN_CHANNEL_CHUNKS_BUFFER_SIZE 255
 
 typedef enum
 {
@@ -391,7 +392,7 @@ struct NBN_Channel
     uint16_t next_message_id;
     unsigned int chunks_count;
     int last_received_chunk_id;
-    NBN_MessageChunk *chunks_buffer[255];
+    NBN_MessageChunk *chunks_buffer[NBN_CHANNEL_CHUNKS_BUFFER_SIZE];
     NBN_OutgoingMessagePolicy (*get_outgoing_message_policy)(NBN_Channel *, NBN_Message *);
     bool (*handle_message_reception)(NBN_Channel *, NBN_Message *);
     bool (*process_queued_received_message)(NBN_Channel *, NBN_Message *);
@@ -1931,9 +1932,9 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
 
         log_trace("Split message into %d chunks", chunks_count);
 
-        if (chunks_count > 256)
+        if (chunks_count > NBN_CHANNEL_CHUNKS_BUFFER_SIZE)
         {
-            log_error("The maximum number of chunks is 256");
+            log_error("The maximum number of chunks is 255");
 
             return -1;
         }
@@ -2055,7 +2056,7 @@ int NBN_Connection_CreateChannel(NBN_Connection *connection, NBN_ChannelType typ
     channel->chunks_count = 0;
     channel->last_received_chunk_id = -1;
 
-    for (int i = 0; i < 256; i++)
+    for (int i = 0; i < NBN_CHANNEL_CHUNKS_BUFFER_SIZE; i++)
         channel->chunks_buffer[i] = NULL;
 
     connection->channels[id] = channel; 
@@ -2433,7 +2434,14 @@ bool NBN_Channel_AddChunk(NBN_Channel *channel, NBN_Message *chunk_msg)
 
         NBN_Message_Destroy(chunk_msg, false);
         
-        return ++channel->chunks_count == chunk->total;
+        if (++channel->chunks_count == chunk->total)
+        {
+            channel->last_received_chunk_id = -1;
+
+            return true;
+        }
+
+        return false;
     }
 
     /* Clear the chunks buffer */
@@ -2459,8 +2467,6 @@ bool NBN_Channel_AddChunk(NBN_Channel *channel, NBN_Message *chunk_msg)
 
 NBN_Message *NBN_Channel_ReconstructMessageFromChunks(NBN_Channel *channel, NBN_Connection *connection)
 {
-    assert(channel->chunks_count > 1);
-
     unsigned int size = channel->chunks_count * NBN_MESSAGE_CHUNK_SIZE;
     uint8_t *data = malloc(size);
 
@@ -2468,18 +2474,22 @@ NBN_Message *NBN_Channel_ReconstructMessageFromChunks(NBN_Channel *channel, NBN_
     {
         NBN_MessageChunk *chunk = channel->chunks_buffer[i];
 
-        assert(chunk != NULL);
-
         memcpy(data + i * NBN_MESSAGE_CHUNK_SIZE, chunk->data, NBN_MESSAGE_CHUNK_SIZE);
 
         NBN_MessageChunk_Destroy(chunk);
+
+        channel->chunks_buffer[i] = NULL;
     }
+
+    channel->chunks_count = 0;
 
     NBN_ReadStream r_stream;
 
     NBN_ReadStream_Init(&r_stream, data, size);
 
     NBN_Message *message = read_message_from_stream(connection, &r_stream);
+
+    message->sender = connection;
 
     free(data);
 
@@ -2594,9 +2604,6 @@ static bool handle_reliable_ordered_message_reception(NBN_Channel *channel, NBN_
     NBN_ReliableOrderedChannel *reliable_ordered_channel = (NBN_ReliableOrderedChannel *)channel;
     unsigned int dt = compute_message_id_delta(message->header.id,
             reliable_ordered_channel->most_recent_message_id);
-
-    log_debug("Handle message reception (id: %d, most recent: %d, delta: %d)",
-        message->header.id, reliable_ordered_channel->most_recent_message_id, dt);
 
     if (SEQUENCE_NUMBER_GT(message->header.id, reliable_ordered_channel->most_recent_message_id))
     {
