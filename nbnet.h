@@ -1928,7 +1928,7 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
 
         connection->message = NULL;
 
-        unsigned int chunks_count = ((message_size - 1) / NBN_MESSAGE_CHUNK_SIZE) + 1; 
+        unsigned int chunks_count = ((message_size - 1) / NBN_MESSAGE_CHUNK_SIZE) + 1;
 
         log_trace("Split message into %d chunks", chunks_count);
 
@@ -1962,7 +1962,7 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
     else
     {
         NBN_List_PushBack(connection->send_queue, connection->message);
-    } 
+    }
 
     connection->message = NULL;
 
@@ -2059,7 +2059,7 @@ int NBN_Connection_CreateChannel(NBN_Connection *connection, NBN_ChannelType typ
     for (int i = 0; i < NBN_CHANNEL_CHUNKS_BUFFER_SIZE; i++)
         channel->chunks_buffer[i] = NULL;
 
-    connection->channels[id] = channel; 
+    connection->channels[id] = channel;
 
     return 0;
 }
@@ -2146,7 +2146,7 @@ static void ack_packet(NBN_Connection *connection, uint16_t ack_packet_seq_numbe
 }
 
 static NBN_Message *read_next_packet_message(NBN_Connection *connection, NBN_Packet *packet)
-{ 
+{
     return read_message_from_stream(connection, &packet->r_stream);
 }
 
@@ -2433,7 +2433,7 @@ bool NBN_Channel_AddChunk(NBN_Channel *channel, NBN_Message *chunk_msg)
         channel->last_received_chunk_id++;
 
         NBN_Message_Destroy(chunk_msg, false);
-        
+
         if (++channel->chunks_count == chunk->total)
         {
             channel->last_received_chunk_id = -1;
