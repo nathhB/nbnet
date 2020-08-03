@@ -33,8 +33,8 @@ freely, subject to the following restrictions:
     The driver header needs to be included *after* this one.
 */
 
-#ifndef NBNET_H_INCLUDED
-#define NBNET_H_INCLUDED
+#ifndef NBNET_H
+#define NBNET_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -877,7 +877,7 @@ void log_log(int level, const char *file, int line, const char *fmt, ...);
 
 #pragma endregion /* Declarations */
 
-#endif /* NBNET_H_INCLUDED */
+#endif /* NBNET_H */
 
 #pragma region Implementations
 
