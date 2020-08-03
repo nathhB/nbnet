@@ -13,7 +13,7 @@ target_compile_definitions(server PUBLIC NBN_GAME_SERVER NBN_DEBUG)
 if (NBN_DRIVER_UDP_SDL_NET)
     message("Compile with SDL_net network driver")
 
-    list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/sdl2)
+    list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/sdl2)
 
     find_package(SDL2_net REQUIRED)
 
