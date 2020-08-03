@@ -26,19 +26,19 @@ freely, subject to the following restrictions:
     Portable single UDP socket network driver implemented with SDL_Net for the nbnet library.
 
     How to use:
-        #define NBN_DRIVER_UDP_SDL_NET
+        #define NBN_DRIVER_UDP_SDL_NET_IMPL
     before you include this file in *one* C or C++ file (after you included the nbnet header).
 */
 
-#ifdef NBN_DRIVER_UDP_SDL_NET
+#ifdef NBN_DRIVER_UDP_SDL_NET_IMPL
 
-#ifndef NBN_DRIVER_UDP_SDL_NET_H_INCLUDED
-#define NBN_DRIVER_UDP_SDL_NET_H_INCLUDED
+#ifndef NBN_DRIVER_UDP_SDL_NET_H
+#define NBN_DRIVER_UDP_SDL_NET_H
 
 #include <stdint.h>
 #include <SDL_net.h>
 
-#endif /* NBN_DRIVER_UDP_SDL_NET_H_INCLUDED */
+#endif /* NBN_DRIVER_UDP_SDL_NET_H */
 
 static uint32_t protocol_id;
 UDPsocket udp_socket;
@@ -307,4 +307,4 @@ static bool is_packet_from_server(UDPpacket *udp_packet)
 
 #pragma endregion /* Game client */
 
-#endif /* NBN_DRIVER_UDP_SDL_NET */
+#endif /* NBN_DRIVER_UDP_SDL_NET_IMPL */

@@ -14,7 +14,7 @@
 #include "../net_drivers/udp.h"
 #endif
 
-#ifdef NBN_DRIVER_UDP_SDL_NET
+#ifdef NBN_DRIVER_UDP_SDL_NET_IMPL
 #include "../net_drivers/udp_sdl_net.h"
 #endif
 
