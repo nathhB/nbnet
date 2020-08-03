@@ -5,6 +5,8 @@ enable_testing()
 
 add_executable(message_chunks message_chunks.c CuTest.c)
 
+add_compile_options(-Wall -Wextra)
+
 add_test(message_chunks message_chunks)
 
 target_compile_definitions(message_chunks PUBLIC NBN_DEBUG)
