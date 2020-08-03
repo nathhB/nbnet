@@ -163,8 +163,11 @@ void Test_NBN_Channel_AddChunk(CuTest *tc)
 
     /* This is the last chunk of the first message so it should return true */
     CuAssertTrue(tc, NBN_Channel_AddChunk(channel, chunk_msg5));
-    CuAssertIntEquals(tc, 4, channel->last_received_chunk_id);
+    CuAssertIntEquals(tc, -1, channel->last_received_chunk_id);
     CuAssertIntEquals(tc, 5, channel->chunks_count);
+
+    /* Reconstruct the message so the chunks buffer gets cleared */
+    NBN_Channel_ReconstructMessageFromChunks(channel, conn);
 
     /* Second message chunks */
 
@@ -186,7 +189,7 @@ void Test_NBN_Channel_AddChunk(CuTest *tc)
 
     /* This is the last chunk of the second message so it should return true */
     CuAssertTrue(tc, NBN_Channel_AddChunk(channel, chunk_msg10));
-    CuAssertIntEquals(tc, 4, channel->last_received_chunk_id);
+    CuAssertIntEquals(tc, -1, channel->last_received_chunk_id);
     CuAssertIntEquals(tc, 5, channel->chunks_count);
 
     NBN_ListNode *current_node = conn->send_queue->head;
