@@ -260,6 +260,7 @@ void NBN_MeasureStream_Reset(NBN_MeasureStream *);
 
 typedef int (*NBN_MessageSerializer)(void *, NBN_Stream *);
 typedef void *(*NBN_MessageBuilder)(void);
+typedef void (*NBN_MessageDestructor)(void *);
 
 typedef struct
 {
@@ -274,13 +275,14 @@ typedef struct
 {
     NBN_MessageHeader header;
     NBN_Connection *sender;
+    NBN_MessageDestructor destructor;
     time_t last_send_time;
     bool sent;
     bool acked;
     void *data;
 } NBN_Message;
 
-NBN_Message *NBN_Message_Create(uint8_t, uint8_t, void *);
+NBN_Message *NBN_Message_Create(uint8_t, uint8_t, NBN_MessageDestructor, void *);
 void NBN_Message_Destroy(NBN_Message *, bool);
 int NBN_Message_SerializeHeader(NBN_MessageHeader *, NBN_Stream *);
 int NBN_Message_Measure(NBN_Message *, NBN_MessageSerializer, NBN_MeasureStream *);
@@ -500,6 +502,7 @@ struct __NBN_Connection
     uint32_t protocol_id;
     bool accepted;
     NBN_MessageBuilder message_builders[NBN_MAX_MESSAGE_TYPES];
+    NBN_MessageDestructor message_destructors[NBN_MAX_MESSAGE_TYPES];
     NBN_MessageSerializer message_serializers[NBN_MAX_MESSAGE_TYPES];
     time_t last_recv_packet_time; /* used to detect stale connections */
     NBN_Timer *timer;
@@ -534,6 +537,7 @@ NBN_Connection *NBN_Connection_Create(
     int, uint32_t,
     bool,
     NBN_MessageBuilder[NBN_MAX_MESSAGE_TYPES],
+    NBN_MessageDestructor[NBN_MAX_MESSAGE_TYPES],
     NBN_MessageSerializer[NBN_MAX_MESSAGE_TYPES]);
 void NBN_Connection_Destroy(NBN_Connection *);
 int NBN_Connection_ProcessReceivedPacket(NBN_Connection *, NBN_Packet *);
@@ -609,8 +613,6 @@ static void *packet_simulator_routine(void *);
 
 #pragma region NBN_Endpoint
 
-// TODO: handle message destructor
-
 #ifdef NBN_GAME_CLIENT
 
 #define NBN_RegisterMessage(type, builder, serializer, destructor) \
@@ -621,6 +623,7 @@ static void *packet_simulator_routine(void *);
         exit(1); \
     } \
     NBN_Endpoint_RegisterMessageBuilder(&game_client.endpoint, (NBN_MessageBuilder)builder, type); \
+    NBN_Endpoint_RegisterMessageDestructor(&game_client.endpoint, (NBN_MessageDestructor)destructor, type); \
     NBN_Endpoint_RegisterMessageSerializer(&game_client.endpoint, (NBN_MessageSerializer)serializer, type); \
 }
 
@@ -638,6 +641,7 @@ static void *packet_simulator_routine(void *);
         exit(1); \
     } \
     NBN_Endpoint_RegisterMessageBuilder(&game_server.endpoint, (NBN_MessageBuilder)builder, type); \
+    NBN_Endpoint_RegisterMessageDestructor(&game_server.endpoint, (NBN_MessageDestructor)destructor, type); \
     NBN_Endpoint_RegisterMessageSerializer(&game_server.endpoint, (NBN_MessageSerializer)serializer, type); \
 }
 
@@ -650,6 +654,7 @@ typedef struct
     uint32_t protocol_id;
     NBN_ChannelType channels[NBN_MAX_MESSAGE_CHANNELS];
     NBN_MessageBuilder message_builders[NBN_MAX_MESSAGE_TYPES];
+    NBN_MessageDestructor message_destructors[NBN_MAX_MESSAGE_TYPES];
     NBN_MessageSerializer message_serializers[NBN_MAX_MESSAGE_TYPES];
     NBN_EventQueue *events_queue;
 
@@ -663,6 +668,7 @@ typedef struct
 void NBN_Endpoint_Init(NBN_Endpoint *, const char *);
 void NBN_Endpoint_Deinit(NBN_Endpoint *);
 void NBN_Endpoint_RegisterMessageBuilder(NBN_Endpoint *, NBN_MessageBuilder, uint8_t);
+void NBN_Endpoint_RegisterMessageDestructor(NBN_Endpoint *, NBN_MessageDestructor, uint8_t);
 void NBN_Endpoint_RegisterMessageSerializer(NBN_Endpoint *, NBN_MessageSerializer, uint8_t);
 void NBN_Endpoint_RegisterChannel(NBN_Endpoint *, NBN_ChannelType, uint8_t);
 NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *, int, bool);
@@ -1659,9 +1665,10 @@ static int serialize_packet_header(NBN_Packet *packet, NBN_Stream *stream)
 
 #pragma region NBN_Message
 
-NBN_Message *NBN_Message_Create(uint8_t type, uint8_t channel, void *data)
+NBN_Message *NBN_Message_Create(uint8_t type, uint8_t channel, NBN_MessageDestructor destructor, void *data)
 {
     NBN_Message *message = malloc(sizeof(NBN_Message));
+
     message->header.id = 0;
     message->header.type = type;
     message->header.channel = channel;
@@ -1669,6 +1676,7 @@ NBN_Message *NBN_Message_Create(uint8_t type, uint8_t channel, void *data)
     message->sent = false;
     message->acked = false;
     message->data = data;
+    message->destructor = destructor;
 
     return message;
 }
@@ -1676,7 +1684,12 @@ NBN_Message *NBN_Message_Create(uint8_t type, uint8_t channel, void *data)
 void NBN_Message_Destroy(NBN_Message *message, bool free_data)
 {
     if (free_data)
-        free(message->data); // TODO: use a custom destructor for user data
+    {
+        if (message->destructor)
+            message->destructor(message->data);
+        else
+            free(message->data);
+    }
 
     free(message);
 }
@@ -1753,6 +1766,7 @@ NBN_Connection *NBN_Connection_Create(int id,
                                 uint32_t protocol_id,
                                 bool accepted,
                                 NBN_MessageBuilder message_builders[NBN_MAX_MESSAGE_TYPES],
+                                NBN_MessageDestructor message_destructors[NBN_MAX_MESSAGE_TYPES],
                                 NBN_MessageSerializer message_serializers[NBN_MAX_MESSAGE_TYPES])
 {
     NBN_Connection *connection = malloc(sizeof(NBN_Connection));
@@ -1763,6 +1777,7 @@ NBN_Connection *NBN_Connection_Create(int id,
     connection->last_recv_packet_time = 0;
 
     memcpy(connection->message_builders, message_builders, sizeof(NBN_MessageBuilder[NBN_MAX_MESSAGE_TYPES]));
+    memcpy(connection->message_destructors, message_destructors, sizeof(NBN_MessageDestructor[NBN_MAX_MESSAGE_TYPES]));
     memcpy(connection->message_serializers, message_serializers, sizeof(NBN_MessageSerializer[NBN_MAX_MESSAGE_TYPES]));
 
     connection->next_packet_seq_number = 1;
@@ -1885,7 +1900,7 @@ void *NBN_Connection_CreateOutgoingMessage(NBN_Connection *connection, uint8_t m
         return NULL;
     }
 
-    NBN_Message *msg = NBN_Message_Create(msg_type, channel, msg_builder());
+    NBN_Message *msg = NBN_Message_Create(msg_type, channel, connection->message_destructors[msg_type], msg_builder());
 
     connection->message = msg;
 
@@ -2388,7 +2403,8 @@ static NBN_Message *read_message_from_stream(NBN_Connection *connection, NBN_Rea
         return NULL;
     }
 
-    NBN_Message *message = NBN_Message_Create(msg_header.type, msg_header.channel, msg_builder());
+    NBN_Message *message = NBN_Message_Create(
+        msg_header.type, msg_header.channel, connection->message_destructors[msg_type], msg_builder());
 
     message->header.id = msg_header.id;
 
@@ -2872,12 +2888,19 @@ void NBN_Endpoint_Init(NBN_Endpoint *endpoint, const char *protocol_name)
         endpoint->channels[i] = NBN_CHANNEL_UNDEFINED;
 
     for (int i = 0; i < NBN_MAX_MESSAGE_TYPES; i++)
+        endpoint->message_destructors[i] = NULL;
+
+    for (int i = 0; i < NBN_MAX_MESSAGE_TYPES; i++)
         endpoint->message_serializers[i] = NULL;
 
     endpoint->events_queue = NBN_EventQueue_Create();
 
-    NBN_Endpoint_RegisterMessageBuilder(endpoint, (NBN_MessageBuilder)NBN_MessageChunk_Create, NBN_MESSAGE_CHUNK_TYPE);
-    NBN_Endpoint_RegisterMessageSerializer(endpoint, (NBN_MessageSerializer)NBN_MessageChunk_Serialize, NBN_MESSAGE_CHUNK_TYPE);
+    NBN_Endpoint_RegisterMessageBuilder(
+        endpoint, (NBN_MessageBuilder)NBN_MessageChunk_Create, NBN_MESSAGE_CHUNK_TYPE);
+    NBN_Endpoint_RegisterMessageDestructor(
+        endpoint, (NBN_MessageDestructor)NBN_MessageChunk_Destroy, NBN_MESSAGE_CHUNK_TYPE);
+    NBN_Endpoint_RegisterMessageSerializer(
+        endpoint, (NBN_MessageSerializer)NBN_MessageChunk_Serialize, NBN_MESSAGE_CHUNK_TYPE);
 
 #ifdef NBN_DEBUG
     endpoint->debug_settings = (NBN_ConnectionDebugSettings){0};
@@ -2903,6 +2926,11 @@ void NBN_Endpoint_RegisterMessageBuilder(NBN_Endpoint *endpoint, NBN_MessageBuil
     endpoint->message_builders[msg_type] = msg_builder;
 }
 
+void NBN_Endpoint_RegisterMessageDestructor(NBN_Endpoint *endpoint, NBN_MessageDestructor msg_destructor, uint8_t msg_type)
+{
+    endpoint->message_destructors[msg_type] = msg_destructor;
+}
+
 void NBN_Endpoint_RegisterMessageSerializer(NBN_Endpoint *endpoint, NBN_MessageSerializer msg_serializer, uint8_t msg_type)
 {
     endpoint->message_serializers[msg_type] = msg_serializer;
@@ -2916,7 +2944,12 @@ void NBN_Endpoint_RegisterChannel(NBN_Endpoint *endpoint, NBN_ChannelType type, 
 NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *endpoint, int id, bool accepted)
 {
     NBN_Connection *connection = NBN_Connection_Create(
-        id, endpoint->protocol_id, accepted, endpoint->message_builders, endpoint->message_serializers);
+        id,
+        endpoint->protocol_id,
+        accepted,
+        endpoint->message_builders,
+        endpoint->message_destructors,
+        endpoint->message_serializers);
 
     for (int chan_id = 0; chan_id < NBN_MAX_MESSAGE_CHANNELS; chan_id++)
     {
