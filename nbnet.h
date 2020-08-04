@@ -3603,14 +3603,14 @@ static void close_stale_client_connections(void)
     {
         NBN_Connection *client = current_node->data;
 
+        current_node = current_node->next;
+
         if (NBN_Connection_IsStale(client))
         {
             log_trace("Client %d connection is stale. Closing connection.", client->id);
 
             NBN_GameServer_CloseClient(client);
         }
-
-        current_node = current_node->next;
     }
 }
 
@@ -3646,11 +3646,9 @@ static void handle_client_connected_event_data(void)
 
 static void handle_client_disconnected_event_data(void)
 {
-    NBN_Connection *client = game_server.endpoint.events_queue->last_event_data;
+    last_event_client = game_server.endpoint.events_queue->last_event_data;
 
-    last_event_client = client;
-
-    NBN_Connection_Destroy(client);
+    /* TODO: destroy the disconnected client */
 }
 
 static void handle_client_connection_request_event_data(void)
