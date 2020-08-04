@@ -1851,24 +1851,31 @@ int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet 
     return 0;
 }
 
+static NBN_ListNode *dequeue_current_node = NULL;
+
 NBN_Message *NBN_Connection_DequeueReceivedMessage(NBN_Connection *connection)
 {
-    NBN_ListNode *current_node = connection->recv_queue->head;
-
-    while (current_node)
+    if (dequeue_current_node == NULL)
     {
-        NBN_Message *message = current_node->data;
-        NBN_Channel *channel = get_message_channel(connection, message);
-
-        current_node = current_node->next;
-
-        if (channel->process_queued_received_message(channel, message))
+        dequeue_current_node = connection->recv_queue->head;
+    }
+    else
+    {
+        while (dequeue_current_node)
         {
-            NBN_List_Remove(connection->recv_queue, message);
+            NBN_Message *message = dequeue_current_node->data;
+            NBN_Channel *channel = get_message_channel(connection, message);
 
-            message->sender = connection;
+            dequeue_current_node = dequeue_current_node->next;
 
-            return message;
+            if (channel->process_queued_received_message(channel, message))
+            {
+                NBN_List_Remove(connection->recv_queue, message);
+
+                message->sender = connection;
+
+                return message;
+            }
         }
     }
 
