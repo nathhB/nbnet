@@ -48,9 +48,9 @@ static int send_messages(void)
 
             sent_messages_count++;
 
-            NBN_GameClient_EnqueueMessage();
+            log_info("Send soak message (id: %d, data length: %d)", msg->id, msg->data_length);
 
-            log_info("Soak message sent (id: %d, data length: %d)", msg->id, msg->data_length);
+            NBN_GameClient_SendMessage();
         }
     }
 
@@ -92,11 +92,11 @@ static int handle_soak_message(SoakMessage *msg)
 
 static int handle_message(void)
 {
-    NBN_Message msg;
+    NBN_MessageInfo msg;
 
     NBN_GameClient_ReadReceivedMessage(&msg);
 
-    switch (msg.header.type)
+    switch (msg.type)
     {
     case SOAK_MESSAGE:
         if (handle_soak_message((SoakMessage *)msg.data) < 0)
@@ -104,12 +104,10 @@ static int handle_message(void)
         break;
 
     default:
-        log_error("Received unexpected message (type: %d)", msg.header.type);
+        log_error("Received unexpected message (type: %d)", msg.type);
 
         return -1;
     }
-
-    NBN_GameClient_RecycleMessage(&msg);
 
     return 0;
 }

@@ -54,7 +54,7 @@ static int echo_soak_message(SoakMessage *msg, NBN_Connection *sender_cli)
 
     memcpy(echo_msg->data, msg->data, msg->data_length);
 
-    NBN_GameServer_EnqueueMessage(sender_cli);
+    NBN_GameServer_SendMessageTo(sender_cli);
 
     return 0;
 }
@@ -89,11 +89,11 @@ static int handle_soak_message(SoakMessage *msg, NBN_Connection *sender_cli)
 
 static void handle_message(void)
 {
-    NBN_Message msg;
+    NBN_MessageInfo msg;
 
     NBN_GameServer_ReadReceivedMessage(&msg);
 
-    switch (msg.header.type)
+    switch (msg.type)
     {
     case SOAK_MESSAGE:
         if (handle_soak_message((SoakMessage *)msg.data, msg.sender) < 0)
@@ -101,13 +101,11 @@ static void handle_message(void)
         break;
     
     default:
-        log_error("Received unexpected message (type: %d)", msg.header.type);
+        log_error("Received unexpected message (type: %d)", msg.type);
 
         close_client(msg.sender);
         break;
     }
-
-    NBN_GameServer_RecycleMessage(&msg);
 }
 
 static int tick(void)
