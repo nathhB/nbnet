@@ -10,7 +10,7 @@
 
 #include "soak.h"
 
-#ifdef NBN_DRIVER_UDP
+#ifdef NBN_DRIVER_UDP_IMPL
 #include "../net_drivers/udp.h"
 #endif
 

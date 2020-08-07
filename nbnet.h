@@ -617,7 +617,7 @@ void NBN_PacketSimulator_DestroyEntry(NBN_PacketSimulatorEntry *);
 
 static void *packet_simulator_routine(void *);
 
-#endif
+#endif /* NBN_DEBUG */
 
 #pragma endregion
 
@@ -1119,7 +1119,7 @@ void NBN_Timer_Update(NBN_Timer *timer)
 
     clock_gettime(CLOCK_MONOTONIC_RAW, &spec);
 
-    unsigned long ms = spec.tv_nsec / 1.0e6;
+    time_t ms = spec.tv_nsec / 1.0e6;
 
     /* handle wrap at 1000 */
     if (ms < timer->current_ms)
@@ -1527,6 +1527,8 @@ int NBN_MeasureStream_SerializeInt(NBN_MeasureStream *measure_stream, int *value
 
 int NBN_MeasureStream_SerializeBool(NBN_MeasureStream *measure_stream, unsigned int *value)
 {
+    (void)value;
+
     measure_stream->number_of_bits++;
 
     return 1;
@@ -1546,6 +1548,8 @@ int NBN_MeasureStream_SerializePadding(NBN_MeasureStream *measure_stream)
 
 int NBN_MeasureStream_SerializeBytes(NBN_MeasureStream *measure_stream, uint8_t *bytes, unsigned int length)
 {
+    (void)bytes;
+
     NBN_MeasureStream_SerializePadding(measure_stream);
 
     unsigned int bits = length * 8;
@@ -1974,7 +1978,7 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
             return -1;
         }
 
-        for (int i = 0; i < chunks_count; i++)
+        for (unsigned int i = 0; i < chunks_count; i++)
         {
             void *chunk_start = message_bytes + (i * NBN_MESSAGE_CHUNK_SIZE);
             unsigned int chunk_size = MIN(NBN_MESSAGE_CHUNK_SIZE, message_size - (i * NBN_MESSAGE_CHUNK_SIZE));
@@ -2463,7 +2467,7 @@ bool NBN_Channel_AddChunk(NBN_Channel *channel, NBN_Message *chunk_msg)
     }
 
     /* Clear the chunks buffer */
-    for (int i = 0; i < channel->chunks_count; i++)
+    for (unsigned int i = 0; i < channel->chunks_count; i++)
     {
         assert(channel->chunks_buffer[i] != NULL);
 
@@ -2488,7 +2492,7 @@ NBN_Message *NBN_Channel_ReconstructMessageFromChunks(NBN_Channel *channel, NBN_
     unsigned int size = channel->chunks_count * NBN_MESSAGE_CHUNK_SIZE;
     uint8_t *data = malloc(size);
 
-    for (int i = 0; i < channel->chunks_count; i++)
+    for (unsigned int i = 0; i < channel->chunks_count; i++)
     {
         NBN_MessageChunk *chunk = channel->chunks_buffer[i];
 
@@ -2557,6 +2561,9 @@ static bool handle_unreliable_ordered_message_reception(NBN_Channel *channel, NB
 
 static bool process_received_unreliable_ordered_message(NBN_Channel *channel, NBN_Message *message)
 {
+    (void)channel;
+    (void)message;
+
     return true;
 }
 
@@ -2974,7 +2981,7 @@ static uint32_t build_protocol_id(const char *protocol_name)
 {
     uint32_t protocol_id = 2166136261;
 
-    for (int i = 0; i < strlen(protocol_name); i++)
+    for (unsigned int i = 0; i < strlen(protocol_name); i++)
     {
         protocol_id *= 16777619;
         protocol_id ^= protocol_name[i];
@@ -2985,6 +2992,8 @@ static uint32_t build_protocol_id(const char *protocol_name)
 
 static int process_received_packet(NBN_Endpoint *endpoint, NBN_Packet *packet, NBN_Connection *connection)
 {
+    (void)endpoint;
+
     log_trace("Received packet %d (conn id: %d, ack: %d, messages count: %d)", packet->header.seq_number,
         connection->id, packet->header.ack, packet->header.messages_count);
 
