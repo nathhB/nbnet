@@ -26,14 +26,11 @@ freely, subject to the following restrictions:
     Portable single UDP socket network driver for the nbnet library.
 
     How to use:
-        #define NBN_DRIVER_UDP
+        #define NBN_DRIVER_UDP_IMPL
     before you include this file in *one* C or C++ file (after you included the nbnet header).
 */
 
-#ifdef NBN_DRIVER_UDP
-
-#ifndef NBN_DRIVER_UDP_H_INCLUDED
-#define NBN_DRIVER_UDP_H_INCLUDED
+#ifdef NBN_DRIVER_UDP_IMPL
 
 #include <errno.h>
 #include <assert.h>
@@ -86,7 +83,12 @@ typedef struct
 static SOCKET udp_sock;
 static uint32_t protocol_id;
 
-#endif /* NBN_DRIVER_UDP_H_INCLUDED */
+#ifdef NBN_GAME_CLIENT
+
+static NBN_UDPConnection server_connection;
+static bool server_connection_closed = false;
+
+#endif /* NBN_GAME_CLIENT */
 
 #pragma region Socket functions
 
@@ -164,7 +166,7 @@ static int bind_socket(uint16_t port)
 
 static int read_received_packets(void (*process_packet)(NBN_Packet *, NBN_IPAddress))
 {
-    uint8_t buffer[NBN_MAX_PACKET_SIZE] = {0};
+    uint8_t buffer[NBN_PACKET_MAX_SIZE] = {0};
     SOCKADDR_IN src_addr;
     socklen_t src_addr_len = sizeof(src_addr);
     int ret;
@@ -342,7 +344,6 @@ static void close_client_connection(NBN_UDPConnection *connection)
     NBN_Connection *conn = connection->conn;
 
     free(NBN_List_Remove(connections, connection));
-    NBN_GameServer_OnClientDisconnected(conn);
 }
 
 static NBN_UDPConnection *find_connection_by_address(NBN_IPAddress address)
@@ -386,9 +387,6 @@ static NBN_UDPConnection *find_connection_by_id(uint32_t conn_id)
 #pragma region Game client
 
 #ifdef NBN_GAME_CLIENT
-
-static NBN_UDPConnection server_connection;
-static bool server_connection_closed = false;
 
 static void process_server_packet(NBN_Packet *, NBN_IPAddress);
 static void close_server_connection(void);
@@ -478,4 +476,4 @@ static void close_server_connection(void)
 
 #pragma endregion /* Game client */
 
-#endif
+#endif /* NBN_DRIVER_UDP_IMPL */
