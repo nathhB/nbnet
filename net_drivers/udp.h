@@ -295,7 +295,7 @@ int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, uint32_t conn_id)
 
     if (connection == NULL)
     {
-        log_error("connection %d does not exist", conn_id);
+        log_error("Connection %d does not exist", conn_id);
 
         return -1;
     }
@@ -424,7 +424,7 @@ int NBN_Driver_GCli_RecvPackets(void)
 {
     if (server_connection_closed)
     {
-        log_error("server connection is closed");
+        log_error("Server connection is closed");
 
         return -1;
     }
@@ -436,7 +436,7 @@ int NBN_Driver_GCli_SendPacket(NBN_Packet *packet)
 {
     if (server_connection_closed)
     {
-        log_error("server connection is closed");
+        log_error("Server connection is closed");
 
         return -1;
     }
