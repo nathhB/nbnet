@@ -10,6 +10,9 @@ add_compile_options(-Wall -Wextra)
 target_compile_definitions(client PUBLIC NBN_GAME_CLIENT NBN_DEBUG)
 target_compile_definitions(server PUBLIC NBN_GAME_SERVER NBN_DEBUG)
 
+option(NBN_DRIVER_UDP "use udp driver")
+option(NBN_DRIVER_UDP_SDL_NET "use SDL_net udp driver")
+
 if (NBN_DRIVER_UDP_SDL_NET)
     message("Compile with SDL_net network driver")
 
@@ -22,4 +25,11 @@ if (NBN_DRIVER_UDP_SDL_NET)
     
     target_link_libraries(client SDL2::Net)
     target_link_libraries(server SDL2::Net)
-endif(NBN_DRIVER_UDP_SDL_NET)
+endif (NBN_DRIVER_UDP_SDL_NET)
+
+if (NBN_DRIVER_UDP)
+    message("Compile with UDP network driver")
+
+    target_compile_definitions(client PUBLIC NBN_DRIVER_UDP_IMPL)
+    target_compile_definitions(server PUBLIC NBN_DRIVER_UDP_IMPL)
+endif (NBN_DRIVER_UDP)
