@@ -691,6 +691,8 @@ NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *, int, bool);
 
 typedef enum
 {
+    NBN_ERROR = -1,
+
     /* Client is connected to server */
     NBN_CONNECTED = 1,
 
@@ -743,6 +745,8 @@ NBN_ConnectionDebugInfo NBN_GameClient_Debug_GetInfo(void);
 
 typedef enum
 {
+    NBN_ERROR = -1,
+
     /* A client has requested a connection */
     NBN_CLIENT_CONNECTION_REQUESTED = 1,
 
@@ -3055,7 +3059,7 @@ NBN_GameClientEvent NBN_GameClient_Poll(void)
         else
         {
             if (NBN_Driver_GCli_RecvPackets() < 0)
-                return -1;
+                return NBN_ERROR;
 
             NBN_Message *msg;
 
@@ -3319,7 +3323,7 @@ NBN_GameServerEvent NBN_GameServer_Poll(void)
         close_stale_client_connections();
 
         if (NBN_Driver_GServ_RecvPackets() < 0)
-            return -1;
+            return NBN_ERROR;
 
         NBN_ListNode *current_node = game_server.clients->head;
 
