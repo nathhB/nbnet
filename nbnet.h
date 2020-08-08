@@ -629,7 +629,7 @@ static void *packet_simulator_routine(void *);
 { \
     if (type == NBN_MESSAGE_CHUNK_TYPE) \
     { \
-        log_error("The message type %d is reserved by the library", type); \
+        NBN_LogError("The message type %d is reserved by the library", type); \
         exit(1); \
     } \
     NBN_Endpoint_RegisterMessageBuilder(&game_client.endpoint, (NBN_MessageBuilder)builder, type); \
@@ -647,7 +647,7 @@ static void *packet_simulator_routine(void *);
 { \
     if (type == NBN_MESSAGE_CHUNK_TYPE) \
     { \
-        log_error("The message type %d is reserved by the library", type); \
+        NBN_LogError("The message type %d is reserved by the library", type); \
         exit(1); \
     } \
     NBN_Endpoint_RegisterMessageBuilder(&game_server.endpoint, (NBN_MessageBuilder)builder, type); \
@@ -852,42 +852,6 @@ int NBN_Driver_GCli_SendPacket(NBN_Packet *);
 #endif /* NBN_DEBUG */
 
 #pragma endregion /* Debugging */
-
-#pragma region Logging
-
-/* I did not write this: https://github.com/rxi/log.c */
-
-/**
- * Copyright (c) 2017 rxi
- *
- * This library is free software; you can redistribute it and/or modify it
- * under the terms of the MIT license. See `log.c` for details.
- */
-
-#define LOG_VERSION "0.1.0"
-
-typedef void (*log_LockFn)(void *udata, int lock);
-
-enum { LOG_TRACE, LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR, LOG_FATAL };
-
-#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
-
-#define log_trace(...) log_log(LOG_TRACE, __FILENAME__, __LINE__, __VA_ARGS__)
-#define log_debug(...) log_log(LOG_DEBUG, __FILENAME__, __LINE__, __VA_ARGS__)
-#define log_info(...)  log_log(LOG_INFO,  __FILENAME__, __LINE__, __VA_ARGS__)
-#define log_warn(...)  log_log(LOG_WARN,  __FILENAME__, __LINE__, __VA_ARGS__)
-#define log_error(...) log_log(LOG_ERROR, __FILENAME__, __LINE__, __VA_ARGS__)
-#define log_fatal(...) log_log(LOG_FATAL, __FILENAME__, __LINE__, __VA_ARGS__)
-
-void log_set_udata(void *udata);
-void log_set_lock(log_LockFn fn);
-void log_set_fp(FILE *fp);
-void log_set_level(int level);
-void log_set_quiet(int enable);
-
-void log_log(int level, const char *file, int line, const char *fmt, ...);
-
-#pragma endregion /* Logging */
 
 #pragma endregion /* Declarations */
 
@@ -1859,7 +1823,7 @@ int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet 
 
         if (message == NULL)
         {
-            log_error("Failed to read packet messages");
+            NBN_LogError("Failed to read packet messages");
 
             return -1;
         }
@@ -1903,14 +1867,14 @@ void *NBN_Connection_CreateOutgoingMessage(NBN_Connection *connection, uint8_t m
 
     if (msg_builder == NULL)
     {
-        log_error("No message builder is registered for messages of type %d", msg_type);
+        NBN_LogError("No message builder is registered for messages of type %d", msg_type);
 
         return NULL;
     }
 
     if (connection->message_serializers[msg_type] == NULL)
     {
-        log_error("No message serializer attached to messages of type %d", msg_type);
+        NBN_LogError("No message serializer attached to messages of type %d", msg_type);
 
         return NULL;
     } 
@@ -1919,7 +1883,7 @@ void *NBN_Connection_CreateOutgoingMessage(NBN_Connection *connection, uint8_t m
 
     if (channel == NULL)
     {
-        log_error("Channel %d does not exist", chann_id);
+        NBN_LogError("Channel %d does not exist", chann_id);
 
         return NULL;
     }
@@ -1946,7 +1910,7 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
 
     unsigned int message_size = (NBN_Message_Measure(connection->message, msg_serializer, &measure_stream) - 1) / 8 + 1;
 
-    log_trace("Enqueue message of type %d for channel %d (%d bytes)",
+    NBN_LogTrace("Enqueue message of type %d for channel %d (%d bytes)",
             connection->message->header.type, connection->message->header.channel_id, message_size);
 
     if (message_size > NBN_PACKET_MAX_DATA_SIZE)
@@ -1969,11 +1933,11 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
 
         unsigned int chunks_count = ((message_size - 1) / NBN_MESSAGE_CHUNK_SIZE) + 1;
 
-        log_trace("Split message into %d chunks", chunks_count);
+        NBN_LogTrace("Split message into %d chunks", chunks_count);
 
         if (chunks_count > NBN_CHANNEL_CHUNKS_BUFFER_SIZE)
         {
-            log_error("The maximum number of chunks is 255");
+            NBN_LogError("The maximum number of chunks is 255");
 
             return -1;
         }
@@ -1983,7 +1947,7 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
             void *chunk_start = message_bytes + (i * NBN_MESSAGE_CHUNK_SIZE);
             unsigned int chunk_size = MIN(NBN_MESSAGE_CHUNK_SIZE, message_size - (i * NBN_MESSAGE_CHUNK_SIZE));
 
-            log_trace("Enqueue chunk %d (size: %d)", i, chunk_size);
+            NBN_LogTrace("Enqueue chunk %d (size: %d)", i, chunk_size);
 
             NBN_MessageChunk *chunk = NBN_Connection_CreateOutgoingMessage(
                     connection, NBN_MESSAGE_CHUNK_TYPE, chann_id);
@@ -2022,7 +1986,7 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
     NBN_PacketEntry *packet_entry = insert_send_packet_entry(connection, outgoing_packet.header.seq_number);
     NBN_ListNode *current_node = connection->send_queue->head;
 
-    log_trace("Flushing send queue (messages in queue: %d)", connection->send_queue->count);
+    NBN_LogTrace("Flushing send queue (messages in queue: %d)", connection->send_queue->count);
 
     while (current_node)
     {
@@ -2077,7 +2041,7 @@ int NBN_Connection_CreateChannel(NBN_Connection *connection, NBN_ChannelType typ
         break;
     
     default:
-        log_error("Unsupported message channel type: %d", type);
+        NBN_LogError("Unsupported message channel type: %d", type);
 
         return -1;
     }
@@ -2144,7 +2108,7 @@ static void ack_packet(NBN_Connection *connection, uint16_t ack_packet_seq_numbe
 
     if (entry && !entry->acked)
     {
-        log_trace("Ack packet: %d", ack_packet_seq_number);
+        NBN_LogTrace("Ack packet: %d", ack_packet_seq_number);
 
         unsigned int ping = connection->timer->elapsed_ms - entry->send_time;
 
@@ -2164,7 +2128,7 @@ static void ack_packet(NBN_Connection *connection, uint16_t ack_packet_seq_numbe
 
                 message->acked = true;
 
-                log_trace("Message acked: %d", message->header.id);
+                NBN_LogTrace("Message acked: %d", message->header.id);
             }
         }
 
@@ -2181,7 +2145,7 @@ static int handle_message_reception(NBN_Message *message, NBN_Connection *connec
 {
     if (message->channel->handle_message_reception(message->channel, message))
     {
-        log_trace("Received message %d on channel %d : added to recv queue", message->header.id, message->channel->id);
+        NBN_LogTrace("Received message %d on channel %d : added to recv queue", message->header.id, message->channel->id);
 
         NBN_List_PushBack(connection->recv_queue, message);
 
@@ -2192,7 +2156,7 @@ static int handle_message_reception(NBN_Message *message, NBN_Connection *connec
     }
     else
     {
-        log_trace("Received message %d : discarded", message->header.id);
+        NBN_LogTrace("Received message %d : discarded", message->header.id);
 
         NBN_Message_Destroy(message, true);
     }
@@ -2222,7 +2186,7 @@ static int process_outgoing_message(NBN_Message *message, NBN_Packet *outgoing_p
 
     if (ret == NBN_PACKET_WRITE_OK)
     {
-        log_trace("Message %d added to packet", message->header.id);
+        NBN_LogTrace("Message %d added to packet", message->header.id);
 
         if (policy == NBN_SEND_ONCE)
             remove_message_from_send_queue(connection, message);
@@ -2303,7 +2267,7 @@ static int send_packet(NBN_Connection *connection, NBN_Packet *packet)
 
     if (RAND_RATIO < connection->debug_settings.current_packet_loss_ratio)
     {
-        log_trace("Send packet %d (DEBUG DROPPED)", packet->header.seq_number);
+        NBN_LogTrace("Send packet %d (DEBUG DROPPED)", packet->header.seq_number);
 
         return 0;
     }
@@ -2313,7 +2277,7 @@ static int send_packet(NBN_Connection *connection, NBN_Packet *packet)
     memcpy(dup_packet, packet, sizeof(NBN_Packet));
 #endif /* NBN_DEBUG */
 
-    log_trace("Send packet %d (messages count: %d)", packet->header.seq_number, packet->header.messages_count);
+    NBN_LogTrace("Send packet %d (messages count: %d)", packet->header.seq_number, packet->header.messages_count);
 
 #ifdef NBN_GAME_SERVER
 
@@ -2372,7 +2336,7 @@ static NBN_Message *read_message_from_stream(NBN_Connection *connection, NBN_Rea
 
     if (NBN_Message_SerializeHeader(&msg_header, (NBN_Stream *)r_stream) < 0)
     {
-        log_error("Failed to read net message header");
+        NBN_LogError("Failed to read net message header");
 
         return NULL;
     }
@@ -2381,7 +2345,7 @@ static NBN_Message *read_message_from_stream(NBN_Connection *connection, NBN_Rea
 
     if (channel == NULL)
     {
-        log_error("Channel %d does not exist", channel);
+        NBN_LogError("Channel %d does not exist", msg_header.channel_id);
 
         return NULL;
     }
@@ -2391,7 +2355,7 @@ static NBN_Message *read_message_from_stream(NBN_Connection *connection, NBN_Rea
 
     if (msg_builder == NULL)
     {
-        log_error("No message builder is registered for messages of type %d", msg_type);
+        NBN_LogError("No message builder is registered for messages of type %d", msg_type);
 
         return NULL;
     }
@@ -2400,7 +2364,7 @@ static NBN_Message *read_message_from_stream(NBN_Connection *connection, NBN_Rea
 
     if (msg_serializer == NULL)
     {
-        log_error("No message serializer attached to message of type %d", msg_type);
+        NBN_LogError("No message serializer attached to message of type %d", msg_type);
 
         return NULL;
     }
@@ -2412,7 +2376,7 @@ static NBN_Message *read_message_from_stream(NBN_Connection *connection, NBN_Rea
 
     if (msg_serializer(message->data, (NBN_Stream *)r_stream) < 0)
     {
-        log_error("Failed to read message body");
+        NBN_LogError("Failed to read message body");
 
         return NULL;
     }
@@ -2994,7 +2958,7 @@ static int process_received_packet(NBN_Endpoint *endpoint, NBN_Packet *packet, N
 {
     (void)endpoint;
 
-    log_trace("Received packet %d (conn id: %d, ack: %d, messages count: %d)", packet->header.seq_number,
+    NBN_LogTrace("Received packet %d (conn id: %d, ack: %d, messages count: %d)", packet->header.seq_number,
         connection->id, packet->header.ack, packet->header.messages_count);
 
 #ifdef NBN_DEBUG
@@ -3019,7 +2983,7 @@ static int process_received_packet(NBN_Endpoint *endpoint, NBN_Packet *packet, N
     {
         for (int i = 0; i < dup_count; i++)
         {
-            log_trace("Received packet %d (DEBUG DUPLICATE %d)", dup_packets[i].header.seq_number, i + 1);
+            NBN_LogTrace("Received packet %d (DEBUG DUPLICATE %d)", dup_packets[i].header.seq_number, i + 1);
 
             if (NBN_Connection_ProcessReceivedPacket(connection, &dup_packets[i]) < 0)
                 return -1;
@@ -3060,7 +3024,7 @@ int NBN_GameClient_Start(const char *host, uint16_t port)
     if (NBN_Driver_GCli_Start(game_client.endpoint.protocol_id, host, port) < 0)
         return -1;
 
-    log_info("Started");
+    NBN_LogInfo("Started");
 
     return 0;
 }
@@ -3071,7 +3035,7 @@ void NBN_GameClient_Stop(void)
     NBN_Endpoint_Deinit(&game_client.endpoint);
     NBN_Connection_Destroy(game_client.server_connection);
 
-    log_info("Stopped");
+    NBN_LogInfo("Stopped");
 }
 
 NBN_GameClientEvent NBN_GameClient_Poll(void)
@@ -3084,7 +3048,7 @@ NBN_GameClientEvent NBN_GameClient_Poll(void)
 
         if (NBN_Connection_IsStale(game_client.server_connection))
         {
-            log_trace("Server connection is stale. Disconnected.");
+            NBN_LogTrace("Server connection is stale. Disconnected.");
 
             NBN_EventQueue_Enqueue(game_client.endpoint.events_queue, NBN_DISCONNECTED, NULL);
         }
@@ -3143,7 +3107,7 @@ int NBN_GameClient_ReadReceivedMessage(NBN_MessageInfo *message_info)
 {
     if (last_received_message_data == NULL)
     {
-        log_error("No message message to read, this should not happen. \
+        NBN_LogError("No message message to read, this should not happen. \
         Are you sure you are properly listening for 'NBN_MESSAGE_RECEIVED' events ?");
 
         return -1;
@@ -3331,7 +3295,7 @@ int NBN_GameServer_Start(uint16_t port)
     if (NBN_Driver_GServ_Start(game_server.endpoint.protocol_id, port) < 0)
         return -1;
 
-    log_info("Started");
+    NBN_LogInfo("Started");
 
     return 0;
 }
@@ -3342,7 +3306,7 @@ void NBN_GameServer_Stop(void)
     NBN_Endpoint_Deinit(&game_server.endpoint);
     NBN_List_Destroy(game_server.clients, true, (NBN_List_FreeItemFunc)NBN_Connection_Destroy);
 
-    log_info("Stopped");
+    NBN_LogInfo("Stopped");
 }
 
 NBN_GameServerEvent NBN_GameServer_Poll(void)
@@ -3463,7 +3427,7 @@ int NBN_GameServer_ReadReceivedMessage(NBN_MessageInfo *message_info)
 {
     if (last_received_message_data == NULL)
     {
-        log_error("No message message to read, this should not happen. \
+        NBN_LogError("No message message to read, this should not happen. \
         Are you sure you are properly listening for 'NBN_CLIENT_MESSAGE_RECEIVED' events ?");
 
         return -1;
@@ -3625,7 +3589,7 @@ static void close_stale_client_connections(void)
 
         if (NBN_Connection_IsStale(client))
         {
-            log_trace("Client %d connection is stale. Closing connection.", client->id);
+            NBN_LogTrace("Client %d connection is stale. Closing connection.", client->id);
 
             NBN_GameServer_CloseClient(client);
         }
@@ -3748,120 +3712,6 @@ static void release_client_message_received_event_data(void)
 #endif /* NBN_GAME_SERVER */
 
 #pragma endregion /* NBN_GameServer */
-
-#pragma region Logging
-
-static struct
-{
-    void *udata;
-    log_LockFn lock;
-    FILE *fp;
-    int level;
-    int quiet;
-} L;
-
-static const char *level_names[] = {
-    "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
-
-#ifdef LOG_USE_COLOR
-static const char *level_colors[] = {
-    "\x1b[94m", "\x1b[36m", "\x1b[32m", "\x1b[33m", "\x1b[31m", "\x1b[35m"};
-#endif
-
-static void lock(void)
-{
-    if (L.lock)
-    {
-        L.lock(L.udata, 1);
-    }
-}
-
-static void unlock(void)
-{
-    if (L.lock)
-    {
-        L.lock(L.udata, 0);
-    }
-}
-
-void log_set_udata(void *udata)
-{
-    L.udata = udata;
-}
-
-void log_set_lock(log_LockFn fn)
-{
-    L.lock = fn;
-}
-
-void log_set_fp(FILE *fp)
-{
-    L.fp = fp;
-}
-
-void log_set_level(int level)
-{
-    L.level = level;
-}
-
-void log_set_quiet(int enable)
-{
-    L.quiet = enable ? 1 : 0;
-}
-
-void log_log(int level, const char *file, int line, const char *fmt, ...)
-{
-    if (level < L.level)
-    {
-        return;
-    }
-
-    /* Acquire lock */
-    lock();
-
-    /* Get current time */
-    time_t t = time(NULL);
-    struct tm *lt = localtime(&t);
-
-    /* Log to stderr */
-    if (!L.quiet)
-    {
-        va_list args;
-        char buf[16];
-        buf[strftime(buf, sizeof(buf), "%H:%M:%S", lt)] = '\0';
-#ifdef LOG_USE_COLOR
-        fprintf(
-            stderr, "%s %s%-5s\x1b[0m \x1b[90m%s:%d:\x1b[0m ",
-            buf, level_colors[level], level_names[level], file, line);
-#else
-        fprintf(stderr, "%s %-5s %s:%d: ", buf, level_names[level], file, line);
-#endif
-        va_start(args, fmt);
-        vfprintf(stderr, fmt, args);
-        va_end(args);
-        fprintf(stderr, "\n");
-        fflush(stderr);
-    }
-
-    /* Log to file */
-    if (L.fp)
-    {
-        va_list args;
-        char buf[32];
-        buf[strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", lt)] = '\0';
-        fprintf(L.fp, "%s %-5s %s:%d: ", buf, level_names[level], file, line);
-        va_start(args, fmt);
-        vfprintf(L.fp, fmt, args);
-        va_end(args);
-        fprintf(L.fp, "\n");
-        fflush(L.fp);
-    }
-
-    /* Release lock */
-    unlock();
-}
-
-#pragma endregion /* Logging */
 
 #endif /* NBNET_IMPL */
 
