@@ -21,14 +21,14 @@ static void handle_client_connection(void)
 
     NBN_GameServer_GetConnectedClient()->user_data = soak_client;
 
-    log_info("Client has connected (id: %d)", soak_client->id);
+    Soak_LogInfo("Client has connected (id: %d)", soak_client->id);
 }
 
 static void handle_client_disconnection(void)
 {
     SoakClient *soak_client = NBN_GameServer_GetDisconnectedClient()->user_data;
 
-    log_info("Client has disconnected (id: %d)", soak_client->id);
+    Soak_LogInfo("Client has disconnected (id: %d)", soak_client->id);
 
     free(soak_client);
 }
@@ -44,7 +44,7 @@ static int echo_soak_message(SoakMessage *msg, NBN_Connection *sender_cli)
 
     if (echo_msg == NULL)
     {
-        log_error("Failed to create soak message");
+        Soak_LogError("Failed to create soak message");
 
         return -1;
     }
@@ -68,7 +68,7 @@ static int handle_soak_message(SoakMessage *msg, NBN_Connection *sender_cli)
 
     if (msg->id != soak_client->last_recved_message_id + 1)
     {
-        log_error("Expected to receive message %d but received message %d (from client: %d)\n",
+        Soak_LogError("Expected to receive message %d but received message %d (from client: %d)\n",
           soak_client->last_recved_message_id + 1, msg->id, sender_cli->id);
 
         soak_client->error = true;
@@ -76,7 +76,7 @@ static int handle_soak_message(SoakMessage *msg, NBN_Connection *sender_cli)
         return -1;
     }
 
-    log_info("Received message %d from client %d\n", msg->id, sender_cli->id);
+    Soak_LogInfo("Received message %d from client %d\n", msg->id, sender_cli->id);
 
     soak_client->recved_messages_count++;
     soak_client->last_recved_message_id = msg->id;
@@ -101,7 +101,7 @@ static void handle_message(void)
         break;
     
     default:
-        log_error("Received unexpected message (type: %d)", msg.type);
+        Soak_LogError("Received unexpected message (type: %d)", msg.type);
 
         close_client(msg.sender);
         break;
@@ -136,7 +136,7 @@ static int tick(void)
 
     if (NBN_GameServer_Flush() < 0)
     {
-        log_error("Failed to flush game server send queue. Exit");
+        Soak_LogError("Failed to flush game server send queue. Exit");
 
         return -1;
     }
@@ -161,7 +161,7 @@ int main(int argc, char *argv[])
 
     if (NBN_GameServer_Start(SOAK_PORT))
     {
-        log_error("Failed to start game server");
+        Soak_LogError("Failed to start game server");
 
         return 1;
     }

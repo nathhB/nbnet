@@ -130,7 +130,7 @@ void Soak_Stop(void)
 {
     running = false;
 
-    log_info("Soak test stopped");
+    Soak_LogInfo("Soak test stopped");
 }
 
 SoakOptions Soak_GetOptions(void)
@@ -160,13 +160,13 @@ void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *conn, NBN_Message *msg)
 {
     if (msg->header.type == NBN_MESSAGE_CHUNK_TYPE)
     {
-        log_debug("Soak message chunk added to recv queue");
+        Soak_LogDebug("Soak message chunk added to recv queue");
     }
     else
     {
         SoakMessage *soak_message = (SoakMessage *)msg->data;
 
-        log_debug("Soak message added to recv queue (conn id: %d, msg id: %d, soak msg id: %d)",
+        Soak_LogDebug("Soak message added to recv queue (conn id: %d, msg id: %d, soak msg id: %d)",
                 conn->id, msg->header.id, soak_message->id);
     }
 }

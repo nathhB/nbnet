@@ -3,6 +3,14 @@
 
 #include <stdbool.h>
 
+#include "logging.h"
+
+/* nbnet logging */
+#define NBN_LogInfo Soak_LogInfo
+#define NBN_LogTrace Soak_LogTrace
+#define NBN_LogDebug Soak_LogDebug
+#define NBN_LogError Soak_LogError
+
 #include "../nbnet.h"
 
 #define SOAK_PROTOCOL_NAME "nbnet_soak"
