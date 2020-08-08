@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.0)
 
 project(soak C)
 
-add_executable(client client.c soak.c)
-add_executable(server server.c soak.c)
+add_executable(client client.c soak.c logging.c)
+add_executable(server server.c soak.c logging.c)
 
 add_compile_options(-Wall -Wextra)
 

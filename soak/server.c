@@ -131,6 +131,9 @@ static int tick(void)
         case NBN_CLIENT_MESSAGE_RECEIVED:
             handle_message();
             break;
+
+        case NBN_ERROR:
+            return -1;
         }
     }
 

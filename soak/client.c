@@ -134,6 +134,9 @@ static int tick(void)
             if (handle_message() < 0)
                 return -1;
             break;
+
+        case NBN_ERROR:
+            return -1;
         }
     }
 
