@@ -4,6 +4,12 @@
 
 #define NBNET_IMPL
 
+/* nbnet logging */
+#define NBN_LogInfo printf
+#define NBN_LogTrace printf
+#define NBN_LogDebug printf
+#define NBN_LogError printf
+
 #include "../nbnet.h"
 
 typedef struct
@@ -114,7 +120,7 @@ void Test_ChunksGeneration(CuTest *tc)
                 message_size - (i * NBN_MESSAGE_CHUNK_SIZE),
                 NBN_MESSAGE_CHUNK_SIZE);
 
-        log_debug("Read chunk %d (bytes: %d)", i, cpy_size);
+        NBN_LogDebug("Read chunk %d (bytes: %d)", i, cpy_size);
 
         memcpy(r_buffer + (i * NBN_MESSAGE_CHUNK_SIZE), chunk->data, cpy_size);
 
