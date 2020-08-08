@@ -105,7 +105,7 @@ static int init_socket(void)
     int err = WSAStartup(MAKEWORD(2, 2), &wsa);
     if (err < 0)
     {
-        log_error("WSAStartup() failed");
+        NBN_LogError("WSAStartup() failed");
 
         return -1;
     }
@@ -119,7 +119,7 @@ static int init_socket(void)
 
     if (ioctlsocket(udp_sock, FIONBIO, &non_blocking) != 0)
     {
-        log_error("ioctlsocket() failed: %d", WSAGetLastError());
+        NBN_LogError("ioctlsocket() failed: %d", WSAGetLastError());
 
         return -1;
     }
@@ -128,7 +128,7 @@ static int init_socket(void)
 
     if (fcntl(udp_sock, F_SETFL, O_NONBLOCK, non_blocking) < 0)
     {
-        log_error("fcntl() failed: %s", strerror(errno));
+        NBN_LogError("fcntl() failed: %s", strerror(errno));
 
         return -1;
     }
@@ -156,7 +156,7 @@ static int bind_socket(uint16_t port)
 
     if (bind(udp_sock, (SOCKADDR *)&sin, sizeof(sin)) < 0)
     {
-        log_error("bind() failed: %s", strerror(errno));
+        NBN_LogError("bind() failed: %s", strerror(errno));
 
         return -1;
     }
@@ -197,7 +197,7 @@ static int read_received_packets(void (*process_packet)(NBN_Packet *, NBN_IPAddr
 
     if (ret == 0)
     {
-        log_error("Socket was closed");
+        NBN_LogError("Socket was closed");
 
         return -1;
     }
@@ -206,7 +206,7 @@ static int read_received_packets(void (*process_packet)(NBN_Packet *, NBN_IPAddr
     {
         if (errno != EAGAIN && errno != EWOULDBLOCK)
         {
-            log_error("recvfrom() failed: %s", strerror(errno));
+            NBN_LogError("recvfrom() failed: %s", strerror(errno));
 
             return -1;
         }
@@ -295,7 +295,7 @@ int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, uint32_t conn_id)
 
     if (connection == NULL)
     {
-        log_error("Connection %d does not exist", conn_id);
+        NBN_LogError("Connection %d does not exist", conn_id);
 
         return -1;
     }
@@ -308,7 +308,7 @@ int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, uint32_t conn_id)
 
     if (sendto(udp_sock, packet->buffer, packet->size, 0, (SOCKADDR *)&dest_addr, sizeof(dest_addr)) != packet->size)
     {
-        log_error("sendto() failed: %s", strerror(errno));
+        NBN_LogError("sendto() failed: %s", strerror(errno));
 
         return -1;
     }
@@ -397,7 +397,7 @@ int NBN_Driver_GCli_Start(uint32_t proto_id, const char *host, uint16_t port)
 
     if (resolve_ip_address(host, port, &server_connection.address) < 0)
     {
-        log_error("Failed to resolve IP address from %s", host);
+        NBN_LogError("Failed to resolve IP address from %s", host);
 
         return -1;
     }
@@ -424,7 +424,7 @@ int NBN_Driver_GCli_RecvPackets(void)
 {
     if (server_connection_closed)
     {
-        log_error("Server connection is closed");
+        NBN_LogError("Server connection is closed");
 
         return -1;
     }
@@ -436,7 +436,7 @@ int NBN_Driver_GCli_SendPacket(NBN_Packet *packet)
 {
     if (server_connection_closed)
     {
-        log_error("Server connection is closed");
+        NBN_LogError("Server connection is closed");
 
         return -1;
     }
@@ -449,7 +449,7 @@ int NBN_Driver_GCli_SendPacket(NBN_Packet *packet)
 
     if (sendto(udp_sock, packet->buffer, packet->size, 0, (SOCKADDR *)&dest_addr, sizeof(dest_addr)) != packet->size)
     {
-        log_error("sendto() failed: %s", strerror(errno));
+        NBN_LogError("sendto() failed: %s", strerror(errno));
 
         return -1;
     }
