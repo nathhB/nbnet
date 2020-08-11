@@ -51,7 +51,7 @@ NBN_Connection *Begin(void)
     message_serializers[NBN_MESSAGE_CHUNK_TYPE] = (NBN_MessageSerializer)NBN_MessageChunk_Serialize;
     message_serializers[BIG_MESSAGE_TYPE] = (NBN_MessageSerializer)BigMessage_Serialize;
 
-    NBN_Connection *conn = NBN_Connection_Create(0, 0, true, message_builders, message_destructors, message_serializers);
+    NBN_Connection *conn = NBN_Connection_Create(0, 0, message_builders, message_destructors, message_serializers);
 
     NBN_Connection_CreateChannel(conn, NBN_CHANNEL_RELIABLE_ORDERED, 0);
 

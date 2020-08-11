@@ -124,10 +124,6 @@ static int tick(void)
             handle_client_disconnection();
             break;
 
-        case NBN_CLIENT_CONNECTION_REQUESTED:
-            /* unused for now */
-            break;
-
         case NBN_CLIENT_MESSAGE_RECEIVED:
             handle_message();
             break;
