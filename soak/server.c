@@ -145,17 +145,15 @@ static int tick(void)
 
 int main(int argc, char *argv[])
 {
-    if (Soak_ReadCommandLine(argc, argv) < 0)
-        return 1;
-
     NBN_GameServer_Init(SOAK_PROTOCOL_NAME);
-    Soak_Init();
 
-    NBN_GameServer_Debug_SetMinPacketLossRatio(Soak_GetOptions().min_packet_loss);
-    NBN_GameServer_Debug_SetMaxPacketLossRatio(Soak_GetOptions().max_packet_loss);
-    NBN_GameServer_Debug_SetPacketDuplicationRatio(Soak_GetOptions().packet_duplication);
-    NBN_GameServer_Debug_SetPing(Soak_GetOptions().ping);
-    NBN_GameServer_Debug_SetJitter(Soak_GetOptions().jitter);
+    if (Soak_Init(argc, argv) < 0)
+    {
+        NBN_GameServer_Stop();
+
+        return 1;
+    }
+
     NBN_GameServer_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, Soak_Debug_PrintAddedToRecvQueue);
 
     if (NBN_GameServer_Start(SOAK_PORT))

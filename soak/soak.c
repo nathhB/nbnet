@@ -21,8 +21,7 @@
 enum
 {
     OPT_MESSAGES_COUNT,
-    OPT_MIN_PACKET_LOSS,
-    OPT_MAX_PACKET_LOSS,
+    OPT_PACKET_LOSS,
     OPT_PACKET_DUPLICATION,
     OPT_PING,
     OPT_JITTER
@@ -31,15 +30,31 @@ enum
 static bool running = true;
 static SoakOptions soak_options = {0};
 
-void Soak_Init(void)
+int Soak_Init(int argc, char *argv[])
 {
     srand(SOAK_SEED);
+
+    if (Soak_ReadCommandLine(argc, argv) < 0)
+        return -1;
 
     NBN_RegisterMessage(SOAK_MESSAGE, SoakMessage_Create, SoakMessage_Serialize, NULL);
     NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, SOAK_CHAN_RELIABLE_ORDERED_1);
     NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, SOAK_CHAN_RELIABLE_ORDERED_2);
     NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, SOAK_CHAN_RELIABLE_ORDERED_3);
     NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, SOAK_CHAN_RELIABLE_ORDERED_4);
+
+    /* Packet simulator configuration */
+
+    NBN_Debug_SetPing(soak_options.ping);
+    NBN_Debug_SetJitter(soak_options.jitter);
+    NBN_Debug_SetPacketLoss(soak_options.packet_loss);
+    NBN_Debug_SetPacketDuplication(soak_options.packet_duplication);
+
+    return 0;
+}
+
+void Soak_Deinit(void)
+{
 }
 
 int Soak_ReadCommandLine(int argc, char *argv[])
@@ -58,8 +73,7 @@ int Soak_ReadCommandLine(int argc, char *argv[])
     int option_index;
     struct option long_options[] = {
         { "messages_count", required_argument, NULL, OPT_MESSAGES_COUNT },
-        { "min_packet_loss", required_argument, NULL, OPT_MIN_PACKET_LOSS },
-        { "max_packet_loss", required_argument, NULL, OPT_MAX_PACKET_LOSS },
+        { "packet_loss", required_argument, NULL, OPT_PACKET_LOSS },
         { "packet_duplication", required_argument, NULL, OPT_PACKET_DUPLICATION },
         { "ping", required_argument, NULL, OPT_PING },
         { "jitter", required_argument, NULL, OPT_JITTER }
@@ -75,12 +89,8 @@ int Soak_ReadCommandLine(int argc, char *argv[])
             break;
 #endif
 
-        case OPT_MIN_PACKET_LOSS:
-            soak_options.min_packet_loss = atof(optarg);
-            break;
-
-        case OPT_MAX_PACKET_LOSS:
-            soak_options.max_packet_loss = atof(optarg);
+        case OPT_PACKET_LOSS:
+            soak_options.packet_loss = atof(optarg);
             break;
 
         case OPT_PACKET_DUPLICATION:

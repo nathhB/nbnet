@@ -24,8 +24,7 @@
 typedef struct
 {
     unsigned int messages_count;
-    float min_packet_loss;
-    float max_packet_loss;
+    float packet_loss;
     float packet_duplication;
     unsigned int ping; /* in ms */
     unsigned int jitter; /* in ms */
@@ -46,7 +45,8 @@ enum
     SOAK_CHAN_RELIABLE_ORDERED_4
 };
 
-void Soak_Init(void);
+int Soak_Init(int, char *[]);
+void Soak_Deinit(void);
 int Soak_ReadCommandLine(int, char *[]);
 int Soak_MainLoop(int (*)(void));
 void Soak_Stop(void);

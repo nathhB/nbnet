@@ -153,27 +153,27 @@ static int tick(void)
         return -1;
     }
 
+    Soak_LogDebug("Ping: %d", NBN_GameClient_GetStats().ping);
+
     return 0;
 }
 
 int main(int argc, char *argv[])
 {
-    if (Soak_ReadCommandLine(argc, argv) < 0)
+    NBN_GameClient_Init(SOAK_PROTOCOL_NAME);
+    
+    if (Soak_Init(argc, argv) < 0)
+    {
+        NBN_GameClient_Stop();
+
         return 1;
+    }
 
     messages_data = malloc(sizeof(uint8_t *) * Soak_GetOptions().messages_count);
 
     for (int i = 0; i < Soak_GetOptions().messages_count; i++)
         messages_data[i] = NULL;
 
-    NBN_GameClient_Init(SOAK_PROTOCOL_NAME);
-    Soak_Init();
-
-    NBN_GameClient_Debug_SetMinPacketLossRatio(Soak_GetOptions().min_packet_loss);
-    NBN_GameClient_Debug_SetMaxPacketLossRatio(Soak_GetOptions().min_packet_loss);
-    NBN_GameClient_Debug_SetPacketDuplicationRatio(Soak_GetOptions().packet_duplication);
-    NBN_GameClient_Debug_SetPing(Soak_GetOptions().ping);
-    NBN_GameClient_Debug_SetJitter(Soak_GetOptions().jitter);
     NBN_GameClient_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, Soak_Debug_PrintAddedToRecvQueue);
 
     if (NBN_GameClient_Start("127.0.0.1", SOAK_PORT) < 0)
@@ -186,6 +186,7 @@ int main(int argc, char *argv[])
     int ret = Soak_MainLoop(tick);
 
     NBN_GameClient_Stop();
+    Soak_Deinit();
 
     for (int i = 0; i < Soak_GetOptions().messages_count; i++)
     {

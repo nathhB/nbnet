@@ -7,8 +7,8 @@ add_executable(server server.c soak.c logging.c)
 
 add_compile_options(-Wall -Wextra)
 
-target_compile_definitions(client PUBLIC NBN_GAME_CLIENT NBN_DEBUG)
-target_compile_definitions(server PUBLIC NBN_GAME_SERVER NBN_DEBUG)
+target_compile_definitions(client PUBLIC NBN_GAME_CLIENT NBN_DEBUG NBN_USE_PACKET_SIMULATOR)
+target_compile_definitions(server PUBLIC NBN_GAME_SERVER NBN_DEBUG NBN_USE_PACKET_SIMULATOR)
 
 option(NBN_DRIVER_UDP "use udp driver")
 option(NBN_DRIVER_UDP_SDL_NET "use SDL_net udp driver")
