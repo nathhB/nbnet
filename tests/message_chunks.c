@@ -89,7 +89,7 @@ void Test_ChunksGeneration(CuTest *tc)
 
     NBN_MeasureStream_Init(&m_stream);
 
-    unsigned int message_size = (NBN_Message_Measure(conn->message, (NBN_MessageSerializer)BigMessage_Serialize, &m_stream) - 1) / 8 + 1;
+    unsigned int message_size = (NBN_Message_Measure(conn->message, &m_stream) - 1) / 8 + 1;
     uint8_t *buffer = malloc(message_size);
     NBN_WriteStream w_stream;
 
@@ -179,24 +179,24 @@ void Test_NBN_Channel_AddChunk(CuTest *tc)
 
     CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg1));
     CuAssertIntEquals(tc, 0, channel->last_received_chunk_id);
-    CuAssertIntEquals(tc, 1, channel->chunks_count);
+    CuAssertIntEquals(tc, 1, channel->chunk_count);
 
     CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg2));
     CuAssertIntEquals(tc, 1, channel->last_received_chunk_id);
-    CuAssertIntEquals(tc, 2, channel->chunks_count);
+    CuAssertIntEquals(tc, 2, channel->chunk_count);
 
     CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg3));
     CuAssertIntEquals(tc, 2, channel->last_received_chunk_id);
-    CuAssertIntEquals(tc, 3, channel->chunks_count);
+    CuAssertIntEquals(tc, 3, channel->chunk_count);
 
     CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg4));
     CuAssertIntEquals(tc, 3, channel->last_received_chunk_id);
-    CuAssertIntEquals(tc, 4, channel->chunks_count);
+    CuAssertIntEquals(tc, 4, channel->chunk_count);
 
     /* This is the last chunk of the first message so it should return true */
     CuAssertTrue(tc, NBN_Channel_AddChunk(channel, chunk_msg5));
     CuAssertIntEquals(tc, -1, channel->last_received_chunk_id);
-    CuAssertIntEquals(tc, 5, channel->chunks_count);
+    CuAssertIntEquals(tc, 5, channel->chunk_count);
 
     /* Reconstruct the message so the chunks buffer gets cleared */
     NBN_Channel_ReconstructMessageFromChunks(channel, conn);
@@ -205,24 +205,24 @@ void Test_NBN_Channel_AddChunk(CuTest *tc)
 
     CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg6));
     CuAssertIntEquals(tc, 0, channel->last_received_chunk_id);
-    CuAssertIntEquals(tc, 1, channel->chunks_count);
+    CuAssertIntEquals(tc, 1, channel->chunk_count);
 
     CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg7));
     CuAssertIntEquals(tc, 1, channel->last_received_chunk_id);
-    CuAssertIntEquals(tc, 2, channel->chunks_count);
+    CuAssertIntEquals(tc, 2, channel->chunk_count);
 
     CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg8));
     CuAssertIntEquals(tc, 2, channel->last_received_chunk_id);
-    CuAssertIntEquals(tc, 3, channel->chunks_count);
+    CuAssertIntEquals(tc, 3, channel->chunk_count);
 
     CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg9));
     CuAssertIntEquals(tc, 3, channel->last_received_chunk_id);
-    CuAssertIntEquals(tc, 4, channel->chunks_count);
+    CuAssertIntEquals(tc, 4, channel->chunk_count);
 
     /* This is the last chunk of the second message so it should return true */
     CuAssertTrue(tc, NBN_Channel_AddChunk(channel, chunk_msg10));
     CuAssertIntEquals(tc, -1, channel->last_received_chunk_id);
-    CuAssertIntEquals(tc, 5, channel->chunks_count);
+    CuAssertIntEquals(tc, 5, channel->chunk_count);
 
     End(conn);
 }

@@ -8,6 +8,7 @@ typedef struct
     unsigned int recved_messages_count;
     unsigned int last_recved_message_id;
     bool error;
+    NBN_List *echo_queue;
 } SoakClient;
 
 static void handle_client_connection(void)
@@ -18,6 +19,7 @@ static void handle_client_connection(void)
     soak_client->recved_messages_count = 0;
     soak_client->last_recved_message_id = 0;
     soak_client->error = false;
+    soak_client->echo_queue = NBN_List_Create();
 
     NBN_GameServer_GetConnectedClient()->user_data = soak_client;
 
@@ -30,6 +32,7 @@ static void handle_client_disconnection(void)
 
     Soak_LogInfo("Client has disconnected (id: %d)", soak_client->id);
 
+    NBN_List_Destroy(soak_client->echo_queue, true, NULL);
     free(soak_client);
 }
 
@@ -38,25 +41,52 @@ static void close_client(NBN_Connection *client)
     NBN_GameServer_CloseClient(client);
 }
 
-static int echo_soak_message(SoakMessage *msg, NBN_Connection *sender_cli)
+static void send_echoes(void)
 {
-    SoakMessage *echo_msg = NBN_GameServer_CreateMessage(SOAK_MESSAGE, SOAK_CHAN_RELIABLE_ORDERED_1, sender_cli);
+    NBN_List *clients = NBN_GameServer_GetClients();
+    NBN_ListNode *current_cli_node = clients->head;
 
-    if (echo_msg == NULL)
+    while (current_cli_node)
     {
-        Soak_LogError("Failed to create soak message");
+        NBN_Connection *sender = current_cli_node->data;
+        SoakClient *soak_client = sender->user_data;
+        NBN_ListNode *current_echo_node = soak_client->echo_queue->head;
 
-        return -1;
+        while (current_echo_node)
+        {
+            SoakMessage *msg = current_echo_node->data;
+            SoakMessage *echo_msg = NBN_GameServer_CreateMessage(SOAK_MESSAGE, SOAK_CHAN_RELIABLE_ORDERED_1, sender);
+
+            current_echo_node = current_echo_node->next;
+
+            if (echo_msg == NULL)
+            {
+                Soak_LogError("Failed to create soak message");
+                close_client(sender);
+
+                return;
+            }
+
+            echo_msg->id = msg->id;
+            echo_msg->data_length = msg->data_length;
+
+            /*if (!NBN_GameServer_CanSendMessageTo(sender))
+            {
+                free(echo_msg);
+
+                break;
+            }*/
+
+            memcpy(echo_msg->data, msg->data, msg->data_length);
+
+            if (NBN_GameServer_SendMessageTo(sender) < 0)
+                close_client(sender);
+
+            free(NBN_List_Remove(soak_client->echo_queue, msg));
+        }
+
+        current_cli_node = current_cli_node->next;
     }
-
-    echo_msg->id = msg->id;
-    echo_msg->data_length = msg->data_length;
-
-    memcpy(echo_msg->data, msg->data, msg->data_length);
-
-    NBN_GameServer_SendMessageTo(sender_cli);
-
-    return 0;
 }
 
 static int handle_soak_message(SoakMessage *msg, NBN_Connection *sender_cli)
@@ -81,8 +111,7 @@ static int handle_soak_message(SoakMessage *msg, NBN_Connection *sender_cli)
     soak_client->recved_messages_count++;
     soak_client->last_recved_message_id = msg->id;
 
-    if (echo_soak_message(msg, sender_cli) < 0)
-        return -1;
+    NBN_List_PushBack(soak_client->echo_queue, msg);
 
     return 0;
 }
@@ -132,6 +161,8 @@ static int tick(void)
             return -1;
         }
     }
+
+    send_echoes();
 
     if (NBN_GameServer_Flush() < 0)
     {

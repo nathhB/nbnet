@@ -41,10 +41,8 @@ int Soak_Init(int argc, char *argv[])
     NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, SOAK_CHAN_RELIABLE_ORDERED_1);
     NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, SOAK_CHAN_RELIABLE_ORDERED_2);
     NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, SOAK_CHAN_RELIABLE_ORDERED_3);
-    NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, SOAK_CHAN_RELIABLE_ORDERED_4);
 
     /* Packet simulator configuration */
-
     NBN_Debug_SetPing(soak_options.ping);
     NBN_Debug_SetJitter(soak_options.jitter);
     NBN_Debug_SetPacketLoss(soak_options.packet_loss);

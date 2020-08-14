@@ -22,7 +22,7 @@ static int send_messages(void)
 {
     if (sent_messages_count < Soak_GetOptions().messages_count)
     {
-        unsigned int count = (rand() % MIN(50, Soak_GetOptions().messages_count - sent_messages_count)) + 1;
+        unsigned int count = MIN((rand() % 64) + 1, Soak_GetOptions().messages_count - sent_messages_count);
 
         for (int i = 0; i < count; i++)
         {
@@ -35,8 +35,16 @@ static int send_messages(void)
                 return -1;
             }
 
-            msg->id = next_msg_id++;
             msg->data_length = rand() % (SOAK_MESSAGE_MAX_DATA_LENGTH - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
+
+            if (!NBN_GameClient_CanSendMessage())
+            {
+                free(msg);
+
+                return 0;
+            }
+
+            msg->id = next_msg_id++;
 
             uint8_t *bytes = generate_random_bytes(msg->data_length);
 
@@ -46,11 +54,12 @@ static int send_messages(void)
             memcpy(messages_data[msg->id - 1], msg->data, msg->data_length);
             free(bytes); // TODO: use a message destructor
 
-            sent_messages_count++;
-
             Soak_LogInfo("Send soak message (id: %d, data length: %d)", msg->id, msg->data_length);
 
-            NBN_GameClient_SendMessage();
+            if (NBN_GameClient_SendMessage() < 0)
+                return -1;
+
+            sent_messages_count++;
         }
     }
 
@@ -153,7 +162,7 @@ static int tick(void)
         return -1;
     }
 
-    Soak_LogDebug("Ping: %d", NBN_GameClient_GetStats().ping);
+    // Soak_LogDebug("Ping: %d", NBN_GameClient_GetStats().ping);
 
     return 0;
 }
