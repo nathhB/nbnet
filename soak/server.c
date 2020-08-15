@@ -70,12 +70,12 @@ static void send_echoes(void)
             echo_msg->id = msg->id;
             echo_msg->data_length = msg->data_length;
 
-            /*if (!NBN_GameServer_CanSendMessageTo(sender))
+            if (!NBN_GameServer_CanSendMessageTo(sender))
             {
                 free(echo_msg);
 
                 break;
-            }*/
+            }
 
             memcpy(echo_msg->data, msg->data, msg->data_length);
 
