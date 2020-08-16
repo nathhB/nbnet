@@ -32,4 +32,10 @@ if (NBN_DRIVER_UDP)
 
     target_compile_definitions(client PUBLIC NBN_DRIVER_UDP_IMPL)
     target_compile_definitions(server PUBLIC NBN_DRIVER_UDP_IMPL)
+
+    if(WIN32)
+        target_link_libraries(client wsock32 ws2_32)
+        target_link_libraries(server wsock32 ws2_32)
+    endif()
+
 endif (NBN_DRIVER_UDP)
