@@ -51,6 +51,8 @@ freely, subject to the following restrictions:
 
 #include <winsock2.h>
 
+typedef int socklen_t;
+
 #elif defined(PLATFORM_UNIX) || defined(PLATFORM_MAC)
 
 #include <sys/types.h>
@@ -92,11 +94,18 @@ static bool server_connection_closed = false;
 
 #pragma region Socket functions
 
+#ifdef PLATFORM_WINDOWS
+
+static char err_msg[32];
+
+#endif
+
 static int init_socket(void);
 static void deinit_socket(void);
 static int bind_socket(uint16_t);
 static int read_received_packets(void (*)(NBN_Packet *, NBN_IPAddress));
 static int resolve_ip_address(const char *, uint16_t, NBN_IPAddress *);
+static char *get_last_error(void);
 
 static int init_socket(void)
 {
@@ -119,7 +128,7 @@ static int init_socket(void)
 
     if (ioctlsocket(udp_sock, FIONBIO, &non_blocking) != 0)
     {
-        NBN_LogError("ioctlsocket() failed: %d", WSAGetLastError());
+        NBN_LogError("ioctlsocket() failed: %s", get_last_error());
 
         return -1;
     }
@@ -128,7 +137,7 @@ static int init_socket(void)
 
     if (fcntl(udp_sock, F_SETFL, O_NONBLOCK, non_blocking) < 0)
     {
-        NBN_LogError("fcntl() failed: %s", strerror(errno));
+        NBN_LogError("fcntl() failed: %s", get_last_error());
 
         return -1;
     }
@@ -156,7 +165,7 @@ static int bind_socket(uint16_t port)
 
     if (bind(udp_sock, (SOCKADDR *)&sin, sizeof(sin)) < 0)
     {
-        NBN_LogError("bind() failed: %s", strerror(errno));
+        NBN_LogError("bind() failed: %s", get_last_error());
 
         return -1;
     }
@@ -204,9 +213,13 @@ static int read_received_packets(void (*process_packet)(NBN_Packet *, NBN_IPAddr
 
     if (ret < 0)
     {
+#ifdef PLATFORM_WINDOWS
+        if (WSAGetLastError() != WSAEWOULDBLOCK)
+#else
         if (errno != EAGAIN && errno != EWOULDBLOCK)
+#endif
         {
-            NBN_LogError("recvfrom() failed: %s", strerror(errno));
+            NBN_LogError("recvfrom() failed: %s", get_last_error());
 
             return -1;
         }
@@ -242,6 +255,17 @@ static int resolve_ip_address(const char *host, uint16_t port, NBN_IPAddress *ad
     free(dup_host);
 
     return 0;
+}
+
+static char *get_last_error(void)
+{
+#ifdef PLATFORM_WINDOWS
+    sprintf(err_msg, "%d", WSAGetLastError());
+
+    return err_msg;
+#else
+    return strerror(errno);
+#endif
 }
 
 #pragma endregion /* Socket functions */
@@ -308,7 +332,7 @@ int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, uint32_t conn_id)
 
     if (sendto(udp_sock, packet->buffer, packet->size, 0, (SOCKADDR *)&dest_addr, sizeof(dest_addr)) != packet->size)
     {
-        NBN_LogError("sendto() failed: %s", strerror(errno));
+        NBN_LogError("sendto() failed: %s", get_last_error());
 
         return -1;
     }
@@ -449,7 +473,7 @@ int NBN_Driver_GCli_SendPacket(NBN_Packet *packet)
 
     if (sendto(udp_sock, packet->buffer, packet->size, 0, (SOCKADDR *)&dest_addr, sizeof(dest_addr)) != packet->size)
     {
-        NBN_LogError("sendto() failed: %s", strerror(errno));
+        NBN_LogError("sendto() failed: %s", get_last_error());
 
         return -1;
     }
