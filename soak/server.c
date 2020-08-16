@@ -139,6 +139,8 @@ static void handle_message(void)
 
 static int tick(void)
 {
+    NBN_GameServer_AddTime(1000 / SOAK_TICK_RATE);
+
     NBN_GameServerEvent ev;
 
     while ((ev = NBN_GameServer_Poll()) != NBN_NO_EVENT)

@@ -123,6 +123,8 @@ static int handle_message(void)
 
 static int tick(void)
 {
+    NBN_GameClient_AddTime(1000 / SOAK_TICK_RATE);
+
     NBN_GameClientEvent ev;
 
     while ((ev = NBN_GameClient_Poll()) != NBN_NO_EVENT)
