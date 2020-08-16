@@ -53,6 +53,20 @@ int Soak_Init(int argc, char *argv[])
 
 void Soak_Deinit(void)
 {
+    Soak_LogInfo("Done.");
+    Soak_LogInfo("Memory report:\n");
+
+    NBN_MemoryReport mem_report = NBN_MemoryManager_GetReport();
+
+    Soak_LogInfo("Total alloc count: %d", mem_report.alloc_count);
+    Soak_LogInfo("Total dealloc count: %d", mem_report.dealloc_count);
+    Soak_LogInfo("Total created message count: %d", mem_report.created_message_count);
+    Soak_LogInfo("Total destroyed message count: %d", mem_report.destroyed_message_count);
+
+    for (int i = 0; i < 4; i++)
+    {
+        NBN_LogInfo("Object %d | Allocs: %d, Deallocs: %d", i, mem_report.object_allocs[i], mem_report.object_deallocs[i]);
+    }
 }
 
 int Soak_ReadCommandLine(int argc, char *argv[])
@@ -60,8 +74,8 @@ int Soak_ReadCommandLine(int argc, char *argv[])
 #ifdef NBN_GAME_CLIENT
     if (argc < 2)
     {
-        printf("Usage: client --message_count=<value> [--min_packet_loss=<value>] [--max_packet_loss=<value>] \
-            [--packet_duplication=<value>] [--ping=<value>]\n");
+        printf("Usage: client --message_count=<value> [--packet_loss=<value>] \
+            [--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
 
         return -1;
     }

@@ -48,6 +48,46 @@ freely, subject to the following restrictions:
 
 #pragma region Declarations
 
+#define NBN_Abort abort
+
+#pragma region Memory management
+
+#define NBN_Alloc(size) __Alloc(size)
+#define NBN_AllocObject(obj_type) __AllocObject(obj_type)
+#define NBN_Dealloc(ptr) __Dealloc(ptr)
+#define NBN_DeallocObject(obj_type, obj_ptr) __DeallocObject(obj_type, obj_ptr)
+
+typedef struct
+{
+    unsigned int alloc_count;
+    unsigned int dealloc_count;
+    unsigned int object_allocs[32];
+    unsigned int object_deallocs[32];
+    unsigned int created_message_count;
+    unsigned int destroyed_message_count;
+} NBN_MemoryReport;
+
+typedef struct
+{
+    NBN_MemoryReport report;
+} NBN_MemoryManager;
+
+typedef enum
+{
+    NBN_OBJ_MESSAGE,
+    NBN_OBJ_MESSAGE_CHUNK,
+    NBN_OBJ_CONNECTION,
+    NBN_OBJ_EVENT
+} NBN_ObjectType;
+
+void *NBN_MemoryManager_Alloc(size_t);
+void *NBN_MemoryManager_AllocObject(NBN_ObjectType);
+void NBN_MemoryManager_Dealloc(void *);
+void NBN_MemoryManager_DeallocObject(NBN_ObjectType, void *);
+NBN_MemoryReport NBN_MemoryManager_GetReport(void);
+
+#pragma endregion
+
 #pragma region NBN_List
 
 typedef struct NBN_ListNode
@@ -483,12 +523,6 @@ typedef struct
 
 #ifdef NBN_DEBUG
 
-typedef struct
-{
-    unsigned int created_messages_count;
-    unsigned int destroyed_messages_count;
-} NBN_ConnectionDebugInfo;
-
 typedef enum
 {
     NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE
@@ -510,8 +544,6 @@ struct __NBN_Connection
     NBN_ConnectionStats stats;
 
 #ifdef NBN_DEBUG
-    NBN_ConnectionDebugInfo debug_info;
-
     /* Debug callbacks */
     void (*debug_cb_on_msg_added_to_recv_queue)(struct __NBN_Connection *, NBN_Message *);
 #endif /* NBN_DEBUG */
@@ -750,7 +782,6 @@ int NBN_GameClient_OnPacketReceived(NBN_Packet *);
 
 #ifdef NBN_DEBUG
 void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
-NBN_ConnectionDebugInfo NBN_GameClient_Debug_GetInfo(void);
 
 #endif /* NBN_DEBUG */
 
@@ -807,8 +838,6 @@ int NBN_GameServer_OnPacketReceived(NBN_Packet *, NBN_Connection *);
 #define NBN_GameServer_GetMessageSender NBN_GameServer_GetLastEventClient
 
 #ifdef NBN_DEBUG
-NBN_ConnectionDebugInfo NBN_GameServer_Debug_GetDisconnectedClientInfo(void);
-NBN_ConnectionDebugInfo* NBN_GameServer_Debug_GetClientInfo(uint32_t);
 void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
 
 #endif /* NBN_DEBUG */
@@ -860,6 +889,118 @@ int NBN_Driver_GCli_SendPacket(NBN_Packet *);
 
 #ifdef NBNET_IMPL
 
+#pragma region Memory management
+
+static NBN_MemoryManager mem_manager = {
+    .report = {
+        .alloc_count = 0,
+        .dealloc_count = 0,
+        .object_allocs = {0},
+        .object_deallocs = {0}}};
+
+void *NBN_MemoryManager_Alloc(size_t size)
+{
+    mem_manager.report.alloc_count++;
+
+    return malloc(size);
+}
+
+void *NBN_MemoryManager_AllocObject(NBN_ObjectType obj_type)
+{
+    void *obj_ptr;
+
+    switch (obj_type)
+    {
+        case NBN_OBJ_MESSAGE:
+            obj_ptr = NBN_MemoryManager_Alloc(sizeof(NBN_Message));
+            break;
+
+        case NBN_OBJ_MESSAGE_CHUNK:
+            obj_ptr = NBN_MemoryManager_Alloc(sizeof(NBN_MessageChunk));
+            break;
+
+        case NBN_OBJ_CONNECTION:
+            obj_ptr = NBN_MemoryManager_Alloc(sizeof(NBN_Connection));
+            break;
+        
+        case NBN_OBJ_EVENT:
+            obj_ptr = NBN_MemoryManager_Alloc(sizeof(NBN_Event));
+            break;
+
+        default:
+            return NULL;
+    }
+
+#ifdef NBN_DEBUG
+    mem_manager.report.object_allocs[obj_type]++;
+#endif
+
+    return obj_ptr;
+}
+
+void NBN_MemoryManager_Dealloc(void *ptr)
+{
+    mem_manager.report.dealloc_count++;
+
+    free(ptr);
+}
+
+void NBN_MemoryManager_DeallocObject(NBN_ObjectType obj_type, void *obj_ptr)
+{
+    assert(mem_manager.report.object_allocs[obj_type] > 0);
+
+    // TODO: implement object pooling here
+
+    NBN_MemoryManager_Dealloc(obj_ptr);
+
+#ifdef NBN_DEBUG
+    mem_manager.report.object_deallocs[obj_type]++;
+#endif
+}
+
+NBN_MemoryReport NBN_MemoryManager_GetReport(void)
+{
+    return mem_manager.report;
+}
+
+static inline void *__Alloc(size_t size)
+{
+    void *ptr = NBN_MemoryManager_Alloc(size);
+
+    if (ptr == NULL)
+    {
+        NBN_LogError("Failed to allocate memory");
+        NBN_Abort();
+    }
+
+    return ptr;
+}
+
+static inline void *__AllocObject(NBN_ObjectType obj_type)
+{
+    void *obj_ptr = NBN_MemoryManager_AllocObject(obj_type);
+
+    if (obj_ptr == NULL)
+    {
+        NBN_LogError("Failed to allocate memory for object %d", obj_type);
+        NBN_Abort();
+    }
+
+    return obj_ptr;
+}
+
+static inline void __Dealloc(void *ptr)
+{
+    NBN_MemoryManager_Dealloc(ptr);
+}
+
+static inline void __DeallocObject(NBN_ObjectType obj_type, void *obj_ptr)
+{
+    NBN_MemoryManager_DeallocObject(obj_type, obj_ptr);
+}
+
+#pragma endregion
+
 #pragma region NBN_List
 
 static NBN_ListNode *create_list_node(void *);
@@ -867,7 +1008,7 @@ static void *remove_node_from_list(NBN_List *, NBN_ListNode *);
 
 NBN_List *NBN_List_Create()
 {
-    NBN_List *list = malloc(sizeof(NBN_List));
+    NBN_List *list = NBN_Alloc(sizeof(NBN_List));
 
     if (list == NULL)
         return NULL;
@@ -882,7 +1023,7 @@ NBN_List *NBN_List_Create()
 void NBN_List_Destroy(NBN_List *list, bool free_items, NBN_List_FreeItemFunc free_item_func)
 {
     NBN_List_Clear(list, free_items, free_item_func);
-    free(list);
+    NBN_Dealloc(list);
 }
 
 void NBN_List_Clear(NBN_List *list, bool free_items, NBN_List_FreeItemFunc free_item_func)
@@ -898,10 +1039,10 @@ void NBN_List_Clear(NBN_List *list, bool free_items, NBN_List_FreeItemFunc free_
             if (free_item_func)
                 free_item_func(current_node->data);
             else
-                free(current_node->data);
+                NBN_Dealloc(current_node->data);
         }
 
-        free(current_node);
+        NBN_Dealloc(current_node);
 
         current_node = next_node;
     }
@@ -989,7 +1130,7 @@ bool NBN_List_Includes(NBN_List *list, void *data)
 
 static NBN_ListNode *create_list_node(void *data)
 {
-    NBN_ListNode *node = malloc(sizeof(NBN_ListNode));
+    NBN_ListNode *node = NBN_Alloc(sizeof(NBN_ListNode));
 
     node->data = data;
 
@@ -1011,7 +1152,7 @@ static void *remove_node_from_list(NBN_List *list, NBN_ListNode *node)
 
         void *data = node->data;
 
-        free(node);
+        NBN_Dealloc(node);
         list->count--;
 
         return data;
@@ -1026,7 +1167,7 @@ static void *remove_node_from_list(NBN_List *list, NBN_ListNode *node)
 
         void *data = node->data;
 
-        free(node);
+        NBN_Dealloc(node);
         list->count--;
 
         return data;
@@ -1037,7 +1178,7 @@ static void *remove_node_from_list(NBN_List *list, NBN_ListNode *node)
 
     void *data = node->data;
 
-    free(node);
+    NBN_Dealloc(node);
     list->count--;
 
     return data;
@@ -1049,7 +1190,7 @@ static void *remove_node_from_list(NBN_List *list, NBN_ListNode *node)
 
 NBN_Timer *NBN_Timer_Create(void)
 {
-    NBN_Timer *timer = malloc(sizeof(NBN_Timer));
+    NBN_Timer *timer = NBN_Alloc(sizeof(NBN_Timer));
 
     timer->current_ms = 0;
     timer->elapsed_ms = 0;
@@ -1060,7 +1201,7 @@ NBN_Timer *NBN_Timer_Create(void)
 
 void NBN_Timer_Destroy(NBN_Timer *timer)
 {
-    free(timer);
+    NBN_Dealloc(timer);
 }
 
 void NBN_Timer_Start(NBN_Timer *timer)
@@ -1643,7 +1784,7 @@ static int serialize_packet_header(NBN_Packet *packet, NBN_Stream *stream)
 NBN_Message *NBN_Message_Create(
     uint8_t type, NBN_Channel *channel, NBN_MessageSerializer serializer, NBN_MessageDestructor destructor, void *data)
 {
-    NBN_Message *message = malloc(sizeof(NBN_Message));
+    NBN_Message *message = NBN_AllocObject(NBN_OBJ_MESSAGE);
 
     message->header.id = 0;
     message->header.type = type;
@@ -1668,10 +1809,10 @@ void NBN_Message_Destroy(NBN_Message *message, bool free_data)
         if (message->destructor)
             message->destructor(message->data);
         else
-            free(message->data);
+            NBN_Dealloc(message->data);
     }
 
-    free(message);
+    NBN_DeallocObject(NBN_OBJ_MESSAGE, message);
 }
 
 int NBN_Message_SerializeHeader(NBN_MessageHeader *message_header, NBN_Stream *stream)
@@ -1700,12 +1841,12 @@ int NBN_Message_Measure(NBN_Message *message, NBN_MeasureStream *m_stream)
 
 NBN_MessageChunk *NBN_MessageChunk_Create(void)
 {
-    return malloc(sizeof(NBN_MessageChunk));
+    return NBN_AllocObject(NBN_OBJ_MESSAGE_CHUNK);
 }
 
 void NBN_MessageChunk_Destroy(NBN_MessageChunk *chunk)
 {
-    free(chunk);
+    NBN_DeallocObject(NBN_OBJ_MESSAGE_CHUNK, chunk);
 }
 
 int NBN_MessageChunk_Serialize(NBN_MessageChunk *chunk, NBN_Stream *stream)
@@ -1752,7 +1893,7 @@ NBN_Connection *NBN_Connection_Create(int id,
                                 NBN_MessageDestructor message_destructors[NBN_MAX_MESSAGE_TYPES],
                                 NBN_MessageSerializer message_serializers[NBN_MAX_MESSAGE_TYPES])
 {
-    NBN_Connection *connection = malloc(sizeof(NBN_Connection));
+    NBN_Connection *connection = NBN_AllocObject(NBN_OBJ_CONNECTION);
 
     connection->id = id;
     connection->protocol_id = protocol_id;
@@ -1793,10 +1934,10 @@ void NBN_Connection_Destroy(NBN_Connection *connection)
     for (int i = 0; i < NBN_MAX_MESSAGE_CHANNELS; i++)
     {
         if (connection->channels[i])
-            free(connection->channels[i]);
+            NBN_Dealloc(connection->channels[i]);
     }
 
-    free(connection);
+    NBN_DeallocObject(NBN_OBJ_CONNECTION, connection);
 }
 
 int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet *packet)
@@ -1886,7 +2027,7 @@ void *NBN_Connection_CreateOutgoingMessage(NBN_Connection *connection, uint8_t m
     connection->message = message;
 
 #ifdef NBN_DEBUG
-    connection->debug_info.created_messages_count++;
+    mem_manager.report.created_message_count++;
 #endif
 
     return message->data;
@@ -1919,7 +2060,7 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
         if (message_size > NBN_PACKET_MAX_DATA_SIZE)
         {
             uint8_t chann_id = connection->message->header.channel_id;
-            uint8_t *message_bytes = malloc(message_size);
+            uint8_t *message_bytes = NBN_Alloc(message_size);
             NBN_WriteStream write_stream;
 
             NBN_WriteStream_Init(&write_stream, message_bytes, message_size);
@@ -2227,7 +2368,7 @@ static void remove_message_from_send_queue(NBN_Connection *connection, NBN_Messa
     NBN_Message_Destroy(NBN_List_Remove(connection->send_queue, message), true);
 
 #ifdef NBN_DEBUG
-    connection->debug_info.destroyed_messages_count++;
+    mem_manager.report.destroyed_message_count++;
 #endif
 }
 
@@ -2450,7 +2591,7 @@ bool NBN_Channel_AddChunk(NBN_Channel *channel, NBN_Message *chunk_msg)
 NBN_Message *NBN_Channel_ReconstructMessageFromChunks(NBN_Channel *channel, NBN_Connection *connection)
 {
     unsigned int size = channel->chunk_count * NBN_MESSAGE_CHUNK_SIZE;
-    uint8_t *data = malloc(size);
+    uint8_t *data = NBN_Alloc(size);
 
     for (unsigned int i = 0; i < channel->chunk_count; i++)
     {
@@ -2475,7 +2616,7 @@ NBN_Message *NBN_Channel_ReconstructMessageFromChunks(NBN_Channel *channel, NBN_
 
     message->sender = connection;
 
-    free(data);
+    NBN_Dealloc(data);
 
     return message;
 }
@@ -2488,7 +2629,7 @@ static bool process_received_unreliable_ordered_message(NBN_Channel *, NBN_Messa
 
 NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(uint8_t id)
 {
-    NBN_UnreliableOrderedChannel *channel = malloc(sizeof(NBN_UnreliableOrderedChannel));
+    NBN_UnreliableOrderedChannel *channel = NBN_Alloc(sizeof(NBN_UnreliableOrderedChannel));
 
     channel->base.id = id;
     channel->base.GetOutgoingMessagePolicy = get_unreliable_ordered_outgoing_message_policy;
@@ -2540,7 +2681,7 @@ static void on_reliable_message_acked(NBN_Channel *, NBN_Message *);
 
 NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(uint8_t id)
 {
-    NBN_ReliableOrderedChannel *channel = malloc(sizeof(NBN_ReliableOrderedChannel));
+    NBN_ReliableOrderedChannel *channel = NBN_Alloc(sizeof(NBN_ReliableOrderedChannel));
 
     channel->base.id = id;
     channel->base.GetOutgoingMessagePolicy = get_reliable_ordered_outgoing_message_policy;
@@ -2683,7 +2824,7 @@ static void on_reliable_message_acked(NBN_Channel *channel, NBN_Message *message
 
 NBN_EventQueue *NBN_EventQueue_Create(void)
 {
-    NBN_EventQueue *events_queue = malloc(sizeof(NBN_EventQueue));
+    NBN_EventQueue *events_queue = NBN_Alloc(sizeof(NBN_EventQueue));
 
     events_queue->queue = NBN_List_Create();
     events_queue->last_event_data = NULL;
@@ -2694,12 +2835,12 @@ NBN_EventQueue *NBN_EventQueue_Create(void)
 void NBN_EventQueue_Destroy(NBN_EventQueue *events_queue)
 {
     NBN_List_Destroy(events_queue->queue, true, NULL);
-    free(events_queue);
+    NBN_Dealloc(events_queue);
 }
 
 void NBN_EventQueue_Enqueue(NBN_EventQueue *events_queue, int type, void *data)
 {
-    NBN_Event *ev = malloc(sizeof(NBN_Event));
+    NBN_Event *ev = NBN_AllocObject(NBN_OBJ_EVENT);
 
     ev->type = type;
     ev->data = data;
@@ -2719,7 +2860,7 @@ int NBN_EventQueue_Dequeue(NBN_EventQueue *events_queue)
 
     events_queue->last_event_data = ev->data;
 
-    free(ev);
+    NBN_DeallocObject(NBN_OBJ_EVENT, ev);
 
     return ev_type;
 }
@@ -3015,11 +3156,6 @@ void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, 
     }
 }
 
-NBN_ConnectionDebugInfo NBN_GameClient_Debug_GetInfo(void)
-{
-    return game_client.server_connection->debug_info;
-}
-
 #endif /* NBN_DEBUG */
 
 static void on_server_message_received(NBN_Message *message, NBN_Connection *server_connection)
@@ -3088,7 +3224,7 @@ static void release_message_received_event_data(void)
     if (destructor)
         destructor(last_received_message_data);
     else
-        free(last_received_message_data);
+        NBN_Dealloc(last_received_message_data);
 
     last_received_message_data = NULL;
 }
@@ -3308,10 +3444,6 @@ int NBN_GameServer_OnPacketReceived(NBN_Packet *packet, NBN_Connection *sender_c
 }
 
 #ifdef NBN_DEBUG
-NBN_ConnectionDebugInfo NBN_GameServer_Debug_GetDisconnectedClientInfo(void)
-{
-    return last_event_client->debug_info;
-}
 
 void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, void *cb)
 {
@@ -3321,16 +3453,6 @@ void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, 
         game_server.endpoint.debug_cb_on_msg_added_to_recv_queue = cb;
         break;
     }
-}
-
-NBN_ConnectionDebugInfo *NBN_GameServer_Debug_GetClientInfo(uint32_t client_id)
-{
-    NBN_Connection *client = find_client_by_id(client_id);
-
-    if (client == NULL)
-        return NULL;
-
-    return &client->debug_info;
 }
 
 #endif /* NBN_DEBUG */
@@ -3483,7 +3605,7 @@ static void release_client_message_received_event_data(void)
     if (destructor)
         destructor(last_received_message_data);
     else
-        free(last_received_message_data);
+        NBN_Dealloc(last_received_message_data);
 
     last_received_message_data = NULL;
 }
@@ -3507,7 +3629,7 @@ static unsigned int GetRandomDuplicatePacketCount(NBN_PacketSimulator *);
 
 NBN_PacketSimulator *NBN_PacketSimulator_Create(void)
 {
-    NBN_PacketSimulator *packet_simulator = malloc(sizeof(NBN_PacketSimulator));
+    NBN_PacketSimulator *packet_simulator = NBN_Alloc(sizeof(NBN_PacketSimulator));
 
     packet_simulator->packets_queue = NBN_List_Create();
     packet_simulator->packets_queue_mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
@@ -3527,7 +3649,7 @@ void NBN_PacketSimulator_Destroy(NBN_PacketSimulator *packet_simulator)
 
     NBN_List_Destroy(packet_simulator->packets_queue, true, NULL);
     NBN_Timer_Destroy(packet_simulator->timer);
-    free(packet_simulator);
+    NBN_Dealloc(packet_simulator);
 }
 
 void NBN_PacketSimulator_EnqueuePacket(
@@ -3535,7 +3657,7 @@ void NBN_PacketSimulator_EnqueuePacket(
 {
     pthread_mutex_lock(&packet_simulator->packets_queue_mutex);
 
-    NBN_Packet *dup_packet = malloc(sizeof(NBN_Packet));
+    NBN_Packet *dup_packet = NBN_Alloc(sizeof(NBN_Packet));
 
     memcpy(dup_packet, packet, sizeof(NBN_Packet));
 
@@ -3570,7 +3692,7 @@ void NBN_PacketSimulator_Stop(NBN_PacketSimulator *packet_simulator)
 
 static NBN_PacketSimulatorEntry *CreateEntry(NBN_PacketSimulator *packet_simulator, NBN_Packet *packet, uint32_t receiver_id)
 {
-    NBN_PacketSimulatorEntry *entry = malloc(sizeof(NBN_PacketSimulatorEntry));
+    NBN_PacketSimulatorEntry *entry = NBN_Alloc(sizeof(NBN_PacketSimulatorEntry));
 
     entry->packet = packet;
     entry->receiver_id = receiver_id;
@@ -3582,8 +3704,8 @@ static NBN_PacketSimulatorEntry *CreateEntry(NBN_PacketSimulator *packet_simulat
 
 static void DestroyEntry(NBN_PacketSimulatorEntry *entry)
 {
-    free(entry->packet);
-    free(entry);
+    NBN_Dealloc(entry->packet);
+    NBN_Dealloc(entry);
 }
 
 static void *PacketSimulatorRoutine(void *arg)
