@@ -61,7 +61,11 @@ typedef int socklen_t;
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
+
+#define INVALID_SOCKET -1
+#define SOCKET_ERROR -1
 #define closesocket(s) close(s)
+
 typedef int SOCKET;
 typedef struct sockaddr_in SOCKADDR_IN;
 typedef struct sockaddr SOCKADDR;
@@ -104,8 +108,13 @@ static int init_socket(void);
 static void deinit_socket(void);
 static int bind_socket(uint16_t);
 static int read_received_packets(void (*)(NBN_Packet *, NBN_IPAddress));
-static int resolve_ip_address(const char *, uint16_t, NBN_IPAddress *);
 static char *get_last_error(void);
+
+#ifdef NBN_GAME_CLIENT
+
+static int resolve_ip_address(const char *, uint16_t, NBN_IPAddress *);
+
+#endif
 
 static int init_socket(void)
 {
@@ -120,7 +129,7 @@ static int init_socket(void)
     }
 #endif
 
-    if ((udp_sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+    if ((udp_sock = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET)
         return -1;
 
 #if defined(PLATFORM_WINDOWS)
@@ -180,7 +189,7 @@ static int read_received_packets(void (*process_packet)(NBN_Packet *, NBN_IPAddr
     socklen_t src_addr_len = sizeof(src_addr);
     int ret;
 
-    while ((ret = recvfrom(udp_sock, buffer, sizeof(buffer), 0, (SOCKADDR *)&src_addr, &src_addr_len)) > 0)
+    while ((ret = recvfrom(udp_sock, (char *)buffer, sizeof(buffer), 0, (SOCKADDR *)&src_addr, &src_addr_len)) > 0)
     {
         NBN_IPAddress ip_address;
 
@@ -211,7 +220,7 @@ static int read_received_packets(void (*process_packet)(NBN_Packet *, NBN_IPAddr
         return -1;
     }
 
-    if (ret < 0)
+    if (ret == SOCKET_ERROR)
     {
 #ifdef PLATFORM_WINDOWS
         if (WSAGetLastError() != WSAEWOULDBLOCK)
@@ -227,6 +236,8 @@ static int read_received_packets(void (*process_packet)(NBN_Packet *, NBN_IPAddr
 
     return 0;
 }
+
+#ifdef NBN_GAME_CLIENT
 
 static int resolve_ip_address(const char *host, uint16_t port, NBN_IPAddress *address)
 {
@@ -256,6 +267,8 @@ static int resolve_ip_address(const char *host, uint16_t port, NBN_IPAddress *ad
 
     return 0;
 }
+
+#endif /* NBN_GAME_CLIENT */
 
 static char *get_last_error(void)
 {
@@ -330,7 +343,7 @@ int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, uint32_t conn_id)
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(connection->address.port);
 
-    if (sendto(udp_sock, packet->buffer, packet->size, 0, (SOCKADDR *)&dest_addr, sizeof(dest_addr)) != packet->size)
+    if (sendto(udp_sock, (const char *)packet->buffer, packet->size, 0, (SOCKADDR *)&dest_addr, sizeof(dest_addr)) == SOCKET_ERROR)
     {
         NBN_LogError("sendto() failed: %s", get_last_error());
 
@@ -471,7 +484,7 @@ int NBN_Driver_GCli_SendPacket(NBN_Packet *packet)
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(server_connection.address.port);
 
-    if (sendto(udp_sock, packet->buffer, packet->size, 0, (SOCKADDR *)&dest_addr, sizeof(dest_addr)) != packet->size)
+    if (sendto(udp_sock, (const char *)packet->buffer, packet->size, 0, (SOCKADDR *)&dest_addr, sizeof(dest_addr)) == SOCKET_ERROR)
     {
         NBN_LogError("sendto() failed: %s", get_last_error());
 

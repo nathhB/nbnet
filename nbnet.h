@@ -514,7 +514,7 @@ typedef enum
 
 struct __NBN_Connection
 {
-    int id;
+    uint32_t id;
     uint32_t protocol_id;
     NBN_MessageBuilder message_builders[NBN_MAX_MESSAGE_TYPES];
     NBN_MessageDestructor message_destructors[NBN_MAX_MESSAGE_TYPES];
@@ -548,7 +548,7 @@ struct __NBN_Connection
 };
 
 NBN_Connection *NBN_Connection_Create(
-    int, uint32_t,
+    uint32_t, uint32_t,
     NBN_MessageBuilder[NBN_MAX_MESSAGE_TYPES],
     NBN_MessageDestructor[NBN_MAX_MESSAGE_TYPES],
     NBN_MessageSerializer[NBN_MAX_MESSAGE_TYPES]);
@@ -1815,7 +1815,7 @@ static void update_connection_average_ping(NBN_Connection *, unsigned int);
 static NBN_Message *read_message_from_stream(NBN_Connection *, NBN_ReadStream *);
 static void destroy_message(void *);
 
-NBN_Connection *NBN_Connection_Create(int id,
+NBN_Connection *NBN_Connection_Create(uint32_t id,
                                 uint32_t protocol_id,
                                 NBN_MessageBuilder message_builders[NBN_MAX_MESSAGE_TYPES],
                                 NBN_MessageDestructor message_destructors[NBN_MAX_MESSAGE_TYPES],
@@ -3687,6 +3687,8 @@ static int SendPacket(NBN_PacketSimulator *packet_simulator, NBN_Packet *packet,
     }
 
 #ifdef NBN_GAME_CLIENT
+    (void)receiver_id; /* avoid warning */
+
     return NBN_Driver_GCli_SendPacket(packet);
 #endif
 
