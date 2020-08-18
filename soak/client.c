@@ -48,11 +48,10 @@ static int send_messages(void)
 
             uint8_t *bytes = generate_random_bytes(msg->data_length);
 
-            messages_data[msg->id - 1] = malloc(msg->data_length);
+            messages_data[msg->id - 1] = bytes;
 
             memcpy(msg->data, bytes, msg->data_length);
-            memcpy(messages_data[msg->id - 1], msg->data, msg->data_length);
-            free(bytes); // TODO: use a message destructor
+            memcpy(messages_data[msg->id - 1], bytes, msg->data_length);
 
             Soak_LogInfo("Send soak message (id: %d, data length: %d)", msg->id, msg->data_length);
 
