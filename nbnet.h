@@ -1860,6 +1860,8 @@ NBN_Connection *NBN_Connection_Create(uint32_t id,
         connection->packet_send_seq_buffer[i] = 0xFFFFFFFF;
         connection->packet_recv_seq_buffer[i] = 0xFFFFFFFF;
     }
+    
+    connection->stats = (NBN_ConnectionStats){0};
 
     return connection;
 }
@@ -2402,11 +2404,10 @@ static NBN_Message *find_message(NBN_Connection *connection, uint16_t id)
     return NULL;
 }
 
-/* FIXME: broken ? (see soak client ping debug logs) */
 static void update_connection_average_ping(NBN_Connection *connection, unsigned int ping)
 {
-    /* exponential smoothing with a factor of 0.5 */
-    connection->stats.ping = connection->stats.ping + .5f * (ping - connection->stats.ping);
+    /* exponential smoothing with a factor of 0.1 */
+    connection->stats.ping = connection->stats.ping + .1f * ((int)ping - (int)connection->stats.ping);
 }
 
 static NBN_Message *read_message_from_stream(NBN_Connection *connection, NBN_ReadStream *r_stream)

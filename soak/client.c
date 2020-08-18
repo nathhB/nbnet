@@ -164,8 +164,6 @@ static int tick(void)
         return -1;
     }
 
-    // Soak_LogDebug("Ping: %d", NBN_GameClient_GetStats().ping);
-
     return 0;
 }
 
