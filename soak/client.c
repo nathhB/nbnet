@@ -39,7 +39,7 @@ static int send_messages(void)
 
             if (!NBN_GameClient_CanSendMessage())
             {
-                free(msg);
+                NBN_Message_Destroy(game_client.server_connection->message, true);
 
                 return 0;
             }
@@ -196,6 +196,7 @@ int main(int argc, char *argv[])
 
     int ret = Soak_MainLoop(tick);
 
+    NBN_GameClient_Poll(); /* poll one last time to clear the events queue */
     NBN_GameClient_Stop();
     Soak_Deinit();
 

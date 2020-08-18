@@ -925,14 +925,18 @@ void *NBN_MemoryManager_AllocObject(NBN_ObjectType obj_type)
 
 void NBN_MemoryManager_Dealloc(void *ptr)
 {
+#ifdef NBN_DEBUG
     mem_manager.report.dealloc_count++;
+#endif
 
     free(ptr);
 }
 
 void NBN_MemoryManager_DeallocObject(NBN_ObjectType obj_type, void *obj_ptr)
 {
+#ifdef NBN_DEBUG
     assert(mem_manager.report.object_allocs[obj_type] > 0);
+#endif
 
     // TODO: implement object pooling here
 
@@ -1727,6 +1731,10 @@ NBN_Message *NBN_Message_Create(
     message->acked = false;
     message->data = data;
 
+#ifdef NBN_DEBUG
+    mem_manager.report.created_message_count++;
+#endif
+
     return message;
 }
 
@@ -1735,9 +1743,15 @@ void NBN_Message_Destroy(NBN_Message *message, bool free_data)
     if (free_data)
     {
         if (message->destructor)
+        {
             message->destructor(message->data);
+        }
         else
             NBN_Dealloc(message->data);
+
+#ifdef NBN_DEBUG
+        mem_manager.report.destroyed_message_count++;
+#endif
     }
 
     NBN_DeallocObject(NBN_OBJ_MESSAGE, message);
@@ -1949,10 +1963,6 @@ void *NBN_Connection_CreateOutgoingMessage(NBN_Connection *connection, uint8_t m
         msg_type, channel, connection->message_serializers[msg_type], connection->message_destructors[msg_type], msg_builder());
 
     connection->message = message;
-
-#ifdef NBN_DEBUG
-    mem_manager.report.created_message_count++;
-#endif
 
     return message->data;
 }
@@ -2288,10 +2298,6 @@ static void remove_message_from_send_queue(NBN_Connection *connection, NBN_Messa
     message->channel->outgoing_message_count--;
 
     NBN_Message_Destroy(NBN_List_Remove(connection->send_queue, message), true);
-
-#ifdef NBN_DEBUG
-    mem_manager.report.destroyed_message_count++;
-#endif
 }
 
 static NBN_PacketEntry *insert_send_packet_entry(NBN_Connection *connection, uint16_t seq_number)
@@ -2525,6 +2531,10 @@ NBN_Message *NBN_Channel_ReconstructMessageFromChunks(NBN_Channel *channel, NBN_
 
         channel->chunks_buffer[i] = NULL;
     }
+
+#ifdef NBN_DEBUG
+    mem_manager.report.destroyed_message_count += channel->chunk_count;
+#endif
 
     channel->chunk_count = 0;
 
@@ -3136,7 +3146,7 @@ static void release_last_event_data(void)
     switch (last_event_type)
     {
     case NBN_MESSAGE_RECEIVED:
-        // release_message_received_event_data();
+        release_message_received_event_data();
         break;
 
     default:
@@ -3156,6 +3166,10 @@ static void release_message_received_event_data(void)
         NBN_Dealloc(last_received_message_data);
 
     last_received_message_data = NULL;
+
+#ifdef NBN_DEBUG
+    mem_manager.report.destroyed_message_count++;
+#endif
 }
 
 #endif /* NBN_GAME_CLIENT */
@@ -3508,7 +3522,7 @@ static void release_last_event_data(void)
         break;
 
     case NBN_CLIENT_MESSAGE_RECEIVED:
-        // release_client_message_received_event_data();
+        release_client_message_received_event_data();
         break;
 
     default:
@@ -3537,6 +3551,10 @@ static void release_client_message_received_event_data(void)
         NBN_Dealloc(last_received_message_data);
 
     last_received_message_data = NULL;
+
+#ifdef NBN_DEBUG
+    mem_manager.report.destroyed_message_count++;
+#endif
 }
 
 #endif /* NBN_GAME_SERVER */

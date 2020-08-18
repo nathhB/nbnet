@@ -72,7 +72,7 @@ static void send_echoes(void)
 
             if (!NBN_GameServer_CanSendMessageTo(sender))
             {
-                free(echo_msg);
+                NBN_Message_Destroy(sender->message, true);
 
                 break;
             }
@@ -111,7 +111,11 @@ static int handle_soak_message(SoakMessage *msg, NBN_Connection *sender_cli)
     soak_client->recved_messages_count++;
     soak_client->last_recved_message_id = msg->id;
 
-    NBN_List_PushBack(soak_client->echo_queue, msg);
+    SoakMessage *dup_msg = malloc(sizeof(SoakMessage));
+
+    memcpy(dup_msg, msg, sizeof(SoakMessage));
+
+    NBN_List_PushBack(soak_client->echo_queue, dup_msg);
 
     return 0;
 }
@@ -198,7 +202,9 @@ int main(int argc, char *argv[])
 
     int ret = Soak_MainLoop(tick);
 
+    NBN_GameServer_Poll(); /* poll one last time to clear the events queue */
     NBN_GameServer_Stop();
+    Soak_Deinit();
 
     return ret;
 }
