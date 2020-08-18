@@ -2624,7 +2624,8 @@ static NBN_OutgoingMessagePolicy NBN_ReliableOrderedChannel_GetOugoingMessagePol
 
     if (!message->sent)
     {
-        int max_message_id = (reliable_ordered_channel->oldest_unacked_message_id + (NBN_CHANNEL_BUFFER_SIZE - 1)) % 0xFFFF;
+        int max_message_id =
+            (reliable_ordered_channel->oldest_unacked_message_id + (NBN_CHANNEL_BUFFER_SIZE - 1)) % (0xFFFF + 1);
 
         if (SEQUENCE_NUMBER_GTE(channel->next_message_id, max_message_id))
             return NBN_SKIP_MESSAGE;
@@ -2639,9 +2640,9 @@ static NBN_OutgoingMessagePolicy NBN_ReliableOrderedChannel_GetOugoingMessagePol
 static unsigned int compute_message_id_delta(uint16_t id1, uint16_t id2)
 {
     if (SEQUENCE_NUMBER_GT(id1, id2))
-        return (id1 > id2) ? id1 - id2 : (0xFFFF - id2) + id1;
+        return (id1 >= id2) ? id1 - id2 : ((0xFFFF + 1) - id2) + id1;
     else
-        return (id2 > id1) ? id2 - id1 : ((0xFFFF - id1) + id2) % 0xFFFF;
+        return (id2 >= id1) ? id2 - id1 : (((0xFFFF + 1) - id1) + id2) % 0xFFFF;
 }
 
 static bool NBN_ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, NBN_Message *message)
@@ -2650,11 +2651,12 @@ static bool NBN_ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, 
     unsigned int dt = compute_message_id_delta(message->header.id,
             reliable_ordered_channel->most_recent_message_id);
 
+    NBN_LogDebug("Add message to channel (id: %d, most recent msg id: %d, dt: %d)",
+            message->header.id, reliable_ordered_channel->most_recent_message_id, dt);
+
     if (SEQUENCE_NUMBER_GT(message->header.id, reliable_ordered_channel->most_recent_message_id))
     {
-#ifdef NBN_DEBUG
-        NBN_LogDebug("Add message to channel (id: %d, most recent msg id: %d, dt: %d)",
-            message->header.id, reliable_ordered_channel->most_recent_message_id, dt);
+#ifdef NBN_DEBUG 
         assert(dt < NBN_CHANNEL_BUFFER_SIZE);
 #endif
 
