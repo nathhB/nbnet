@@ -5,6 +5,10 @@ project(soak C)
 add_executable(client client.c soak.c logging.c)
 add_executable(server server.c soak.c logging.c)
 
+# for packet simulator
+target_link_libraries(client pthread)
+target_link_libraries(server pthread)
+
 add_compile_options(-Wall -Wextra)
 
 target_compile_definitions(client PUBLIC NBN_GAME_CLIENT NBN_DEBUG NBN_USE_PACKET_SIMULATOR)
