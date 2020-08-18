@@ -300,7 +300,7 @@ typedef struct
     NBN_Channel *channel;
     NBN_MessageSerializer serializer;
     NBN_MessageDestructor destructor;
-    time_t last_send_time;
+    long last_send_time;
     bool sent;
     bool acked;
     void *data;
@@ -491,7 +491,7 @@ typedef struct
     bool acked;
     int messages_count;
     uint16_t message_ids[NBN_MAX_MESSAGES_PER_PACKET];
-    time_t send_time;
+    long send_time;
 } NBN_PacketEntry;
 
 typedef struct
@@ -516,14 +516,14 @@ struct __NBN_Connection
 {
     uint32_t id;
     uint32_t protocol_id;
-    NBN_MessageBuilder message_builders[NBN_MAX_MESSAGE_TYPES];
-    NBN_MessageDestructor message_destructors[NBN_MAX_MESSAGE_TYPES];
-    NBN_MessageSerializer message_serializers[NBN_MAX_MESSAGE_TYPES];
-    time_t last_recv_packet_time; /* used to detect stale connections */
+    long last_recv_packet_time; /* used to detect stale connections */
     long time;
     void *user_data;
     NBN_Message *message;
     NBN_ConnectionStats stats;
+    NBN_MessageBuilder message_builders[NBN_MAX_MESSAGE_TYPES];
+    NBN_MessageDestructor message_destructors[NBN_MAX_MESSAGE_TYPES];
+    NBN_MessageSerializer message_serializers[NBN_MAX_MESSAGE_TYPES];
 
 #ifdef NBN_DEBUG
     /* Debug callbacks */
@@ -617,8 +617,8 @@ typedef struct
 {
     NBN_Packet *packet;
     uint32_t receiver_id;
-    time_t delay_ms;
-    time_t enqueued_at;
+    long delay_ms;
+    long enqueued_at;
 } NBN_PacketSimulatorEntry;
 
 typedef struct
