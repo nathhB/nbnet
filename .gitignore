@@ -1,3 +1,4 @@
 soak/build
 tests/build
+examples/raylib/build
 .vscode

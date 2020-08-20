@@ -37,7 +37,7 @@ int Soak_Init(int argc, char *argv[])
     if (Soak_ReadCommandLine(argc, argv) < 0)
         return -1;
 
-    NBN_RegisterMessage(SOAK_MESSAGE, SoakMessage_Create, SoakMessage_Serialize, NULL);
+    NBN_RegisterMessage(SOAK_MESSAGE, SoakMessage_Create, SoakMessage_Serialize, SoakMessage_Destroy);
     NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, SOAK_CHAN_RELIABLE_ORDERED_1);
     NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, SOAK_CHAN_RELIABLE_ORDERED_2);
     NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, SOAK_CHAN_RELIABLE_ORDERED_3);
@@ -167,6 +167,11 @@ SoakMessage *SoakMessage_Create(void)
     msg->id = 0;
 
     return msg; 
+}
+
+void SoakMessage_Destroy(SoakMessage *msg)
+{
+    free(msg);
 }
 
 int SoakMessage_Serialize(SoakMessage *msg, NBN_Stream *stream)

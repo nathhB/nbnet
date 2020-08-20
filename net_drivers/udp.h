@@ -92,7 +92,6 @@ static uint32_t protocol_id;
 #ifdef NBN_GAME_CLIENT
 
 static NBN_UDPConnection server_connection;
-static bool server_connection_closed = false;
 
 #endif /* NBN_GAME_CLIENT */
 
@@ -104,19 +103,18 @@ static char err_msg[32];
 
 #endif
 
-static int init_socket(void);
-static void deinit_socket(void);
-static int bind_socket(uint16_t);
-static int read_received_packets(void (*)(NBN_Packet *, NBN_IPAddress));
-static char *get_last_error(void);
+static int InitSocket(void);
+static void DeinitSocket(void);
+static int BindSocket(uint16_t);
+static char *GetLastErrorMessage(void);
 
 #ifdef NBN_GAME_CLIENT
 
-static int resolve_ip_address(const char *, uint16_t, NBN_IPAddress *);
+static int ResolveIpAddress(const char *, uint16_t, NBN_IPAddress *);
 
 #endif
 
-static int init_socket(void)
+static int InitSocket(void)
 {
 #ifdef PLATFORM_WINDOWS
     WSADATA wsa;
@@ -137,7 +135,7 @@ static int init_socket(void)
 
     if (ioctlsocket(udp_sock, FIONBIO, &non_blocking) != 0)
     {
-        NBN_LogError("ioctlsocket() failed: %s", get_last_error());
+        NBN_LogError("ioctlsocket() failed: %s", GetLastErrorMessage());
 
         return -1;
     }
@@ -146,7 +144,7 @@ static int init_socket(void)
 
     if (fcntl(udp_sock, F_SETFL, O_NONBLOCK, non_blocking) < 0)
     {
-        NBN_LogError("fcntl() failed: %s", get_last_error());
+        NBN_LogError("fcntl() failed: %s", GetLastErrorMessage());
 
         return -1;
     }
@@ -155,7 +153,7 @@ static int init_socket(void)
     return 0;
 }
 
-static void deinit_socket(void)
+static void DeinitSocket(void)
 {
     closesocket(udp_sock);
 
@@ -164,7 +162,7 @@ static void deinit_socket(void)
 #endif
 }
 
-static int bind_socket(uint16_t port)
+static int BindSocket(uint16_t port)
 {
     SOCKADDR_IN sin;
 
@@ -174,7 +172,7 @@ static int bind_socket(uint16_t port)
 
     if (bind(udp_sock, (SOCKADDR *)&sin, sizeof(sin)) < 0)
     {
-        NBN_LogError("bind() failed: %s", get_last_error());
+        NBN_LogError("bind() failed: %s", GetLastErrorMessage());
 
         return -1;
     }
@@ -182,64 +180,9 @@ static int bind_socket(uint16_t port)
     return 0;
 }
 
-static int read_received_packets(void (*process_packet)(NBN_Packet *, NBN_IPAddress))
-{
-    uint8_t buffer[NBN_PACKET_MAX_SIZE] = {0};
-    SOCKADDR_IN src_addr;
-    socklen_t src_addr_len = sizeof(src_addr);
-    int ret;
-
-    while ((ret = recvfrom(udp_sock, (char *)buffer, sizeof(buffer), 0, (SOCKADDR *)&src_addr, &src_addr_len)) > 0)
-    {
-        NBN_IPAddress ip_address;
-
-        ip_address.host = ntohl(src_addr.sin_addr.s_addr);
-        ip_address.port = ntohs(src_addr.sin_port);
-
-#ifdef NBN_GAME_CLIENT
-        /* make sure the received packet is from the server */
-        if (ip_address.host != server_connection.address.host || ip_address.port != server_connection.address.port)
-            continue;
-#endif
-
-        NBN_Packet packet;
-
-        if (NBN_Packet_InitRead(&packet, buffer, ret) < 0)
-            continue; /* not a valid packet */
-
-        if (packet.header.protocol_id != protocol_id)
-            continue; /* valid packet but not matching the protocol of the receiver */
-
-        process_packet(&packet, ip_address);
-    }
-
-    if (ret == 0)
-    {
-        NBN_LogError("Socket was closed");
-
-        return -1;
-    }
-
-    if (ret == SOCKET_ERROR)
-    {
-#ifdef PLATFORM_WINDOWS
-        if (WSAGetLastError() != WSAEWOULDBLOCK)
-#else
-        if (errno != EAGAIN && errno != EWOULDBLOCK)
-#endif
-        {
-            NBN_LogError("recvfrom() failed: %s", get_last_error());
-
-            return -1;
-        }
-    }
-
-    return 0;
-}
-
 #ifdef NBN_GAME_CLIENT
 
-static int resolve_ip_address(const char *host, uint16_t port, NBN_IPAddress *address)
+static int ResolveIpAddress(const char *host, uint16_t port, NBN_IPAddress *address)
 {
     char *dup_host = strdup(host);
     uint8_t arr[4];
@@ -270,7 +213,7 @@ static int resolve_ip_address(const char *host, uint16_t port, NBN_IPAddress *ad
 
 #endif /* NBN_GAME_CLIENT */
 
-static char *get_last_error(void)
+static char *GetLastErrorMessage(void)
 {
 #ifdef PLATFORM_WINDOWS
     sprintf(err_msg, "%d", WSAGetLastError());
@@ -290,19 +233,19 @@ static char *get_last_error(void)
 static NBN_List *connections = NULL;
 static uint32_t next_conn_id = 0;
 
-static void process_client_packet(NBN_Packet *, NBN_IPAddress);
-static void close_client_connection(NBN_UDPConnection *);
-static NBN_UDPConnection *find_connection_by_address(NBN_IPAddress);
-static NBN_UDPConnection *find_connection_by_id(uint32_t);
+static void ProcessClientPacket(NBN_Packet *, NBN_IPAddress);
+static void CloseClientConnection(NBN_UDPConnection *);
+static NBN_UDPConnection *FindClientConnectionByAddress(NBN_IPAddress);
+static NBN_UDPConnection *FindClientConnectionById(uint32_t);
 
 int NBN_Driver_GServ_Start(uint32_t proto_id, uint16_t port)
 {
     protocol_id = proto_id;
 
-    if (init_socket() < 0)
+    if (InitSocket() < 0)
         return -1;
 
-    if (bind_socket(port) < 0)
+    if (BindSocket(port) < 0)
         return -1;
 
     connections = NBN_List_Create();
@@ -312,30 +255,51 @@ int NBN_Driver_GServ_Start(uint32_t proto_id, uint16_t port)
 
 void NBN_Driver_GServ_Stop(void)
 {
-    deinit_socket();
+    DeinitSocket();
     NBN_List_Destroy(connections, true, NULL);
 }
 
 int NBN_Driver_GServ_RecvPackets(void)
 {
-    return read_received_packets(process_client_packet);
+    uint8_t buffer[NBN_PACKET_MAX_SIZE] = {0};
+    SOCKADDR_IN src_addr;
+    socklen_t src_addr_len = sizeof(src_addr);
+    NBN_IPAddress ip_address;
+
+    while (true)
+    {
+        int bytes = recvfrom(udp_sock, (char *)buffer, sizeof(buffer), 0, (SOCKADDR *)&src_addr, &src_addr_len);
+
+        if (bytes <= 0)
+            break;
+
+        ip_address.host = ntohl(src_addr.sin_addr.s_addr);
+        ip_address.port = ntohs(src_addr.sin_port);
+
+        NBN_Packet packet;
+
+        if (NBN_Packet_InitRead(&packet, buffer, bytes) < 0)
+            continue; /* not a valid packet */
+
+        if (packet.header.protocol_id != protocol_id)
+            continue; /* valid packet but not matching the protocol of the receiver */
+
+        ProcessClientPacket(&packet, ip_address);
+    }
+
+    return 0;
 }
 
 void NBN_Driver_GServ_CloseClient(uint32_t conn_id)
 {
-    close_client_connection(find_connection_by_id(conn_id));
+    CloseClientConnection(FindClientConnectionById(conn_id));
 }
 
 int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, uint32_t conn_id)
 {
-    NBN_UDPConnection *connection = find_connection_by_id(conn_id);
+    NBN_UDPConnection *connection = FindClientConnectionById(conn_id);
 
-    if (connection == NULL)
-    {
-        NBN_LogError("Connection %d does not exist", conn_id);
-
-        return -1;
-    }
+    assert(connection != NULL);
 
     SOCKADDR_IN dest_addr;
 
@@ -345,7 +309,7 @@ int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, uint32_t conn_id)
 
     if (sendto(udp_sock, (const char *)packet->buffer, packet->size, 0, (SOCKADDR *)&dest_addr, sizeof(dest_addr)) == SOCKET_ERROR)
     {
-        NBN_LogError("sendto() failed: %s", get_last_error());
+        NBN_LogError("sendto() failed: %s", GetLastErrorMessage());
 
         return -1;
     }
@@ -353,9 +317,9 @@ int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, uint32_t conn_id)
     return 0;
 }
 
-static void process_client_packet(NBN_Packet *packet, NBN_IPAddress client_address)
+static void ProcessClientPacket(NBN_Packet *packet, NBN_IPAddress client_address)
 {
-    NBN_UDPConnection *udp_conn = find_connection_by_address(client_address);
+    NBN_UDPConnection *udp_conn = FindClientConnectionByAddress(client_address);
 
     if (udp_conn == NULL) /* this is a new connection */
     {
@@ -367,23 +331,25 @@ static void process_client_packet(NBN_Packet *packet, NBN_IPAddress client_addre
         udp_conn->conn = NBN_GameServer_CreateClientConnection(conn_id);
 
         NBN_List_PushBack(connections, udp_conn);
-        NBN_GameServer_OnClientConnected(udp_conn->conn);
+        NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_CONNECTED, udp_conn->conn);
     }
 
-    if (NBN_GameServer_OnPacketReceived(packet, udp_conn->conn) < 0)
-        close_client_connection(udp_conn);
+    packet->sender = udp_conn->conn;
+
+    NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_PACKET_RECEIVED, packet);
 }
 
-static void close_client_connection(NBN_UDPConnection *connection)
+static void CloseClientConnection(NBN_UDPConnection *connection)
 {
     assert(connection != NULL);
 
-    NBN_Connection *conn = connection->conn;
+    NBN_LogDebug("Close connection %d", connection->id);
 
+    NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_DISCONNECTED, connection->conn);
     free(NBN_List_Remove(connections, connection));
 }
 
-static NBN_UDPConnection *find_connection_by_address(NBN_IPAddress address)
+static NBN_UDPConnection *FindClientConnectionByAddress(NBN_IPAddress address)
 {
     NBN_ListNode *current_node = connections->head;
 
@@ -400,7 +366,7 @@ static NBN_UDPConnection *find_connection_by_address(NBN_IPAddress address)
     return NULL;
 }
 
-static NBN_UDPConnection *find_connection_by_id(uint32_t conn_id)
+static NBN_UDPConnection *FindClientConnectionById(uint32_t conn_id)
 {
     NBN_ListNode *current_node = connections->head;
 
@@ -425,59 +391,81 @@ static NBN_UDPConnection *find_connection_by_id(uint32_t conn_id)
 
 #ifdef NBN_GAME_CLIENT
 
-static void process_server_packet(NBN_Packet *, NBN_IPAddress);
-static void close_server_connection(void);
+static bool is_connected_to_server = false;
 
 int NBN_Driver_GCli_Start(uint32_t proto_id, const char *host, uint16_t port)
 {
     protocol_id = proto_id;
 
-    if (resolve_ip_address(host, port, &server_connection.address) < 0)
+    if (ResolveIpAddress(host, port, &server_connection.address) < 0)
     {
         NBN_LogError("Failed to resolve IP address from %s", host);
 
         return -1;
     }
 
-    if (init_socket() < 0)
+    if (InitSocket() < 0)
         return -1;
 
-    if (bind_socket(0) < 0)
+    if (BindSocket(0) < 0)
         return -1;
 
     server_connection.conn = NBN_GameClient_CreateServerConnection();
-
-    NBN_GameClient_OnConnected();
 
     return 0;
 }
 
 void NBN_Driver_GCli_Stop(void)
 {
-    deinit_socket();
+    DeinitSocket();
 }
 
 int NBN_Driver_GCli_RecvPackets(void)
 {
-    if (server_connection_closed)
-    {
-        NBN_LogError("Server connection is closed");
+    uint8_t buffer[NBN_PACKET_MAX_SIZE] = {0};
+    SOCKADDR_IN src_addr;
+    socklen_t src_addr_len = sizeof(src_addr);
 
-        return -1;
+    while (true)
+    {
+        int bytes = recvfrom(udp_sock, (char *)buffer, sizeof(buffer), 0, (SOCKADDR *)&src_addr, &src_addr_len);
+
+        if (bytes <= 0)
+            break;
+
+        NBN_IPAddress ip_address;
+
+        ip_address.host = ntohl(src_addr.sin_addr.s_addr);
+        ip_address.port = ntohs(src_addr.sin_port);
+
+        /* make sure the received packet is from the server */
+        if (ip_address.host != server_connection.address.host || ip_address.port != server_connection.address.port)
+            continue;
+
+        NBN_Packet packet;
+
+        if (NBN_Packet_InitRead(&packet, buffer, bytes) < 0)
+            continue; /* not a valid packet */
+
+        if (packet.header.protocol_id != protocol_id)
+            continue; /* valid packet but not matching the protocol of the receiver */
+
+        /* First received packet from server triggers the client connected event */
+        if (!is_connected_to_server)
+        {
+            NBN_Driver_GCli_RaiseEvent(NBN_DRIVER_GCLI_CONNECTED, NULL);
+
+            is_connected_to_server = true;
+        }
+
+        NBN_Driver_GCli_RaiseEvent(NBN_DRIVER_GCLI_SERVER_PACKET_RECEIVED, &packet);
     }
 
-    return read_received_packets(process_server_packet);
+    return 0;
 }
 
 int NBN_Driver_GCli_SendPacket(NBN_Packet *packet)
 {
-    if (server_connection_closed)
-    {
-        NBN_LogError("Server connection is closed");
-
-        return -1;
-    }
-
     SOCKADDR_IN dest_addr;
 
     dest_addr.sin_addr.s_addr = htonl(server_connection.address.host);
@@ -486,27 +474,12 @@ int NBN_Driver_GCli_SendPacket(NBN_Packet *packet)
 
     if (sendto(udp_sock, (const char *)packet->buffer, packet->size, 0, (SOCKADDR *)&dest_addr, sizeof(dest_addr)) == SOCKET_ERROR)
     {
-        NBN_LogError("sendto() failed: %s", get_last_error());
+        NBN_LogError("sendto() failed: %s", GetLastErrorMessage());
 
         return -1;
     }
 
     return 0;
-}
-
-static void process_server_packet(NBN_Packet *packet, NBN_IPAddress server_address)
-{
-    assert(server_connection.address.host == server_address.host && server_connection.address.port == server_address.port);
-
-    if (NBN_GameClient_OnPacketReceived(packet) < 0)
-        close_server_connection();
-}
-
-static void close_server_connection(void)
-{
-    server_connection_closed = true;
-
-    NBN_GameClient_OnDisconnected();
 }
 
 #endif /* NBN_GAME_CLIENT */

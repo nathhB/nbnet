@@ -1,5 +1,14 @@
 #include "logging.h"
 
+/* I did not write this library: https://github.com/rxi/log.c */
+
+/**
+ * Copyright (c) 2017 rxi
+ *
+ * This library is free software; you can redistribute it and/or modify it
+ * under the terms of the MIT license. See `log.c` for details.
+ */
+
 static struct
 {
     void *udata;

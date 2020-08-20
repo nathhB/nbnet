@@ -1,7 +1,7 @@
 #ifndef SOAK_LOGGING_H
 #define SOAK_LOGGING_H
 
-/* I did not write this: https://github.com/rxi/log.c */
+/* I did not write this library: https://github.com/rxi/log.c */
 
 /**
  * Copyright (c) 2017 rxi

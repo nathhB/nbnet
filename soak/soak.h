@@ -16,8 +16,8 @@
 #define SOAK_PROTOCOL_NAME "nbnet_soak"
 #define SOAK_PORT 42042
 #define SOAK_TICK_RATE 60
-#define SOAK_MESSAGE_MIN_DATA_LENGTH 100
-#define SOAK_MESSAGE_MAX_DATA_LENGTH 4096
+#define SOAK_MESSAGE_MIN_DATA_LENGTH 4096
+#define SOAK_MESSAGE_MAX_DATA_LENGTH 4100
 #define SOAK_MESSAGE 0
 #define SOAK_SEED time(NULL)
 
@@ -51,6 +51,7 @@ int Soak_MainLoop(int (*)(void));
 void Soak_Stop(void);
 SoakOptions Soak_GetOptions(void);
 SoakMessage *SoakMessage_Create(void);
+void SoakMessage_Destroy(SoakMessage *);
 int SoakMessage_Serialize(SoakMessage*, NBN_Stream *);
 void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *, NBN_Message *);
 

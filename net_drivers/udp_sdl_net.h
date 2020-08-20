@@ -32,13 +32,8 @@ freely, subject to the following restrictions:
 
 #ifdef NBN_DRIVER_UDP_SDL_NET_IMPL
 
-#ifndef NBN_DRIVER_UDP_SDL_NET_H
-#define NBN_DRIVER_UDP_SDL_NET_H
-
 #include <stdint.h>
 #include <SDL_net.h>
-
-#endif /* NBN_DRIVER_UDP_SDL_NET_H */
 
 static uint32_t protocol_id;
 UDPsocket udp_socket;
