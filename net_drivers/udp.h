@@ -234,7 +234,6 @@ static NBN_List *connections = NULL;
 static uint32_t next_conn_id = 0;
 
 static void ProcessClientPacket(NBN_Packet *, NBN_IPAddress);
-static void CloseClientConnection(NBN_UDPConnection *);
 static NBN_UDPConnection *FindClientConnectionByAddress(NBN_IPAddress);
 static NBN_UDPConnection *FindClientConnectionById(uint32_t);
 
@@ -290,9 +289,14 @@ int NBN_Driver_GServ_RecvPackets(void)
     return 0;
 }
 
-void NBN_Driver_GServ_CloseClient(uint32_t conn_id)
+void NBN_Driver_GServ_DestroyClientConnection(uint32_t conn_id)
 {
-    CloseClientConnection(FindClientConnectionById(conn_id));
+    NBN_UDPConnection *connection = FindClientConnectionById(conn_id);
+
+    assert(connection != NULL);
+
+    NBN_LogDebug("Destroy UDP connection %d", connection->id);
+    NBN_Dealloc(NBN_List_Remove(connections, connection));
 }
 
 int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, uint32_t conn_id)
@@ -323,12 +327,14 @@ static void ProcessClientPacket(NBN_Packet *packet, NBN_IPAddress client_address
 
     if (udp_conn == NULL) /* this is a new connection */
     {
-        udp_conn = malloc(sizeof(NBN_UDPConnection));
+        udp_conn = NBN_Alloc(sizeof(NBN_UDPConnection));
         uint32_t conn_id = next_conn_id++;
 
         udp_conn->id = conn_id;
         udp_conn->address = client_address;
         udp_conn->conn = NBN_GameServer_CreateClientConnection(conn_id);
+
+        NBN_LogDebug("New UDP connection (id: %d)", conn_id);
 
         NBN_List_PushBack(connections, udp_conn);
         NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_CONNECTED, udp_conn->conn);
@@ -337,16 +343,6 @@ static void ProcessClientPacket(NBN_Packet *packet, NBN_IPAddress client_address
     packet->sender = udp_conn->conn;
 
     NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_PACKET_RECEIVED, packet);
-}
-
-static void CloseClientConnection(NBN_UDPConnection *connection)
-{
-    assert(connection != NULL);
-
-    NBN_LogDebug("Close connection %d", connection->id);
-
-    NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_DISCONNECTED, connection->conn);
-    free(NBN_List_Remove(connections, connection));
 }
 
 static NBN_UDPConnection *FindClientConnectionByAddress(NBN_IPAddress address)
