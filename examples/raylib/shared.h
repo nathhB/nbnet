@@ -85,6 +85,15 @@ typedef struct tagMSG *LPMSG;
 /* Max number of connected clients */
 #define MAX_CLIENTS 4
 
+/* Max number of client colors */
+#define MAX_COLORS 7
+
+/*
+    A code passed by the server when closing a client connection due to
+    being full (max client count reached).
+*/
+#define SERVER_FULL_CODE 42
+
 /*
     nbnet channels
 
@@ -117,7 +126,7 @@ enum
     we do not care about occasionally losing one of those, therefore it will be channelled into the unreliable channel.
 */
 
-/* Use an enum for message ids */
+/* Enum for message ids */
 enum
 {
     SPAWN_MESSAGE,
@@ -126,7 +135,7 @@ enum
     GAME_STATE_MESSAGE
 };
 
-/* Message structures */
+/* Message types */
 
 typedef struct
 {
@@ -137,21 +146,33 @@ typedef struct
 
 typedef struct
 {
-    Color color;
-} ChangeColorMessage;
-
-typedef struct
-{
     int x;
     int y;
 } UpdatePositionMessage;
 
+/* Enum for client colors used for ChangeColorMessage and GameStateMessage */
+typedef enum
+{
+    CLI_RED,
+    CLI_GREEN,
+    CLI_BLUE,
+    CLI_YELLOW,
+    CLI_ORANGE,
+    CLI_PURPLE,
+    CLI_PINK
+} ClientColor;
+
+typedef struct
+{
+    ClientColor color;
+} ChangeColorMessage;
+
 typedef struct
 {
     uint32_t client_id;
+    ClientColor color;
     int x;
     int y;
-    Color color;
 } ClientState;
 
 typedef struct
@@ -207,7 +228,6 @@ void ChangeColorMessage_Destroy(ChangeColorMessage *);
 void UpdatePositionMessage_Destroy(UpdatePositionMessage *);
 void GameStateMessage_Destroy(GameStateMessage *);
 
-void RegisterChannels(void);
 void RegisterMessages(void);
 void TickSleep(float);
 

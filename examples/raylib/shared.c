@@ -1,3 +1,4 @@
+#include <limits.h>
 #include <time.h>
 
 #include "shared.h"
@@ -6,21 +7,23 @@
 
 #include "../../nbnet.h"
 
-#define NBN_DRIVER_UDP_IMPL /* nbnet udp driver implementation */
+#if defined(NBN_DRIVER_UDP)
+
+/* nbnet udp driver implementation */
+
+#define NBN_DRIVER_UDP_IMPL
 
 #include "../../net_drivers/udp.h"
 
-void RegisterChannels(void)
-{
-    /*
-        The first argument of NBN_RegisterChannel is the type of channel, the second one is a user defined ID.
+#elif defined(NBN_DRIVER_UDP_SDL_NET)
 
-        Each channel must have a unique ID.
-    */
+/* nbnet SDL_net udp driver implementation */
 
-    NBN_RegisterChannel(NBN_CHANNEL_UNRELIABLE_ORDERED, UNRELIABLE_CHANNEL); /* reliable ordered */
-    NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, RELIABLE_CHANNEL); /* unreliable ordered */
-}
+#define NBN_DRIVER_UDP_SDL_NET_IMPL 
+
+#include "../../net_drivers/udp_sdl_net.h"
+
+#endif
 
 void RegisterMessages(void)
 {
@@ -65,6 +68,8 @@ int SpawnMessage_Serialize(SpawnMessage *msg, NBN_Stream *stream)
 
 int ChangeColorMessage_Serialize(ChangeColorMessage *msg, NBN_Stream *stream)
 {
+    SERIALIZE_UINT(msg->color, 0, MAX_COLORS - 1);
+
     return 0;
 }
 
@@ -83,6 +88,7 @@ int GameStateMessage_Serialize(GameStateMessage *msg, NBN_Stream *stream)
     for (unsigned int i = 0; i < msg->client_count; i++)
     {
         SERIALIZE_UINT(msg->client_states[i].client_id, 0, UINT_MAX);
+        SERIALIZE_UINT(msg->client_states[i].color, 0, MAX_COLORS - 1);
         SERIALIZE_UINT(msg->client_states[i].x, 0, GAME_WIDTH);
         SERIALIZE_UINT(msg->client_states[i].y, 0, GAME_HEIGHT);
 
