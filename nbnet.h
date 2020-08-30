@@ -498,6 +498,9 @@ NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(uint8_t);
 
 typedef struct
 {
+    const char *protocol_name;
+    const char *ip_address;
+    uint16_t port;
     unsigned int flush_frequency;
     unsigned int max_upload_bandwidth;
 } NBN_Config;
@@ -711,7 +714,7 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
     if (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE) \
     { \
         NBN_LogError("Message type %d is reserved by the library", type); \
-        exit(1); \
+        NBN_Abort(); \
     } \
     NBN_Endpoint_RegisterMessageBuilder(&game_server.endpoint, (NBN_MessageBuilder)builder, type); \
     NBN_Endpoint_RegisterMessageDestructor(&game_server.endpoint, (NBN_MessageDestructor)destructor, type); \
@@ -732,7 +735,6 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 
 typedef struct
 {
-    uint32_t protocol_id;
     NBN_Config config;
     NBN_ChannelType channels[NBN_MAX_MESSAGE_CHANNELS];
     NBN_MessageBuilder message_builders[NBN_MAX_MESSAGE_TYPES];
@@ -750,7 +752,7 @@ typedef struct
 #endif
 } NBN_Endpoint;
 
-void NBN_Endpoint_Init(NBN_Endpoint *, const char *, NBN_Config);
+void NBN_Endpoint_Init(NBN_Endpoint *, NBN_Config);
 void NBN_Endpoint_Deinit(NBN_Endpoint *);
 void NBN_Endpoint_RegisterMessageBuilder(NBN_Endpoint *, NBN_MessageBuilder, uint8_t);
 void NBN_Endpoint_RegisterMessageDestructor(NBN_Endpoint *, NBN_MessageDestructor, uint8_t);
@@ -786,8 +788,8 @@ typedef struct
 
 extern NBN_GameClient game_client;
 
-void NBN_GameClient_Init(const char *, NBN_Config);
-int NBN_GameClient_Start(const char *, uint16_t);
+void NBN_GameClient_Init(NBN_Config);
+int NBN_GameClient_Start(void);
 void NBN_GameClient_Stop(void);
 void NBN_GameClient_AddTime(double);
 NBN_GameClientEvent NBN_GameClient_Poll(void);
@@ -843,8 +845,8 @@ typedef struct
 
 extern NBN_GameServer game_server;
 
-void NBN_GameServer_Init(const char *, NBN_Config);
-int NBN_GameServer_Start(uint16_t);
+void NBN_GameServer_Init(NBN_Config);
+int NBN_GameServer_Start(void);
 void NBN_GameServer_Stop(void);
 void NBN_GameServer_AddTime(double);
 NBN_GameServerEvent NBN_GameServer_Poll(void);
@@ -2587,7 +2589,6 @@ static void NBN_Connection_UpdateAverageDownloadBandwidth(NBN_Connection *connec
     connection->stats.download_bandwidth =
         connection->stats.download_bandwidth + .1f * (bytes_per_sec - connection->stats.download_bandwidth);
 
-
     connection->downloaded_bytes = 0;
 }
 
@@ -2958,9 +2959,8 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *events_queue)
 static uint32_t NBN_Endpoint_BuildProtocolId(const char *);
 static int NBN_Endpoint_ProcessReceivedPacket(NBN_Endpoint *, NBN_Packet *, NBN_Connection *);
 
-void NBN_Endpoint_Init(NBN_Endpoint *endpoint, const char *protocol_name, NBN_Config config)
+void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config)
 {
-    endpoint->protocol_id = NBN_Endpoint_BuildProtocolId(protocol_name);
     endpoint->config = config;
 
     for (int i = 0; i < NBN_MAX_MESSAGE_CHANNELS; i++)
@@ -3039,7 +3039,7 @@ void NBN_Endpoint_RegisterChannel(NBN_Endpoint *endpoint, NBN_ChannelType type, 
 
 NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *endpoint, int id)
 {
-    NBN_Connection *connection = NBN_Connection_Create(id, endpoint->protocol_id, endpoint->config);
+    NBN_Connection *connection = NBN_Connection_Create(id, NBN_Endpoint_BuildProtocolId(endpoint->config.protocol_name), endpoint->config);
 
     for (int chan_id = 0; chan_id < NBN_MAX_MESSAGE_CHANNELS; chan_id++)
     {
@@ -3100,14 +3100,16 @@ static int NBN_GameClient_HandleMessageReceivedEvent(void);
 static void NBN_GameClient_ReleaseLastEvent(void);
 static void NBN_GameClient_ReleaseMessageReceivedEvent(void);
 
-void NBN_GameClient_Init(const char *protocol_name, NBN_Config config)
+void NBN_GameClient_Init(NBN_Config config)
 {
-    NBN_Endpoint_Init(&game_client.endpoint, protocol_name, config);
+    NBN_Endpoint_Init(&game_client.endpoint, config);
 }
 
-int NBN_GameClient_Start(const char *host, uint16_t port)
+int NBN_GameClient_Start(void)
 {
-    if (NBN_Driver_GCli_Start(game_client.endpoint.protocol_id, host, port) < 0)
+    NBN_Config config = game_client.endpoint.config;
+
+    if (NBN_Driver_GCli_Start(NBN_Endpoint_BuildProtocolId(config.protocol_name), config.ip_address, config.port) < 0)
         return -1;
 
     NBN_LogInfo("Started");
@@ -3398,16 +3400,18 @@ static void NBN_GameServer_HandleMessageReceivedEvent(void);
 static void NBN_GameServer_ReleaseLastEvent(void);
 static void NBN_GameServer_ReleaseMessageReceivedEvent(void);
 
-void NBN_GameServer_Init(const char *protocol_name, NBN_Config config)
+void NBN_GameServer_Init(NBN_Config config)
 {
-    NBN_Endpoint_Init(&game_server.endpoint, protocol_name, config);
+    NBN_Endpoint_Init(&game_server.endpoint, config);
 
     game_server.clients = NBN_List_Create();
 }
 
-int NBN_GameServer_Start(uint16_t port)
+int NBN_GameServer_Start(void)
 {
-    if (NBN_Driver_GServ_Start(game_server.endpoint.protocol_id, port) < 0)
+    NBN_Config config = game_server.endpoint.config;
+
+    if (NBN_Driver_GServ_Start(NBN_Endpoint_BuildProtocolId(config.protocol_name), config.port) < 0)
     {
         NBN_LogError("Failed to start network driver");
 
