@@ -15,13 +15,14 @@ typedef struct
 static SoakClient *clients[SOAK_MAX_CLIENTS] = {NULL};
 static unsigned int client_count = 0;
 
-static void HandleClientConnection(NBN_Connection *connection)
+static void HandleNewConnection(void)
 {
     if (client_count == SOAK_MAX_CLIENTS)
-        NBN_GameServer_CloseClient(connection, -1);
+        NBN_GameServer_RejectConnection(-1);
 
     assert(clients[client_count] == NULL);
 
+    NBN_Connection *connection = NBN_GameServer_AcceptConnection();
     SoakClient *soak_client = malloc(sizeof(SoakClient));
 
     soak_client->id = connection->id;
@@ -33,16 +34,16 @@ static void HandleClientConnection(NBN_Connection *connection)
 
     clients[client_count++] = soak_client;
 
-    Soak_LogInfo("Client has connected (id: %d)", soak_client->id);
+    Soak_LogInfo("Client has connected (ID: %d)", soak_client->id);
 }
 
-static void HandleClientDisconnection(NBN_Connection *connection)
+static void HandleClientDisconnection(uint32_t client_id)
 {
-    SoakClient *soak_client = clients[connection->id];
+    SoakClient *soak_client = clients[client_id];
 
     assert(soak_client != NULL);
 
-    Soak_LogInfo("Client has disconnected (id: %d)", soak_client->id);
+    Soak_LogInfo("Client has disconnected (ID: %d)", client_id);
 
     NBN_List_Destroy(soak_client->echo_queue, true, (void (*)(void *))SoakMessage_Destroy);
     free(soak_client);
@@ -153,12 +154,12 @@ static int Tick(void)
     {
         switch (ev)
         {
-        case NBN_CLIENT_CONNECTED:
-            HandleClientConnection(NBN_GameServer_GetConnectedClient());
+        case NBN_NEW_CONNECTION:
+            HandleNewConnection();
             break;
 
         case NBN_CLIENT_DISCONNECTED:
-            HandleClientDisconnection(NBN_GameServer_GetDisconnectedClient());
+            HandleClientDisconnection(NBN_GameServer_DisconnectedClientId);
             break;
 
         case NBN_CLIENT_MESSAGE_RECEIVED:
