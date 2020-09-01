@@ -8,7 +8,7 @@ static unsigned int last_recved_message_id = 0;
 static bool connected = false;
 static uint8_t **messages_data;
 
-static uint8_t *generate_random_bytes(unsigned int length)
+static uint8_t *GenerateRandomBytes(unsigned int length)
 {
     uint8_t *bytes = malloc(length);
 
@@ -18,7 +18,7 @@ static uint8_t *generate_random_bytes(unsigned int length)
     return bytes;
 }
 
-static int send_messages(void)
+static int SendSoakMessages(void)
 {
     if (sent_messages_count < Soak_GetOptions().messages_count)
     {
@@ -37,7 +37,7 @@ static int send_messages(void)
 
             msg->data_length = rand() % (SOAK_MESSAGE_MAX_DATA_LENGTH - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
 
-            if (!NBN_GameClient_CanSendMessage(SOAK_CHAN_RELIABLE_ORDERED_1))
+            if (!NBN_GameClient_CanSendMessage(NBN_RESERVED_RELIABLE_CHANNEL))
             {
                 NBN_Message_Destroy(NBN_GameClient_GetOutgoingMessage(), true);
 
@@ -46,7 +46,7 @@ static int send_messages(void)
 
             msg->id = next_msg_id++;
 
-            uint8_t *bytes = generate_random_bytes(msg->data_length);
+            uint8_t *bytes = GenerateRandomBytes(msg->data_length);
 
             messages_data[msg->id - 1] = bytes;
 
@@ -55,7 +55,7 @@ static int send_messages(void)
 
             Soak_LogInfo("Send soak message (id: %d, data length: %d)", msg->id, msg->data_length);
 
-            if (NBN_GameClient_SendMessage(SOAK_CHAN_RELIABLE_ORDERED_1) < 0)
+            if (NBN_GameClient_SendMessage(NBN_RESERVED_RELIABLE_CHANNEL) < 0)
                 return -1;
 
             sent_messages_count++;
@@ -65,7 +65,7 @@ static int send_messages(void)
     return 0;
 }
 
-static int handle_soak_message(SoakMessage *msg)
+static int HandleReceivedSoakMessage(SoakMessage *msg)
 {
     if (msg->id != last_recved_message_id + 1)
     {
@@ -98,16 +98,14 @@ static int handle_soak_message(SoakMessage *msg)
     return 0;
 }
 
-static int handle_message(void)
+static int HandleReceivedMessage(void)
 {
-    NBN_MessageInfo msg;
-
-    NBN_GameClient_GetReceivedMessageInfo(&msg);
+    NBN_MessageInfo msg = NBN_GameClient_GetReceivedMessageInfo();
 
     switch (msg.type)
     {
     case SOAK_MESSAGE:
-        if (handle_soak_message((SoakMessage *)msg.data) < 0)
+        if (HandleReceivedSoakMessage((SoakMessage *)msg.data) < 0)
             return -1;
         break;
 
@@ -120,9 +118,9 @@ static int handle_message(void)
     return 0;
 }
 
-static int tick(void)
+static int Tick(void)
 {
-    NBN_GameClient_AddTime(1000 / SOAK_TICK_RATE);
+    NBN_GameClient_AddTime(SOAK_TICK_DT);
 
     NBN_GameClientEvent ev;
 
@@ -141,7 +139,7 @@ static int tick(void)
             break;
 
         case NBN_MESSAGE_RECEIVED:
-            if (handle_message() < 0)
+            if (HandleReceivedMessage() < 0)
                 return -1;
             break;
 
@@ -152,7 +150,7 @@ static int tick(void)
 
     if (connected)
     {
-        if (send_messages() < 0)
+        if (SendSoakMessages() < 0)
             return -1;
     }
 
@@ -168,11 +166,15 @@ static int tick(void)
 
 int main(int argc, char *argv[])
 {
-    NBN_GameClient_Init(SOAK_PROTOCOL_NAME);
+    NBN_GameClient_Init((NBN_Config){
+        .protocol_name = SOAK_PROTOCOL_NAME,
+        .ip_address = "127.0.0.1",
+        .port = SOAK_PORT
+    });
     
     if (Soak_Init(argc, argv) < 0)
     {
-        NBN_GameClient_Stop();
+        NBN_GameClient_Stop(); /* TODO: segfault */
 
         return 1;
     }
@@ -184,16 +186,15 @@ int main(int argc, char *argv[])
 
     NBN_GameClient_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, Soak_Debug_PrintAddedToRecvQueue);
 
-    if (NBN_GameClient_Start("127.0.0.1", SOAK_PORT) < 0)
+    if (NBN_GameClient_Start() < 0)
     {
         Soak_LogError("Failed to start game client. Exit");
 
         return 1;
     } 
 
-    int ret = Soak_MainLoop(tick);
+    int ret = Soak_MainLoop(Tick);
 
-    NBN_GameClient_Poll(); /* poll one last time to clear the events queue */
     NBN_GameClient_Stop();
     Soak_Deinit();
 

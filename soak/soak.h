@@ -2,6 +2,7 @@
 #define SOAK_H_INCLUDED
 
 #include <stdbool.h>
+#include <limits.h>
 
 #include "logging.h"
 
@@ -16,16 +17,18 @@
 #define SOAK_PROTOCOL_NAME "nbnet_soak"
 #define SOAK_PORT 42042
 #define SOAK_TICK_RATE 60
-#define SOAK_MESSAGE_MIN_DATA_LENGTH 4096
-#define SOAK_MESSAGE_MAX_DATA_LENGTH 4100
+#define SOAK_TICK_DT (1.0 / SOAK_TICK_RATE)
+#define SOAK_MESSAGE_MIN_DATA_LENGTH 50
+#define SOAK_MESSAGE_MAX_DATA_LENGTH 4096
 #define SOAK_MESSAGE 0
 #define SOAK_SEED time(NULL)
+#define SOAK_MAX_CLIENTS 4
 
 typedef struct
 {
     unsigned int messages_count;
-    float packet_loss;
-    float packet_duplication;
+    float packet_loss; /* 0 - 1 */
+    float packet_duplication; /* 0 - 1 */
     unsigned int ping; /* in ms */
     unsigned int jitter; /* in ms */
 } SoakOptions;
@@ -36,13 +39,6 @@ typedef struct
     unsigned int data_length;
     uint8_t data[SOAK_MESSAGE_MAX_DATA_LENGTH];
 } SoakMessage;
-
-enum
-{
-    SOAK_CHAN_RELIABLE_ORDERED_1,
-    SOAK_CHAN_RELIABLE_ORDERED_2,
-    SOAK_CHAN_RELIABLE_ORDERED_3
-};
 
 int Soak_Init(int, char *[]);
 void Soak_Deinit(void);

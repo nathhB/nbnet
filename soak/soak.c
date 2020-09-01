@@ -38,9 +38,6 @@ int Soak_Init(int argc, char *argv[])
         return -1;
 
     NBN_RegisterMessage(SOAK_MESSAGE, SoakMessage_Create, SoakMessage_Serialize, SoakMessage_Destroy);
-    NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, SOAK_CHAN_RELIABLE_ORDERED_1);
-    NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, SOAK_CHAN_RELIABLE_ORDERED_2);
-    NBN_RegisterChannel(NBN_CHANNEL_RELIABLE_ORDERED, SOAK_CHAN_RELIABLE_ORDERED_3);
 
     /* Packet simulator configuration */
     NBN_Debug_SetPing(soak_options.ping);
@@ -138,7 +135,7 @@ int Soak_MainLoop(int (*Tick)(void))
 #ifdef __EMSCRIPTEN__
     emscripten_sleep(1.f / SOAK_TICK_RATE);
 #else
-    long nanos = (1.f / SOAK_TICK_RATE) * 1e9;
+    long nanos = SOAK_TICK_DT * 1e9;
     struct timespec t = { .tv_sec = nanos / 999999999, .tv_nsec = nanos % 999999999 };
 
     nanosleep(&t, &t);
@@ -176,7 +173,7 @@ void SoakMessage_Destroy(SoakMessage *msg)
 
 int SoakMessage_Serialize(SoakMessage *msg, NBN_Stream *stream)
 {
-    SERIALIZE_UINT(msg->id, 0, UINT_MAX);
+    SERIALIZE_UINT(msg->id, 0, UINT32_MAX);
     SERIALIZE_UINT(msg->data_length, 1, SOAK_MESSAGE_MAX_DATA_LENGTH);
     SERIALIZE_BYTES(msg->data, msg->data_length);
 

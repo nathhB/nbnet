@@ -20,9 +20,9 @@ option(NBN_DRIVER_UDP "use udp driver")
 option(NBN_DRIVER_UDP_SDL_NET "use SDL_net udp driver")
 
 if (NBN_DRIVER_UDP_SDL_NET)
-    message("Compile with SDL_net network driver")
+    message("Compile with SDL_net UDP network driver")
 
-    list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/sdl2)
+    list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/sdl2)
 
     find_package(SDL2_net REQUIRED)
 
