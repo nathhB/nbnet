@@ -1,3 +1,25 @@
+/*
+
+Copyright (C) 2020 BIAGINI Nathan
+
+This software is provided 'as-is', without any express or implied
+warranty.  In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+
+*/
+
 #include "../../nbnet.h"
 #include "shared.h"
 
@@ -326,6 +348,7 @@ void DrawHUD(void)
     NBN_ConnectionStats stats = NBN_GameClient_GetStats();
     unsigned int ping = stats.ping * 1000;
 
+    DrawText(FormatText("FPS: %d", GetFPS()), 450, 400, 32, MAROON);
     DrawText(FormatText("Ping: %d ms", ping), 450, 450, 32, MAROON);
     DrawText(FormatText("Upload: %.1f Bps", stats.upload_bandwidth), 450, 500, 32, MAROON);
     DrawText(FormatText("Download: %.1f Bps", stats.download_bandwidth), 450, 550, 32, MAROON);
@@ -333,26 +356,50 @@ void DrawHUD(void)
 
 void Draw(void)
 {
-    if (!spawned)
-        return;
+    BeginDrawing();
+    ClearBackground(LIGHTGRAY);
 
-    /* Start by drawing the remote clients */
-    for (int i = 0; i < MAX_CLIENTS - 1; i++)
+    if (connected && spawned)
     {
-        if (clients[i])
-            DrawClient(clients[i], false);
+        /* Start by drawing the remote clients */
+        for (int i = 0; i < MAX_CLIENTS - 1; i++)
+        {
+            if (clients[i])
+                DrawClient(clients[i], false);
+        }
+
+        /* Then draw the local client */
+        DrawClient(&local_client_state, true);
+
+        /* Finally draw the HUD */
+        DrawHUD();
+    }
+    else if (disconnected)
+    {
+        if (client_closed_code == -1)
+        {
+            if (connected)
+                DrawText("Connection to the server was lost", 265, 280, 20, LIGHTGRAY);
+            else
+                DrawText("Server cannot be reached", 265, 280, 20, LIGHTGRAY);
+        }
+        else if (client_closed_code == SERVER_FULL_CODE)
+        {
+            DrawText("Cannot connect, server is full", 265, 280, 20, LIGHTGRAY);
+        }
+    }
+    else
+    {
+        DrawText("Connecting to server...", 265, 280, 20, LIGHTGRAY);
     }
 
-    /* Then draw the local client */
-    DrawClient(&local_client_state, true);
-
-    /* Finally draw the HUD */
-    DrawHUD();
+    EndDrawing();
 }
 
 int main(void)
 {
     SetTraceLogLevel(LOG_DEBUG);
+    SetTargetFPS(TICK_RATE);
 
     InitWindow(GAME_WIDTH, GAME_HEIGHT, "raylib client");
 
@@ -361,7 +408,10 @@ int main(void)
 
         Protocol name can be anything but has to match the one used on the server.
     */
-    NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, (NBN_Config){ .flush_frequency = 60 });
+    NBN_GameClient_Init((NBN_Config){
+        .protocol_name = RAYLIB_EXAMPLE_PROTOCOL_NAME,
+        .ip_address = "127.0.0.1",
+        .port = 42042});
 
     /*
         Register the actual messages that will be exchanged between the client and the server.
@@ -373,14 +423,12 @@ int main(void)
     /*
         Start the server on localhost and port 42042.
     */
-    if (NBN_GameClient_Start("127.0.0.1", 42042) < 0)
+    if (NBN_GameClient_Start() < 0)
     {
         TraceLog(LOG_WARNING, "Game client failed to start. Exit");
 
         return 1;
     }
-
-    float tick_dt = 1.f / TICK_RATE; /* Tick delta time */
 
     /* Loop until the window is closed or we are disconnected from the server */
     while (!WindowShouldClose())
@@ -405,37 +453,13 @@ int main(void)
             }
         }
 
-        BeginDrawing();
-
-        ClearBackground(LIGHTGRAY);
-
         if (connected && !disconnected)
         {
             if (Update() < 0)
                 break;
-
-            Draw();
-        }
-        else if (disconnected)
-        {
-            if (client_closed_code == -1)
-            {
-                if (connected)
-                    DrawText("Connection to the server was lost", 265, 280, 20, LIGHTGRAY);
-                else
-                    DrawText("Server cannot be reached", 265, 280, 20, LIGHTGRAY);
-            }
-            else if (client_closed_code == SERVER_FULL_CODE)
-            {
-                DrawText("Cannot connect, server is full", 265, 280, 20, LIGHTGRAY);
-            }
-        }
-        else
-        {
-            DrawText("Connecting to server...", 265, 280, 20, LIGHTGRAY);
         }
 
-        EndDrawing();
+        Draw();
 
         /*
             Flush the send queue: all pending messages will be packed together into packets and sent to the server.
@@ -452,8 +476,6 @@ int main(void)
                 break;
             }
         }
-
-        TickSleep(tick_dt);
     }
 
     /*

@@ -1,3 +1,25 @@
+/*
+
+Copyright (C) 2020 BIAGINI Nathan
+
+This software is provided 'as-is', without any express or implied
+warranty.  In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+
+*/
+
 #include "../../nbnet.h"
 #include "shared.h"
 
@@ -41,17 +63,21 @@ static int SendSpawnMessage(Client *client)
     return 0;
 }
 
-static void OnClientConnected(NBN_Connection *connection)
+static void HandleNewConnection(void)
 {
-    TraceLog(LOG_INFO, "Client has connected (id: %d)", connection->id);
+    TraceLog(LOG_INFO, "New connection");
 
     if (client_count == MAX_CLIENTS)
     {
-        NBN_LogInfo("Connection rejected (ID: %d)", connection->id);
-        NBN_GameServer_CloseClient(connection, SERVER_FULL_CODE);
+        TraceLog(LOG_INFO, "Connection rejected");
+        NBN_GameServer_RejectConnection(SERVER_FULL_CODE);
 
         return;
     }
+
+    NBN_Connection *connection = NBN_GameServer_AcceptConnection();
+
+    TraceLog(LOG_INFO, "Connection accepted (ID: %d)", connection->id);
 
     Client *client = NULL;
 
@@ -70,7 +96,7 @@ static void OnClientConnected(NBN_Connection *connection)
     assert(client != NULL);
 
     client->connection = connection;
-    client->state = (ClientState){ .client_id = connection->id, .x = 200, .y = 200, .color = CLI_RED };
+    client->state = (ClientState){.client_id = connection->id, .x = 200, .y = 200, .color = CLI_RED};
 
     /* Send a SpawnMessage to that client */
     if (SendSpawnMessage(client) < 0)
@@ -80,17 +106,6 @@ static void OnClientConnected(NBN_Connection *connection)
     }
 
     client_count++;
-}
-
-static Client *FindClientById(uint32_t client_id)
-{
-    for (int i = 0; i < MAX_CLIENTS; i++)
-    {
-        if (clients[i] && clients[i]->state.client_id == client_id)
-            return clients[i];
-    }
-
-    return NULL;
 }
 
 static void DestroyClient(uint32_t client_id)
@@ -107,20 +122,24 @@ static void DestroyClient(uint32_t client_id)
     }
 }
 
-static void OnClientDisconnected(NBN_Connection *connection)
+static void HandleClientDisconnection(uint32_t client_id)
 {
-    Client *client = FindClientById(connection->id);
+    TraceLog(LOG_INFO, "Client has disconnected (id: %d)", client_id);
 
-    TraceLog(LOG_INFO, "PLOP: %d", connection->id);
-
-    if (client == NULL)
-        return;
-
-    TraceLog(LOG_INFO, "Client has disconnected (id: %d)", connection->id);
-
-    DestroyClient(connection->id);
+    DestroyClient(client_id);
 
     client_count--;
+}
+
+static Client *FindClientById(uint32_t client_id)
+{
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (clients[i] && clients[i]->state.client_id == client_id)
+            return clients[i];
+    }
+
+    return NULL;
 }
 
 static void HandleUpdatePositionMessage(UpdatePositionMessage *msg, NBN_Connection *connection)
@@ -151,13 +170,13 @@ static void HandleReceivedMessage(void)
 
     switch (msg_info.type)
     {
-        case UPDATE_POSITION_MESSAGE:
-            HandleUpdatePositionMessage(msg_info.data, msg_info.sender);
-            break;
+    case UPDATE_POSITION_MESSAGE:
+        HandleUpdatePositionMessage(msg_info.data, msg_info.sender);
+        break;
 
-        case CHANGE_COLOR_MESSAGE:
-            HandleChangeColorMessage(msg_info.data, msg_info.sender);
-            break;
+    case CHANGE_COLOR_MESSAGE:
+        HandleChangeColorMessage(msg_info.data, msg_info.sender);
+        break;
     }
 }
 
@@ -165,12 +184,12 @@ static int HandleGameServerEvent(NBN_GameServerEvent ev)
 {
     switch (ev)
     {
-    case NBN_CLIENT_CONNECTED:
-        OnClientConnected(NBN_GameServer_GetConnectedClient());
+    case NBN_NEW_CONNECTION:
+        HandleNewConnection();
         break;
 
     case NBN_CLIENT_DISCONNECTED:
-        OnClientDisconnected(NBN_GameServer_GetDisconnectedClient());
+        HandleClientDisconnection(NBN_GameServer_DisconnectedClientId);
         break;
 
     case NBN_CLIENT_MESSAGE_RECEIVED:
@@ -201,7 +220,7 @@ static int BroadcastGameState(void)
             .client_id = client->state.client_id,
             .x = client->state.x,
             .y = client->state.y,
-            .color = client->state.color };
+            .color = client->state.color};
 
         client_index++;
     }
@@ -223,7 +242,6 @@ static int BroadcastGameState(void)
         if (msg == NULL)
             return -1;
 
-
         /* Fill message data */
         msg->client_count = client_index;
         memcpy(msg->client_states, client_states, sizeof(ClientState) * MAX_CLIENTS);
@@ -243,18 +261,18 @@ int main(void)
 {
     SetTraceLogLevel(LOG_DEBUG);
 
-    NBN_GameServer_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, (NBN_Config){ .flush_frequency = 60 });
+    NBN_GameServer_Init((NBN_Config){.protocol_name = RAYLIB_EXAMPLE_PROTOCOL_NAME, .port = 42042});
 
     RegisterMessages();
 
-    if (NBN_GameServer_Start(42042) < 0)
+    if (NBN_GameServer_Start() < 0)
     {
         TraceLog(LOG_ERROR, "Game client failed to start. Exit");
 
         return 1;
     }
 
-    float tick_dt = 1.f / TICK_RATE; /* tick delta time */
+    float tick_dt = 1.f / TICK_RATE; /* Tick delta time */
 
     while (true)
     {
@@ -288,10 +306,17 @@ int main(void)
 
         NBN_GameServerStats stats = NBN_GameServer_GetStats();
 
-        NBN_LogInfo("Upload: %f Bps | Download: %f Bps", stats.upload_bandwidth, stats.download_bandwidth);
+        TraceLog(LOG_INFO, "Upload: %f Bps | Download: %f Bps", stats.upload_bandwidth, stats.download_bandwidth);
 
-        /* We do not want our server simulation to run too fast so we sleep for a duration of "tick dt" */
-        TickSleep(tick_dt);
+        /* Cap the simulation rate to the target tick rate */
+#if defined(_WIN32) || defined(_WIN64)
+        Sleep(tick_dt * 1000);
+#else /* UNIX / OSX */
+        long nanos = tick_dt * 1e9;
+        struct timespec t = {.tv_sec = nanos / 999999999, .tv_nsec = nanos % 999999999};
+
+        nanosleep(&t, &t);
+#endif
     }
 
     NBN_GameServer_Stop();
