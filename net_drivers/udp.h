@@ -32,6 +32,7 @@ freely, subject to the following restrictions:
 
 #ifdef NBN_DRIVER_UDP_IMPL
 
+#include <stdlib.h>
 #include <errno.h>
 #include <assert.h>
 
@@ -296,7 +297,7 @@ void NBN_Driver_GServ_DestroyClientConnection(uint32_t conn_id)
     assert(connection != NULL);
 
     NBN_LogDebug("Destroy UDP connection %d", connection->id);
-    NBN_Dealloc(NBN_List_Remove(connections, connection));
+    free(NBN_List_Remove(connections, connection));
 }
 
 int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, uint32_t conn_id)
@@ -327,7 +328,7 @@ static void ProcessClientPacket(NBN_Packet *packet, NBN_IPAddress client_address
 
     if (udp_conn == NULL) /* this is a new connection */
     {
-        udp_conn = NBN_Alloc(sizeof(NBN_UDPConnection));
+        udp_conn = malloc(sizeof(NBN_UDPConnection));
         uint32_t conn_id = next_conn_id++;
 
         udp_conn->id = conn_id;
