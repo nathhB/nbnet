@@ -2,6 +2,11 @@
 
 #include "soak.h"
 
+/* nbnet UDP driver implementation */
+#define NBN_DRIVER_UDP_IMPL
+
+#include "../net_drivers/udp.h"
+
 typedef struct
 {
     unsigned int id;

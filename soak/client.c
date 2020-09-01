@@ -2,6 +2,11 @@
 
 #include "soak.h"
 
+/* nbnet UDP driver implementation */
+#define NBN_DRIVER_UDP_IMPL
+
+#include "../net_drivers/udp.h"
+
 static unsigned int sent_messages_count = 0;
 static unsigned int next_msg_id = 1;
 static unsigned int last_recved_message_id = 0;

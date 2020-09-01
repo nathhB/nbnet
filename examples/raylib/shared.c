@@ -29,23 +29,11 @@ freely, subject to the following restrictions:
 
 #include "../../nbnet.h"
 
-#if defined(NBN_DRIVER_UDP)
-
 /* nbnet udp driver implementation */
 
 #define NBN_DRIVER_UDP_IMPL
 
 #include "../../net_drivers/udp.h"
-
-#elif defined(NBN_DRIVER_UDP_SDL_NET)
-
-/* nbnet SDL_net udp driver implementation */
-
-#define NBN_DRIVER_UDP_SDL_NET_IMPL 
-
-#include "../../net_drivers/udp_sdl_net.h"
-
-#endif
 
 void RegisterMessages(void)
 {
