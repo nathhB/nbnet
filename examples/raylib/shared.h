@@ -117,22 +117,6 @@ typedef struct tagMSG *LPMSG;
 #define SERVER_FULL_CODE 42
 
 /*
-    nbnet channels
-
-    We are going to use two channels to demonstrate the two existing types of channel in nbnet:
-
-    1.  an unreliable ordered channel on which we are going to send time critical messages
-    2.  a reliable ordered channel on which we are going to send reliable messages that we want to be 
-        sure are received by the other end
-*/
-
-enum
-{
-    UNRELIABLE_CHANNEL,
-    RELIABLE_CHANNEL
-};
-
-/*
     We are going to use four different messages:
 
     1.  SpawnMessage: a reliable message that will be sent by the server to the client when it connects

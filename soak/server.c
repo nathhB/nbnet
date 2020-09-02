@@ -91,7 +91,7 @@ static void EchoReceivedSoakMessages(void)
 
             memcpy(echo_msg->data, msg->data, msg->data_length);
 
-            if (NBN_GameServer_SendMessageTo(soak_client->connection, NBN_RESERVED_RELIABLE_CHANNEL) < 0)
+            if (NBN_GameServer_SendReliableMessageTo(soak_client->connection) < 0)
                 NBN_GameServer_CloseClient(soak_client->connection, -1);
 
             free(NBN_List_Remove(soak_client->echo_queue, msg));

@@ -60,7 +60,7 @@ static int SendSoakMessages(void)
 
             Soak_LogInfo("Send soak message (id: %d, data length: %d)", msg->id, msg->data_length);
 
-            if (NBN_GameClient_SendMessage(NBN_RESERVED_RELIABLE_CHANNEL) < 0)
+            if (NBN_GameClient_SendReliableMessage() < 0)
                 return -1;
 
             sent_messages_count++;
@@ -95,6 +95,7 @@ static int HandleReceivedSoakMessage(SoakMessage *msg)
 
     if (last_recved_message_id == Soak_GetOptions().messages_count)
     {
+        Soak_LogInfo("Received all soak message echoes");
         Soak_Stop();
 
         return -1;
@@ -136,6 +137,7 @@ static int Tick(void)
         case NBN_DISCONNECTED:
             connected = false;
 
+            Soak_LogInfo("Disconnected");
             Soak_Stop();
             return 0;
 

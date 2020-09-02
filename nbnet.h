@@ -796,6 +796,8 @@ NBN_GameClientEvent NBN_GameClient_Poll(void);
 int NBN_GameClient_Flush(void);
 void *NBN_GameClient_CreateMessage(uint8_t);
 int NBN_GameClient_SendMessage(uint8_t);
+int NBN_GameClient_SendUnreliableMessage(void);
+int NBN_GameClient_SendReliableMessage(void);
 bool NBN_GameClient_CanSendMessage(uint8_t);
 NBN_Connection *NBN_GameClient_CreateServerConnection(void);
 NBN_MessageInfo NBN_GameClient_GetReceivedMessageInfo(void);
@@ -855,6 +857,8 @@ NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t);
 void NBN_GameServer_CloseClient(NBN_Connection *, int);
 void *NBN_GameServer_CreateMessage(uint8_t);
 int NBN_GameServer_SendMessageTo(NBN_Connection *, uint8_t);
+int NBN_GameServer_SendUnreliableMessageTo(NBN_Connection *);
+int NBN_GameServer_SendReliableMessageTo(NBN_Connection *);
 NBN_Connection *NBN_GameServer_AcceptConnection(void);
 void NBN_GameServer_RejectConnection(int);
 bool NBN_GameServer_CanSendMessageTo(NBN_Connection *, uint8_t);
@@ -3272,6 +3276,16 @@ int NBN_GameClient_SendMessage(uint8_t channel_id)
     return NBN_Connection_EnqueueOutgoingMessage(game_client.server_connection, channel_id);
 }
 
+int NBN_GameClient_SendUnreliableMessage(void)
+{
+    return NBN_GameClient_SendMessage(NBN_RESERVED_UNRELIABLE_CHANNEL);
+}
+
+int NBN_GameClient_SendReliableMessage(void)
+{
+    return NBN_GameClient_SendMessage(NBN_RESERVED_RELIABLE_CHANNEL);
+}
+
 bool NBN_GameClient_CanSendMessage(uint8_t channel_id)
 {
     NBN_Channel *channel = game_client.server_connection->channels[channel_id];
@@ -3642,6 +3656,16 @@ void *NBN_GameServer_CreateMessage(uint8_t type)
 int NBN_GameServer_SendMessageTo(NBN_Connection *client, uint8_t channel_id)
 {
     return NBN_Connection_EnqueueOutgoingMessage(client, channel_id);
+}
+
+int NBN_GameServer_SendUnreliableMessageTo(NBN_Connection *client)
+{
+    return NBN_GameServer_SendMessageTo(client, NBN_RESERVED_UNRELIABLE_CHANNEL);
+}
+
+int NBN_GameServer_SendReliableMessageTo(NBN_Connection *client)
+{
+    return NBN_GameServer_SendMessageTo(client, NBN_RESERVED_RELIABLE_CHANNEL);
 }
 
 NBN_Connection *NBN_GameServer_AcceptConnection(void)
