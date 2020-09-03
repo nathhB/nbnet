@@ -23,6 +23,8 @@ freely, subject to the following restrictions:
 #ifndef RAYLIB_EXAMPLE_SHARED_H
 #define RAYLIB_EXAMPLE_SHARED_H
 
+#include <raylib.h>
+
 #if defined(_WIN32) || defined(_WIN64)
 
 /*
@@ -75,11 +77,10 @@ freely, subject to the following restrictions:
 /* Type required before windows.h inclusion  */
 typedef struct tagMSG *LPMSG;
 
+#include <winsock2.h> /* Has to be included before windows.h */
+#include <windows.h>
+
 #endif /* WINDOWS */
-
-#include <raylib.h>
-
-#include "../../nbnet.h"
 
 #define RAYLIB_EXAMPLE_PROTOCOL_NAME "raylib-example"
 
@@ -92,6 +93,9 @@ typedef struct tagMSG *LPMSG;
 #define NBN_LogWarning(...) TraceLog(LOG_WARNING, __VA_ARGS__)
 #define NBN_LogDebug(...) TraceLog(LOG_DEBUG, __VA_ARGS__)
 #define NBN_LogTrace(...) TraceLog(LOG_TRACE, __VA_ARGS__)
+
+#include "../../nbnet.h"
+#include "../../net_drivers/udp.h"
 
 /*
     Simulation tick rate.

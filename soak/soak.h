@@ -1,6 +1,13 @@
 #ifndef SOAK_H_INCLUDED
 #define SOAK_H_INCLUDED
 
+#if defined(_WIN32) || defined(_WIN64)
+
+#include <winsock2.h>
+#include <windows.h>
+
+#endif
+
 #include <stdbool.h>
 #include <limits.h>
 

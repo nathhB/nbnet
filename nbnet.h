@@ -617,6 +617,20 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *);
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
 
+#if defined(_WIN32) || defined(_WIN64)
+#define NBNET_WINDOWS
+#endif
+
+/*
+    Threading.
+
+    Windows headers are a pain... they need to be included by the nbnet user before
+    the nbnet header.
+*/
+#ifndef NBNET_WINDOWS
+#include <pthread.h>
+#endif /* NBNET_WINDOWS */
+
 #ifdef NBN_GAME_CLIENT
 
 #define NBN_Debug_SetPing(v) { game_client.endpoint.packet_simulator->ping = v; }
@@ -635,8 +649,6 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *);
 
 #endif /* NBN_GAME_SERVER */
 
-#include <pthread.h>
-
 typedef struct
 {
     NBN_Packet *packet;
@@ -649,8 +661,13 @@ typedef struct
 {
     NBN_List *packets_queue;
     double time;
+#ifdef NBNET_WINDOWS
+    HANDLE packets_queue_mutex;
+    HANDLE thread; 
+#else
     pthread_mutex_t packets_queue_mutex;
     pthread_t thread;
+#endif
     bool running;
 
     /* Settings */
@@ -793,11 +810,11 @@ int NBN_GameClient_Start(void);
 void NBN_GameClient_Stop(void);
 void NBN_GameClient_AddTime(double);
 NBN_GameClientEvent NBN_GameClient_Poll(void);
-int NBN_GameClient_Flush(void);
+int NBN_GameClient_SendPackets(void);
 void *NBN_GameClient_CreateMessage(uint8_t);
-int NBN_GameClient_SendMessage(uint8_t);
-int NBN_GameClient_SendUnreliableMessage(void);
-int NBN_GameClient_SendReliableMessage(void);
+int NBN_GameClient_EnqueueMessage(uint8_t);
+int NBN_GameClient_EnqueueUnreliableMessage(void);
+int NBN_GameClient_EnqueueReliableMessage(void);
 bool NBN_GameClient_CanSendMessage(uint8_t);
 NBN_Connection *NBN_GameClient_CreateServerConnection(void);
 NBN_MessageInfo NBN_GameClient_GetReceivedMessageInfo(void);
@@ -852,13 +869,13 @@ int NBN_GameServer_Start(void);
 void NBN_GameServer_Stop(void);
 void NBN_GameServer_AddTime(double);
 NBN_GameServerEvent NBN_GameServer_Poll(void);
-int NBN_GameServer_Flush(void);
+int NBN_GameServer_SendPackets(void);
 NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t);
 void NBN_GameServer_CloseClient(NBN_Connection *, int);
 void *NBN_GameServer_CreateMessage(uint8_t);
-int NBN_GameServer_SendMessageTo(NBN_Connection *, uint8_t);
-int NBN_GameServer_SendUnreliableMessageTo(NBN_Connection *);
-int NBN_GameServer_SendReliableMessageTo(NBN_Connection *);
+int NBN_GameServer_EnqueueMessageFor(NBN_Connection *, uint8_t);
+int NBN_GameServer_EnqueueUnreliableMessageFor(NBN_Connection *);
+int NBN_GameServer_EnqueueReliableMessageFor(NBN_Connection *);
 NBN_Connection *NBN_GameServer_AcceptConnection(void);
 void NBN_GameServer_RejectConnection(int);
 bool NBN_GameServer_CanSendMessageTo(NBN_Connection *, uint8_t);
@@ -2621,6 +2638,8 @@ static int NBN_Connection_SendPacket(NBN_Connection *connection, NBN_Packet *pac
 
     return 0;
 #else
+    (void)connection;
+
     return NBN_Driver_GCli_SendPacket(packet);
 #endif
 
@@ -3177,7 +3196,7 @@ NBN_GameClient game_client;
 static int last_event_type = NBN_NO_EVENT;
 static uint8_t last_received_message_type;
 static void *last_received_message_data = NULL;
-static int client_closed_code = -1;
+static int last_client_closed_code = -1;
 
 static void NBN_GameClient_ProcessReceivedMessage(NBN_Message *, NBN_Connection *);
 static int NBN_GameClient_HandleEvent(int);
@@ -3261,7 +3280,7 @@ NBN_GameClientEvent NBN_GameClient_Poll(void)
     return NBN_GameClient_HandleEvent(ev_type);
 }
 
-int NBN_GameClient_Flush(void)
+int NBN_GameClient_SendPackets(void)
 {
     return NBN_Connection_FlushSendQueue(game_client.server_connection);
 }
@@ -3271,19 +3290,19 @@ void *NBN_GameClient_CreateMessage(uint8_t type)
     return NBN_Connection_CreateOutgoingMessage(type);
 }
 
-int NBN_GameClient_SendMessage(uint8_t channel_id)
+int NBN_GameClient_EnqueueMessage(uint8_t channel_id)
 {
     return NBN_Connection_EnqueueOutgoingMessage(game_client.server_connection, channel_id);
 }
 
-int NBN_GameClient_SendUnreliableMessage(void)
+int NBN_GameClient_EnqueueUnreliableMessage(void)
 {
-    return NBN_GameClient_SendMessage(NBN_RESERVED_UNRELIABLE_CHANNEL);
+    return NBN_GameClient_EnqueueMessage(NBN_RESERVED_UNRELIABLE_CHANNEL);
 }
 
-int NBN_GameClient_SendReliableMessage(void)
+int NBN_GameClient_EnqueueReliableMessage(void)
 {
-    return NBN_GameClient_SendMessage(NBN_RESERVED_RELIABLE_CHANNEL);
+    return NBN_GameClient_EnqueueMessage(NBN_RESERVED_RELIABLE_CHANNEL);
 }
 
 bool NBN_GameClient_CanSendMessage(uint8_t channel_id)
@@ -3336,7 +3355,7 @@ NBN_Message *NBN_GameClient_GetOutgoingMessage(void)
 
 int NBN_GameClient_GetClientClosedCode(void)
 {
-    return client_closed_code;
+    return last_client_closed_code;
 }
 
 #ifdef NBN_DEBUG
@@ -3397,7 +3416,7 @@ static int NBN_GameClient_HandleMessageReceivedEvent(void)
 
     if (message->header.type == NBN_CLIENT_CLOSED_MESSAGE_TYPE)
     {
-        client_closed_code = ((NBN_ClientClosedMessage *)message->data)->code;
+        last_client_closed_code = ((NBN_ClientClosedMessage *)message->data)->code;
 
         return NBN_DISCONNECTED;
     }
@@ -3488,13 +3507,14 @@ static uint8_t last_received_message_type;
 
 static void NBN_GameServer_ProcessReceivedMessage(NBN_Message *, NBN_Connection *);
 static void NBN_GameServer_CloseStaleClientConnections(void);
-static void NBN_GameServer_DestroyClosedClientConnections(void);
+static void NBN_GameServer_RemoveClosedClientConnections(void);
 static void NBN_GameServer_HandleEvent(int);
 static void NBN_GameServer_HandleClientConnectionEvent(void);
 static void NBN_GameServer_HandleClientDisconnectedEvent(void);
 static void NBN_GameServer_HandleMessageReceivedEvent(void);
 static void NBN_GameServer_ReleaseLastEvent(void);
 static void NBN_GameServer_ReleaseMessageReceivedEvent(void);
+static void NBN_GameServer_ReleaseClientDisconnectedEvent(void);
 
 void NBN_GameServer_Init(NBN_Config config)
 {
@@ -3578,7 +3598,7 @@ NBN_GameServerEvent NBN_GameServer_Poll(void)
             current_node = current_node->next;
         }
 
-        NBN_GameServer_DestroyClosedClientConnections();
+        NBN_GameServer_RemoveClosedClientConnections();
     }
 
     int ev_type = NBN_EventQueue_Dequeue(game_server.endpoint.events_queue);
@@ -3589,7 +3609,7 @@ NBN_GameServerEvent NBN_GameServer_Poll(void)
     return ev_type;
 }
 
-int NBN_GameServer_Flush(void)
+int NBN_GameServer_SendPackets(void)
 {
     NBN_ListNode *current_node = game_server.clients->head;
 
@@ -3642,7 +3662,7 @@ void NBN_GameServer_CloseClient(NBN_Connection *client, int code)
 
         msg->code = code;
 
-        NBN_GameServer_SendMessageTo(client, NBN_RESERVED_RELIABLE_CHANNEL);
+        NBN_GameServer_EnqueueMessageFor(client, NBN_RESERVED_RELIABLE_CHANNEL);
     }
 
     client->closed = true;
@@ -3653,19 +3673,19 @@ void *NBN_GameServer_CreateMessage(uint8_t type)
     return NBN_Connection_CreateOutgoingMessage(type);
 }
 
-int NBN_GameServer_SendMessageTo(NBN_Connection *client, uint8_t channel_id)
+int NBN_GameServer_EnqueueMessageFor(NBN_Connection *client, uint8_t channel_id)
 {
     return NBN_Connection_EnqueueOutgoingMessage(client, channel_id);
 }
 
-int NBN_GameServer_SendUnreliableMessageTo(NBN_Connection *client)
+int NBN_GameServer_EnqueueUnreliableMessageFor(NBN_Connection *client)
 {
-    return NBN_GameServer_SendMessageTo(client, NBN_RESERVED_UNRELIABLE_CHANNEL);
+    return NBN_GameServer_EnqueueMessageFor(client, NBN_RESERVED_UNRELIABLE_CHANNEL);
 }
 
-int NBN_GameServer_SendReliableMessageTo(NBN_Connection *client)
+int NBN_GameServer_EnqueueReliableMessageFor(NBN_Connection *client)
 {
-    return NBN_GameServer_SendMessageTo(client, NBN_RESERVED_RELIABLE_CHANNEL);
+    return NBN_GameServer_EnqueueMessageFor(client, NBN_RESERVED_RELIABLE_CHANNEL);
 }
 
 NBN_Connection *NBN_GameServer_AcceptConnection(void)
@@ -3777,7 +3797,7 @@ static void NBN_GameServer_CloseStaleClientConnections(void)
     }
 }
 
-static void NBN_GameServer_DestroyClosedClientConnections(void)
+static void NBN_GameServer_RemoveClosedClientConnections(void)
 {
     NBN_ListNode *current_node = game_server.clients->head;
 
@@ -3790,8 +3810,9 @@ static void NBN_GameServer_DestroyClosedClientConnections(void)
         if (client->closed && (client->send_queue->count == 0 || client->is_stale))
         {
             NBN_LogDebug("Destroy closed client connection (ID: %d)", client->id);
+
             NBN_Driver_GServ_DestroyClientConnection(client->id);
-            NBN_Connection_Destroy(NBN_List_Remove(game_server.clients, client));
+            NBN_List_Remove(game_server.clients, client);
         }
     }
 }
@@ -3842,6 +3863,10 @@ static void NBN_GameServer_ReleaseLastEvent(void)
 {
     switch (last_event_type)
     {
+    case NBN_CLIENT_DISCONNECTED:
+        NBN_GameServer_ReleaseClientDisconnectedEvent();
+        break;
+
     case NBN_CLIENT_MESSAGE_RECEIVED:
         NBN_GameServer_ReleaseMessageReceivedEvent();
         break;
@@ -3852,6 +3877,11 @@ static void NBN_GameServer_ReleaseLastEvent(void)
 
     last_event_client = NULL;
     last_received_message_data = NULL;
+}
+
+static void NBN_GameServer_ReleaseClientDisconnectedEvent(void)
+{
+    NBN_Connection_Destroy(last_event_client);
 }
 
 static void NBN_GameServer_ReleaseMessageReceivedEvent(void)
@@ -3922,7 +3952,13 @@ static void NBN_GServ_Driver_OnClientPacketReceived(NBN_Packet *packet)
 
 static NBN_PacketSimulatorEntry *NBN_PacketSimulator_CreateEntry(NBN_PacketSimulator *, NBN_Packet *, uint32_t);
 static void NBN_PacketSimulator_DestroyEntry(NBN_PacketSimulatorEntry *);
+
+#ifdef NBNET_WINDOWS
+DWORD WINAPI NBN_PacketSimulator_Routine(LPVOID);
+#else
 static void *NBN_PacketSimulator_Routine(void *);
+#endif
+
 static int NBN_PacketSimulator_SendPacket(NBN_PacketSimulator *, NBN_Packet *, uint32_t);
 static unsigned int NBN_PacketSimulator_GetRandomDuplicatePacketCount(NBN_PacketSimulator *);
 
@@ -3931,7 +3967,12 @@ NBN_PacketSimulator *NBN_PacketSimulator_Create(void)
     NBN_PacketSimulator *packet_simulator = NBN_Alloc(sizeof(NBN_PacketSimulator));
 
     packet_simulator->packets_queue = NBN_List_Create();
+#ifdef NBNET_WINDOWS
+    packet_simulator->packets_queue_mutex = CreateMutex(NULL, FALSE, NULL);
+#else
     packet_simulator->packets_queue_mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+#endif
+
     packet_simulator->time = 0;
     packet_simulator->running = false;
     packet_simulator->ping = 0;
@@ -3953,7 +3994,11 @@ void NBN_PacketSimulator_Destroy(NBN_PacketSimulator *packet_simulator)
 void NBN_PacketSimulator_EnqueuePacket(
     NBN_PacketSimulator *packet_simulator, NBN_Packet *packet, uint32_t receiver_id)
 {
+#ifdef NBNET_WINDOWS
+    WaitForSingleObject(packet_simulator->packets_queue_mutex, INFINITE);
+#else
     pthread_mutex_lock(&packet_simulator->packets_queue_mutex);
+#endif
 
     NBN_Packet *dup_packet = NBN_Alloc(sizeof(NBN_Packet));
 
@@ -3974,12 +4019,20 @@ void NBN_PacketSimulator_EnqueuePacket(
 
     NBN_List_PushBack(packet_simulator->packets_queue, entry);
 
+#ifdef NBNET_WINDOWS
+    ReleaseMutex(packet_simulator->packets_queue_mutex);
+#else
     pthread_mutex_unlock(&packet_simulator->packets_queue_mutex);
+#endif
 }
 
 void NBN_PacketSimulator_Start(NBN_PacketSimulator *packet_simulator)
 {
+#ifdef NBNET_WINDOWS
+    packet_simulator->thread = CreateThread(NULL, 0, NBN_PacketSimulator_Routine, packet_simulator, 0, NULL);
+#else
     pthread_create(&packet_simulator->thread, NULL, NBN_PacketSimulator_Routine, packet_simulator);
+#endif
 
     packet_simulator->running = true;
 }
@@ -3988,7 +4041,10 @@ void NBN_PacketSimulator_Stop(NBN_PacketSimulator *packet_simulator)
 {
     packet_simulator->running = false;
     
+#ifdef NBNET_WINDOWS
+#else
     pthread_join(packet_simulator->thread, NULL);
+#endif
 }
 
 void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *packet_simulator, double time)
@@ -4014,13 +4070,20 @@ static void NBN_PacketSimulator_DestroyEntry(NBN_PacketSimulatorEntry *entry)
     NBN_Dealloc(entry);
 }
 
+#ifdef NBNET_WINDOWS
+DWORD WINAPI NBN_PacketSimulator_Routine(LPVOID arg)
+#else
 static void *NBN_PacketSimulator_Routine(void *arg)
+#endif
 {
     NBN_PacketSimulator *packet_simulator = arg;
 
     while (packet_simulator->running)
     {
+#ifdef NBNET_WINDOWS
+#else
         pthread_mutex_lock(&packet_simulator->packets_queue_mutex);
+#endif
 
         NBN_ListNode *current_node = packet_simulator->packets_queue->head;
 
@@ -4039,16 +4102,24 @@ static void *NBN_PacketSimulator_Routine(void *arg)
             for (unsigned int i = 0; i < NBN_PacketSimulator_GetRandomDuplicatePacketCount(packet_simulator); i++)
             {
                 NBN_LogDebug("Duplicate packet %d (count: %d)", entry->packet->header.seq_number, i + 1);
+
                 NBN_PacketSimulator_SendPacket(packet_simulator, entry->packet, entry->receiver_id);
             }
 
             NBN_PacketSimulator_DestroyEntry(entry);
         }
 
+#ifdef NBNET_WINDOWS
+#else
         pthread_mutex_unlock(&packet_simulator->packets_queue_mutex);
+#endif
     }
 
+#ifdef NBNET_WINDOWS
+    return 0;
+#else
     return NULL;
+#endif
 }
 
 static int NBN_PacketSimulator_SendPacket(NBN_PacketSimulator *packet_simulator, NBN_Packet *packet, uint32_t receiver_id)
@@ -4061,7 +4132,7 @@ static int NBN_PacketSimulator_SendPacket(NBN_PacketSimulator *packet_simulator,
     }
 
 #ifdef NBN_GAME_CLIENT
-    (void)receiver_id; /* avoid warning */
+    (void)receiver_id;
 
     return NBN_Driver_GCli_SendPacket(packet);
 #endif

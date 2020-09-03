@@ -91,7 +91,7 @@ static void EchoReceivedSoakMessages(void)
 
             memcpy(echo_msg->data, msg->data, msg->data_length);
 
-            if (NBN_GameServer_SendReliableMessageTo(soak_client->connection) < 0)
+            if (NBN_GameServer_EnqueueReliableMessageFor(soak_client->connection) < 0)
                 NBN_GameServer_CloseClient(soak_client->connection, -1);
 
             free(NBN_List_Remove(soak_client->echo_queue, msg));
@@ -178,7 +178,7 @@ static int Tick(void)
 
     EchoReceivedSoakMessages();
 
-    if (NBN_GameServer_Flush() < 0)
+    if (NBN_GameServer_SendPackets() < 0)
     {
         Soak_LogError("Failed to flush game server send queue. Exit");
 

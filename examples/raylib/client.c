@@ -20,7 +20,6 @@ freely, subject to the following restrictions:
 
 */
 
-#include "../../nbnet.h"
 #include "shared.h"
 
 static bool connected = false;
@@ -54,7 +53,7 @@ Color client_colors_to_raylib_colors[] = {
 
 static void HandleDisconnection(int code)
 {
-    NBN_LogTrace("Disconnected from server (code: %d)", code);
+    TraceLog(LOG_INFO, "Disconnected from server (code: %d)", code);
 
     disconnected = true;
     client_closed_code = code;
@@ -268,7 +267,7 @@ static int SendPositionUpdate(void)
     msg->y = local_client_state.y;
 
     /* Send the message on the unreliable channel */
-    if (NBN_GameClient_SendUnreliableMessage() < 0)
+    if (NBN_GameClient_EnqueueUnreliableMessage() < 0)
         return -1;
 
     return 0;
@@ -287,7 +286,7 @@ static int SendColorUpdate(void)
     msg->color = local_client_state.color;
 
     /* Send the message on the reliable channel */
-    if (NBN_GameClient_SendReliableMessage() < 0)
+    if (NBN_GameClient_EnqueueReliableMessage() < 0)
         return -1;
 
     return 0;
@@ -359,7 +358,21 @@ void Draw(void)
     BeginDrawing();
     ClearBackground(LIGHTGRAY);
 
-    if (connected && spawned)
+    if (disconnected)
+    {
+        if (client_closed_code == -1)
+        {
+            if (connected)
+                DrawText("Connection to the server was lost", 265, 280, 20, RED);
+            else
+                DrawText("Server cannot be reached", 265, 280, 20, RED);
+        }
+        else if (client_closed_code == SERVER_FULL_CODE)
+        {
+            DrawText("Cannot connect, server is full", 265, 280, 20, RED);
+        }
+    }
+    else if (connected && spawned)
     {
         /* Start by drawing the remote clients */
         for (int i = 0; i < MAX_CLIENTS - 1; i++)
@@ -374,23 +387,9 @@ void Draw(void)
         /* Finally draw the HUD */
         DrawHUD();
     }
-    else if (disconnected)
-    {
-        if (client_closed_code == -1)
-        {
-            if (connected)
-                DrawText("Connection to the server was lost", 265, 280, 20, LIGHTGRAY);
-            else
-                DrawText("Server cannot be reached", 265, 280, 20, LIGHTGRAY);
-        }
-        else if (client_closed_code == SERVER_FULL_CODE)
-        {
-            DrawText("Cannot connect, server is full", 265, 280, 20, LIGHTGRAY);
-        }
-    }
     else
     {
-        DrawText("Connecting to server...", 265, 280, 20, LIGHTGRAY);
+        DrawText("Connecting to server...", 265, 280, 20, RED);
     }
 
     EndDrawing();
@@ -469,7 +468,7 @@ int main(void)
 
         if (!disconnected)
         {
-            if (NBN_GameClient_Flush() < 0)
+            if (NBN_GameClient_SendPackets() < 0)
             {
                 TraceLog(LOG_ERROR, "An occured while flushing the send queue. Exit");
 

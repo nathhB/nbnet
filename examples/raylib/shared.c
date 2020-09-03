@@ -23,17 +23,13 @@ freely, subject to the following restrictions:
 #include <limits.h>
 #include <time.h>
 
-#include "shared.h"
-
-#define NBNET_IMPL /* nbnet implementation */
-
-#include "../../nbnet.h"
+/* nbnet implementation */
+#define NBNET_IMPL 
 
 /* nbnet udp driver implementation */
-
 #define NBN_DRIVER_UDP_IMPL
 
-#include "../../net_drivers/udp.h"
+#include "shared.h"
 
 void RegisterMessages(void)
 {

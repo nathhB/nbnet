@@ -60,7 +60,7 @@ static int SendSoakMessages(void)
 
             Soak_LogInfo("Send soak message (id: %d, data length: %d)", msg->id, msg->data_length);
 
-            if (NBN_GameClient_SendReliableMessage() < 0)
+            if (NBN_GameClient_EnqueueReliableMessage() < 0)
                 return -1;
 
             sent_messages_count++;
@@ -161,7 +161,7 @@ static int Tick(void)
             return -1;
     }
 
-    if (NBN_GameClient_Flush() < 0)
+    if (NBN_GameClient_SendPackets() < 0)
     {
         Soak_LogError("Failed to flush game client send queue. Exit");
 
