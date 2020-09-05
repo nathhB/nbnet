@@ -3978,6 +3978,7 @@ NBN_PacketSimulator *NBN_PacketSimulator_Create(void)
     NBN_PacketSimulator *packet_simulator = NBN_Alloc(sizeof(NBN_PacketSimulator));
 
     packet_simulator->packets_queue = NBN_List_Create();
+
 #ifdef NBNET_WINDOWS
     packet_simulator->packets_queue_mutex = CreateMutex(NULL, FALSE, NULL);
 #else
@@ -4053,6 +4054,7 @@ void NBN_PacketSimulator_Stop(NBN_PacketSimulator *packet_simulator)
     packet_simulator->running = false;
     
 #ifdef NBNET_WINDOWS
+    WaitForSingleObject(packet_simulator->thread, INFINITE);
 #else
     pthread_join(packet_simulator->thread, NULL);
 #endif
@@ -4092,6 +4094,7 @@ static void *NBN_PacketSimulator_Routine(void *arg)
     while (packet_simulator->running)
     {
 #ifdef NBNET_WINDOWS
+        WaitForSingleObject(packet_simulator->packets_queue_mutex, INFINITE);
 #else
         pthread_mutex_lock(&packet_simulator->packets_queue_mutex);
 #endif
@@ -4121,6 +4124,7 @@ static void *NBN_PacketSimulator_Routine(void *arg)
         }
 
 #ifdef NBNET_WINDOWS
+        ReleaseMutex(packet_simulator->packets_queue_mutex);
 #else
         pthread_mutex_unlock(&packet_simulator->packets_queue_mutex);
 #endif
