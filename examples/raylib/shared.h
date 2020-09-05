@@ -83,6 +83,7 @@ typedef struct tagMSG *LPMSG;
 #endif /* WINDOWS */
 
 #define RAYLIB_EXAMPLE_PROTOCOL_NAME "raylib-example"
+#define RAYLIB_EXAMPLE_PORT 42042
 
 /* nbnet logging */
 

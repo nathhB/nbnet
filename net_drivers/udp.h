@@ -26,11 +26,12 @@ freely, subject to the following restrictions:
     Portable single UDP socket network driver for the nbnet library.
 
     How to use:
-        #define NBN_DRIVER_UDP_IMPL
-    before you include this file in *one* C or C++ file (after you included the nbnet header).
+
+        Include this header *once* after including nbnet header in the same file where you defined
+        the NBNET_IMPL macro.
 */
 
-#ifdef NBN_DRIVER_UDP_IMPL
+#ifdef NBNET_IMPL
 
 #include <stdlib.h>
 #include <errno.h>
@@ -483,4 +484,4 @@ int NBN_Driver_GCli_SendPacket(NBN_Packet *packet)
 
 #pragma endregion /* Game client */
 
-#endif /* NBN_DRIVER_UDP_IMPL */
+#endif /* NBNET_IMPL */

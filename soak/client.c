@@ -42,7 +42,7 @@ static int SendSoakMessages(void)
 
             msg->data_length = rand() % (SOAK_MESSAGE_MAX_DATA_LENGTH - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
 
-            if (!NBN_GameClient_CanSendMessage(NBN_RESERVED_RELIABLE_CHANNEL))
+            if (!NBN_GameClient_CanEnqueueMessage(NBN_RESERVED_RELIABLE_CHANNEL))
             {
                 NBN_Message_Destroy(NBN_GameClient_GetOutgoingMessage(), true);
 

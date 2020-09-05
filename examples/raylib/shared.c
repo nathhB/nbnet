@@ -26,9 +26,6 @@ freely, subject to the following restrictions:
 /* nbnet implementation */
 #define NBNET_IMPL 
 
-/* nbnet udp driver implementation */
-#define NBN_DRIVER_UDP_IMPL
-
 #include "shared.h"
 
 void RegisterMessages(void)

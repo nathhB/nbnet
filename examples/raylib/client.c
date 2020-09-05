@@ -407,10 +407,7 @@ int main(void)
 
         Protocol name can be anything but has to match the one used on the server.
     */
-    NBN_GameClient_Init((NBN_Config){
-        .protocol_name = RAYLIB_EXAMPLE_PROTOCOL_NAME,
-        .ip_address = "127.0.0.1",
-        .port = 42042});
+    NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT);
 
     /*
         Register the actual messages that will be exchanged between the client and the server.

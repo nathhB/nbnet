@@ -1,0 +1,7 @@
+#ifndef ECHO_EXAMPLE_SHARED_H
+#define ECHO_EXAMPLE_SHARED_H
+
+#define ECHO_PROTOCOL_NAME "echo-example"
+#define ECHO_EXAMPLE_PORT 42042
+
+#endif /* ECHO_EXAMPLE_SHARED_H */

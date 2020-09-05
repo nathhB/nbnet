@@ -26,7 +26,6 @@ freely, subject to the following restrictions:
 
 #endif /* WINDOWS */
 
-#include "../../nbnet.h"
 #include "shared.h"
 
 /* A simple structure to represent clients */
@@ -195,7 +194,7 @@ static int HandleGameServerEvent(NBN_GameServerEvent ev)
         break;
 
     case NBN_CLIENT_DISCONNECTED:
-        HandleClientDisconnection(NBN_GameServer_DisconnectedClientId);
+        HandleClientDisconnection(NBN_GameServer_GetDisconnectedClientId());
         break;
 
     case NBN_CLIENT_MESSAGE_RECEIVED:
@@ -267,7 +266,7 @@ int main(void)
 {
     SetTraceLogLevel(LOG_DEBUG);
 
-    NBN_GameServer_Init((NBN_Config){.protocol_name = RAYLIB_EXAMPLE_PROTOCOL_NAME, .port = 42042});
+    NBN_GameServer_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT);
 
     RegisterMessages();
 

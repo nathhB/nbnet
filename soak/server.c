@@ -82,7 +82,7 @@ static void EchoReceivedSoakMessages(void)
             echo_msg->id = msg->id;
             echo_msg->data_length = msg->data_length;
 
-            if (!NBN_GameServer_CanSendMessageTo(soak_client->connection, NBN_RESERVED_RELIABLE_CHANNEL))
+            if (!NBN_GameServer_CanEnqueueMessageFor(soak_client->connection, NBN_RESERVED_RELIABLE_CHANNEL))
             {
                 NBN_Message_Destroy(NBN_GameServer_GetOutgoingMessage(), true);
 

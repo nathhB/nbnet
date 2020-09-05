@@ -805,7 +805,7 @@ typedef struct
 
 extern NBN_GameClient game_client;
 
-void NBN_GameClient_Init(NBN_Config);
+void NBN_GameClient_Init(const char *, const char *, uint16_t);
 int NBN_GameClient_Start(void);
 void NBN_GameClient_Stop(void);
 void NBN_GameClient_AddTime(double);
@@ -815,7 +815,7 @@ void *NBN_GameClient_CreateMessage(uint8_t);
 int NBN_GameClient_EnqueueMessage(uint8_t);
 int NBN_GameClient_EnqueueUnreliableMessage(void);
 int NBN_GameClient_EnqueueReliableMessage(void);
-bool NBN_GameClient_CanSendMessage(uint8_t);
+bool NBN_GameClient_CanEnqueueMessage(uint8_t);
 NBN_Connection *NBN_GameClient_CreateServerConnection(void);
 NBN_MessageInfo NBN_GameClient_GetReceivedMessageInfo(void);
 NBN_ConnectionStats NBN_GameClient_GetStats(void);
@@ -864,7 +864,7 @@ typedef struct
 
 extern NBN_GameServer game_server;
 
-void NBN_GameServer_Init(NBN_Config);
+void NBN_GameServer_Init(const char *, uint16_t);
 int NBN_GameServer_Start(void);
 void NBN_GameServer_Stop(void);
 void NBN_GameServer_AddTime(double);
@@ -878,13 +878,11 @@ int NBN_GameServer_EnqueueUnreliableMessageFor(NBN_Connection *);
 int NBN_GameServer_EnqueueReliableMessageFor(NBN_Connection *);
 NBN_Connection *NBN_GameServer_AcceptConnection(void);
 void NBN_GameServer_RejectConnection(int);
-bool NBN_GameServer_CanSendMessageTo(NBN_Connection *, uint8_t);
-NBN_Connection *NBN_GameServer_GetLastEventClient(void);
+bool NBN_GameServer_CanEnqueueMessageFor(NBN_Connection *, uint8_t);
+uint32_t NBN_GameServer_GetDisconnectedClientId(void);
 NBN_MessageInfo NBN_GameServer_GetReceivedMessageInfo(void);
 NBN_Message *NBN_GameServer_GetOutgoingMessage(void);
 NBN_GameServerStats NBN_GameServer_GetStats(void);
-
-#define NBN_GameServer_DisconnectedClientId (NBN_GameServer_GetLastEventClient()->id)
 
 #ifdef NBN_DEBUG
 void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
@@ -1268,13 +1266,13 @@ void NBN_BitReader_Init(NBN_BitReader *bit_reader, uint8_t *buffer, unsigned int
     bit_reader->byte_cursor = 0;
 }
 
-int NBN_BitReader_Read(NBN_BitReader *bit_reader, Word *word, unsigned int numberOfBits)
+int NBN_BitReader_Read(NBN_BitReader *bit_reader, Word *word, unsigned int number_of_bits)
 {
     *word = 0;
 
-    if (numberOfBits > bit_reader->scratch_bits_count)
+    if (number_of_bits > bit_reader->scratch_bits_count)
     {
-        unsigned int needed_bytes = (numberOfBits - bit_reader->scratch_bits_count - 1) / 8 + 1;
+        unsigned int needed_bytes = (number_of_bits - bit_reader->scratch_bits_count - 1) / 8 + 1;
 
         if (bit_reader->byte_cursor + needed_bytes > bit_reader->size)
             return -1;
@@ -1282,9 +1280,9 @@ int NBN_BitReader_Read(NBN_BitReader *bit_reader, Word *word, unsigned int numbe
         NBN_BitReader_ReadFromBuffer(bit_reader);
     }
 
-    *word |= (bit_reader->scratch & (((uint64_t)1 << numberOfBits) - 1));
-    bit_reader->scratch >>= numberOfBits;
-    bit_reader->scratch_bits_count -= numberOfBits;
+    *word |= (bit_reader->scratch & (((uint64_t)1 << number_of_bits) - 1));
+    bit_reader->scratch >>= number_of_bits;
+    bit_reader->scratch_bits_count -= number_of_bits;
 
     return 0;
 }
@@ -1316,11 +1314,11 @@ void NBN_BitWriter_Init(NBN_BitWriter *bit_writer, uint8_t *buffer, unsigned int
     bit_writer->byte_cursor = 0;
 }
 
-int NBN_BitWriter_Write(NBN_BitWriter *bit_writer, Word value, unsigned int numberOfBits)
+int NBN_BitWriter_Write(NBN_BitWriter *bit_writer, Word value, unsigned int number_of_bits)
 {
     bit_writer->scratch |= ((uint64_t)value << bit_writer->scratch_bits_count);
 
-    if ((bit_writer->scratch_bits_count += numberOfBits) >= WORD_BITS)
+    if ((bit_writer->scratch_bits_count += number_of_bits) >= WORD_BITS)
         return NBN_BitWriter_FlushScratchBits(bit_writer, WORD_BITS);
 
     return 0;
@@ -1331,24 +1329,24 @@ int NBN_BitWriter_Flush(NBN_BitWriter *bit_writer)
     return NBN_BitWriter_FlushScratchBits(bit_writer, bit_writer->scratch_bits_count);
 }
 
-static int NBN_BitWriter_FlushScratchBits(NBN_BitWriter *bit_writer, unsigned int numberOfBits)
+static int NBN_BitWriter_FlushScratchBits(NBN_BitWriter *bit_writer, unsigned int number_of_bits)
 {
     if (bit_writer->scratch_bits_count < 1)
         return 0;
 
-    unsigned int bytes_count = (numberOfBits - 1) / 8 + 1;
+    unsigned int bytes_count = (number_of_bits - 1) / 8 + 1;
 
     assert(bytes_count <= WORD_BYTES);
 
     if (bit_writer->byte_cursor + bytes_count > bit_writer->size)
         return -1;
 
-    Word word = 0 | (bit_writer->scratch & (((uint64_t)1 << numberOfBits) - 1));
+    Word word = 0 | (bit_writer->scratch & (((uint64_t)1 << number_of_bits) - 1));
 
     memcpy(bit_writer->buffer + bit_writer->byte_cursor, &word, bytes_count);
 
-    bit_writer->scratch >>= numberOfBits;
-    bit_writer->scratch_bits_count -= numberOfBits;
+    bit_writer->scratch >>= number_of_bits;
+    bit_writer->scratch_bits_count -= number_of_bits;
     bit_writer->byte_cursor += bytes_count;
 
     return 0;
@@ -3204,9 +3202,9 @@ static int NBN_GameClient_HandleMessageReceivedEvent(void);
 static void NBN_GameClient_ReleaseLastEvent(void);
 static void NBN_GameClient_ReleaseMessageReceivedEvent(void);
 
-void NBN_GameClient_Init(NBN_Config config)
+void NBN_GameClient_Init(const char *protocol_name, const char *ip_address, uint16_t port)
 {
-    NBN_Endpoint_Init(&game_client.endpoint, config);
+    NBN_Endpoint_Init(&game_client.endpoint, (NBN_Config){.protocol_name = protocol_name, .ip_address = ip_address, .port = port});
 }
 
 int NBN_GameClient_Start(void)
@@ -3305,7 +3303,7 @@ int NBN_GameClient_EnqueueReliableMessage(void)
     return NBN_GameClient_EnqueueMessage(NBN_RESERVED_RELIABLE_CHANNEL);
 }
 
-bool NBN_GameClient_CanSendMessage(uint8_t channel_id)
+bool NBN_GameClient_CanEnqueueMessage(uint8_t channel_id)
 {
     NBN_Channel *channel = game_client.server_connection->channels[channel_id];
 
@@ -3335,6 +3333,7 @@ NBN_Connection *NBN_GameClient_CreateServerConnection(void)
 
 NBN_MessageInfo NBN_GameClient_GetReceivedMessageInfo(void)
 {
+    assert(last_event_type == NBN_MESSAGE_RECEIVED);
     assert(last_received_message_data != NULL);
 
     return (NBN_MessageInfo){
@@ -3516,9 +3515,9 @@ static void NBN_GameServer_ReleaseLastEvent(void);
 static void NBN_GameServer_ReleaseMessageReceivedEvent(void);
 static void NBN_GameServer_ReleaseClientDisconnectedEvent(void);
 
-void NBN_GameServer_Init(NBN_Config config)
+void NBN_GameServer_Init(const char *protocol_name, uint16_t port)
 {
-    NBN_Endpoint_Init(&game_server.endpoint, config);
+    NBN_Endpoint_Init(&game_server.endpoint, (NBN_Config){.protocol_name = protocol_name, .port = port});
 
     game_server.clients = NBN_List_Create();
 }
@@ -3690,6 +3689,9 @@ int NBN_GameServer_EnqueueReliableMessageFor(NBN_Connection *client)
 
 NBN_Connection *NBN_GameServer_AcceptConnection(void)
 {
+    assert(last_event_type == NBN_NEW_CONNECTION);
+    assert(last_event_client != NULL);
+
     last_event_client->accepted = true;
 
     return last_event_client;
@@ -3697,10 +3699,13 @@ NBN_Connection *NBN_GameServer_AcceptConnection(void)
 
 void NBN_GameServer_RejectConnection(int code)
 {
+    assert(last_event_type == NBN_NEW_CONNECTION);
+    assert(last_event_client != NULL);
+
     NBN_GameServer_CloseClient(last_event_client, code);
 }
 
-bool NBN_GameServer_CanSendMessageTo(NBN_Connection *client, uint8_t channel_id)
+bool NBN_GameServer_CanEnqueueMessageFor(NBN_Connection *client, uint8_t channel_id)
 {
     NBN_Channel *channel = client->channels[channel_id];
 
@@ -3715,13 +3720,16 @@ bool NBN_GameServer_CanSendMessageTo(NBN_Connection *client, uint8_t channel_id)
     return NBN_Channel_HasRoomForMessage(channel, message_size);
 }
 
-NBN_Connection *NBN_GameServer_GetLastEventClient(void)
+uint32_t NBN_GameServer_GetDisconnectedClientId(void)
 {
-    return last_event_client;
+    assert(last_event_type == NBN_CLIENT_DISCONNECTED);
+
+    return last_event_client->id;
 }
 
 NBN_MessageInfo NBN_GameServer_GetReceivedMessageInfo(void)
 {
+    assert(last_event_type == NBN_CLIENT_MESSAGE_RECEIVED);
     assert(last_received_message_data != NULL);
     assert(last_event_client != NULL);
 
