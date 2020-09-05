@@ -164,7 +164,7 @@ static int Tick(void)
             break;
 
         case NBN_CLIENT_DISCONNECTED:
-            HandleClientDisconnection(NBN_GameServer_DisconnectedClientId);
+            HandleClientDisconnection(NBN_GameServer_GetDisconnectedClientId());
             break;
 
         case NBN_CLIENT_MESSAGE_RECEIVED:
@@ -190,7 +190,7 @@ static int Tick(void)
 
 int main(int argc, char *argv[])
 {
-    NBN_GameServer_Init((NBN_Config){ .protocol_name = SOAK_PROTOCOL_NAME, .port = SOAK_PORT });
+    NBN_GameServer_Init(SOAK_PROTOCOL_NAME, SOAK_PORT);
 
     if (Soak_Init(argc, argv) < 0)
     {

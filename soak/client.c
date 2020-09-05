@@ -173,11 +173,7 @@ static int Tick(void)
 
 int main(int argc, char *argv[])
 {
-    NBN_GameClient_Init((NBN_Config){
-        .protocol_name = SOAK_PROTOCOL_NAME,
-        .ip_address = "127.0.0.1",
-        .port = SOAK_PORT
-    });
+    NBN_GameClient_Init(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT);
     
     if (Soak_Init(argc, argv) < 0)
     {
