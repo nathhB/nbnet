@@ -2283,7 +2283,7 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
                 current_node = prev_node;
                 new_packet = true;
 
-                if (packet_count + 1 == MAX_PACKET_COUNT)
+                if (packet_count + 1 > MAX_PACKET_COUNT)
                     break;
 
                 packet_count++;
