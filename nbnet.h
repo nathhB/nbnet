@@ -511,6 +511,9 @@ typedef struct
 
 #define NBN_MAX_PACKET_ENTRIES 1024
 
+/* Maximum number of packets sent at once */
+#define NBN_MAX_SENT_PACKET_COUNT 8
+
 /* Number of seconds before the connection is considered stale and get closed */
 #define NBN_CONNECTION_STALE_TIME_THRESHOLD 3
 
@@ -2239,8 +2242,8 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
 {
     NBN_LogTrace("Flushing the send queue (messages in queue: %d)", connection->send_queue->count);
 
-    NBN_Packet outgoing_packets[MAX_PACKET_COUNT];
-    NBN_PacketEntry *packet_entries[MAX_PACKET_COUNT];
+    NBN_Packet outgoing_packets[NBN_MAX_SENT_PACKET_COUNT];
+    NBN_PacketEntry *packet_entries[NBN_MAX_SENT_PACKET_COUNT];
     unsigned int packet_count = 1;
 
     NBN_Connection_InitOutgoingPacket(connection, &outgoing_packets[0], &packet_entries[0]);
@@ -2283,7 +2286,7 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
                 current_node = prev_node;
                 new_packet = true;
 
-                if (packet_count + 1 > MAX_PACKET_COUNT)
+                if (packet_count + 1 > NBN_MAX_SENT_PACKET_COUNT)
                     break;
 
                 packet_count++;
