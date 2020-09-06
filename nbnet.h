@@ -528,7 +528,7 @@ typedef struct
 typedef struct
 {
     double ping;
-    float packet_loss; // TODO: compute
+    float packet_loss;
     float upload_bandwidth;
     float download_bandwidth;
 } NBN_ConnectionStats;
@@ -1970,6 +1970,7 @@ static bool NBN_Connection_IsPacketReceived(NBN_Connection *, uint16_t);
 static int NBN_Connection_SendPacket(NBN_Connection *, NBN_Packet *);
 static NBN_Message *NBN_Connection_FindOutgoingMessage(NBN_Connection *, uint16_t);
 static void NBN_Connection_UpdateAveragePing(NBN_Connection *, double);
+static void NBN_Connection_UpdateAveragePacketLoss(NBN_Connection *, uint16_t);
 static void NBN_Connection_UpdateAverageUploadBandwidth(NBN_Connection *, float);
 static void NBN_Connection_UpdateAverageDownloadBandwidth(NBN_Connection *);
 static void NBN_Connection_ClearMessageQueue(NBN_List *);
@@ -2025,6 +2026,7 @@ void NBN_Connection_Destroy(NBN_Connection *connection)
 int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet *packet)
 {
     NBN_Connection_DecodePacketHeader(connection, packet);
+    NBN_Connection_UpdateAveragePacketLoss(connection, packet->header.ack);
 
     if (!NBN_Connection_InsertReceivedPacketEntry(connection, packet->header.seq_number))
         return 0;
@@ -2235,8 +2237,6 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection, uint8_t ch
 
     return 0;
 }
-
-#define MAX_PACKET_COUNT 8
 
 int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
 {
@@ -2590,7 +2590,7 @@ static bool NBN_Connection_InsertReceivedPacketEntry(NBN_Connection *connection,
     */
     if (SEQUENCE_NUMBER_GT(seq_number, connection->last_received_packet_seq_number))
     {
-        for (uint16_t seq = connection->last_received_packet_seq_number; SEQUENCE_NUMBER_LT(seq, seq_number); seq++)
+        for (uint16_t seq = connection->last_received_packet_seq_number + 1; SEQUENCE_NUMBER_LT(seq, seq_number); seq++)
             connection->packet_recv_seq_buffer[seq % NBN_MAX_PACKET_ENTRIES] = 0xFFFFFFFF;
     }
 
@@ -2670,6 +2670,26 @@ static void NBN_Connection_UpdateAveragePing(NBN_Connection *connection, double 
 {
     /* exponential smoothing with a factor of 0.05 */
     connection->stats.ping = connection->stats.ping + .05f * (ping - connection->stats.ping);
+}
+
+static void NBN_Connection_UpdateAveragePacketLoss(NBN_Connection *connection, uint16_t seq)
+{
+    unsigned int lost_packet_count = 0;
+    uint16_t start_seq = seq - 64;
+
+    for (int i = 0; i < 100; i++)
+    {
+        uint16_t s = start_seq - i;
+        NBN_PacketEntry *entry = NBN_Connection_FindSendPacketEntry(connection, s);
+
+        if (entry && !entry->acked)
+            lost_packet_count++;
+    }
+
+    float packet_loss = lost_packet_count / 100.f;
+
+    /* exponential smoothing with a factor of 0.1 */
+    connection->stats.packet_loss = connection->stats.packet_loss + .1f * (packet_loss - connection->stats.packet_loss);
 }
 
 static void NBN_Connection_UpdateAverageUploadBandwidth(NBN_Connection *connection, float bytes_per_sec)
