@@ -346,9 +346,11 @@ void DrawHUD(void)
 {
     NBN_ConnectionStats stats = NBN_GameClient_GetStats();
     unsigned int ping = stats.ping * 1000;
+    unsigned int packet_loss = stats.packet_loss * 100;
 
-    DrawText(FormatText("FPS: %d", GetFPS()), 450, 400, 32, MAROON);
-    DrawText(FormatText("Ping: %d ms", ping), 450, 450, 32, MAROON);
+    DrawText(FormatText("FPS: %d", GetFPS()), 450, 350, 32, MAROON);
+    DrawText(FormatText("Ping: %d ms", ping), 450, 400, 32, MAROON);
+    DrawText(FormatText("Packet loss: %d %%", packet_loss), 450, 450, 32, MAROON);
     DrawText(FormatText("Upload: %.1f Bps", stats.upload_bandwidth), 450, 500, 32, MAROON);
     DrawText(FormatText("Download: %.1f Bps", stats.download_bandwidth), 450, 550, 32, MAROON);
 }
@@ -397,8 +399,7 @@ void Draw(void)
 
 int main(void)
 {
-    SetTraceLogLevel(LOG_DEBUG);
-    SetTargetFPS(TICK_RATE);
+    SetTraceLogLevel(LOG_INFO);
 
     InitWindow(GAME_WIDTH, GAME_HEIGHT, "raylib client");
 
@@ -425,6 +426,8 @@ int main(void)
 
         return 1;
     }
+
+    float tick_dt = 1.f / TICK_RATE; /* Tick delta time */
 
     /* Loop until the window is closed or we are disconnected from the server */
     while (!WindowShouldClose())
@@ -462,7 +465,6 @@ int main(void)
 
             This should be the last thing you do every frame. 
         */
-
         if (!disconnected)
         {
             if (NBN_GameClient_SendPackets() < 0)
@@ -472,6 +474,16 @@ int main(void)
                 break;
             }
         }
+
+/* Cap the simulation rate to the target tick rate */
+#if defined(_WIN32) || defined(_WIN64)
+        Sleep(tick_dt * 1000);
+#else /* UNIX / OSX */
+        long nanos = tick_dt * 1e9;
+        struct timespec t = {.tv_sec = nanos / 999999999, .tv_nsec = nanos % 999999999};
+
+        nanosleep(&t, &t);
+#endif
     }
 
     /*
