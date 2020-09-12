@@ -109,6 +109,12 @@ typedef struct tagMSG *LPMSG;
 #define GAME_WIDTH 800
 #define GAME_HEIGHT 600
 
+/*
+    Maximum and minimum values of networked client float value
+*/
+#define MIN_FLOAT_VAL -5
+#define MAX_FLOAT_VAL 5
+
 /* Max number of connected clients */
 #define MAX_CLIENTS 4
 
@@ -159,6 +165,7 @@ typedef struct
 {
     int x;
     int y;
+    float val;
 } UpdatePositionMessage;
 
 /* Enum for client colors used for ChangeColorMessage and GameStateMessage */
@@ -184,6 +191,7 @@ typedef struct
     ClientColor color;
     int x;
     int y;
+    float val;
 } ClientState;
 
 typedef struct

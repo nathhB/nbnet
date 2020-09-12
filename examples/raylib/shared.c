@@ -80,6 +80,7 @@ int UpdatePositionMessage_Serialize(UpdatePositionMessage *msg, NBN_Stream *stre
 {
     SERIALIZE_UINT(msg->x, 0, GAME_WIDTH);
     SERIALIZE_UINT(msg->y, 0, GAME_HEIGHT);
+    // SERIALIZE_FLOAT(msg->val, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
 
     return 0;
 }
@@ -94,6 +95,7 @@ int GameStateMessage_Serialize(GameStateMessage *msg, NBN_Stream *stream)
         SERIALIZE_UINT(msg->client_states[i].color, 0, MAX_COLORS - 1);
         SERIALIZE_UINT(msg->client_states[i].x, 0, GAME_WIDTH);
         SERIALIZE_UINT(msg->client_states[i].y, 0, GAME_HEIGHT);
+        // SERIALIZE_FLOAT(msg->client_states[i].val, -100, 100, 3);
 
         // TODO: color
     }

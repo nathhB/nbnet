@@ -49,7 +49,7 @@ static unsigned int client_count = 0;
 static int SendSpawnMessage(Client *client)
 {
     /* Create a spawn message on the reliable ordered channel */
-    SpawnMessage *msg = NBN_GameServer_CreateMessage(SPAWN_MESSAGE);
+    SpawnMessage *msg = NBN_GameServer_CreateReliableMessage(SPAWN_MESSAGE);
 
     /* Make sure we did not fail to create the message */
     if (msg == NULL)
@@ -62,7 +62,7 @@ static int SendSpawnMessage(Client *client)
     TraceLog(LOG_INFO, "Send spawn message (%d, %d) to client %d", msg->x, msg->y, client->state.client_id);
 
     /* Make sure we did not fail to send the message */
-    if (NBN_GameServer_EnqueueReliableMessageFor(client->connection) < 0)
+    if (NBN_GameServer_SendMessageTo(msg, client->connection) < 0)
         return -1;
 
     return 0;
@@ -101,7 +101,7 @@ static void HandleNewConnection(void)
     assert(client != NULL);
 
     client->connection = connection;
-    client->state = (ClientState){.client_id = connection->id, .x = 200, .y = 200, .color = CLI_RED};
+    client->state = (ClientState){.client_id = connection->id, .x = 200, .y = 200, .color = CLI_RED, .val = 0};
 
     /* Send a SpawnMessage to that client */
     if (SendSpawnMessage(client) < 0)
@@ -155,6 +155,7 @@ static void HandleUpdatePositionMessage(UpdatePositionMessage *msg, NBN_Connecti
 
     client->state.x = msg->x;
     client->state.y = msg->y;
+    client->state.val = msg->val;
 }
 
 static void HandleChangeColorMessage(ChangeColorMessage *msg, NBN_Connection *connection)
@@ -185,7 +186,7 @@ static void HandleReceivedMessage(void)
     }
 }
 
-static int HandleGameServerEvent(NBN_GameServerEvent ev)
+static void HandleGameServerEvent(int ev)
 {
     switch (ev)
     {
@@ -200,12 +201,7 @@ static int HandleGameServerEvent(NBN_GameServerEvent ev)
     case NBN_CLIENT_MESSAGE_RECEIVED:
         HandleReceivedMessage();
         break;
-
-    case NBN_ERROR:
-        return -1;
     }
-
-    return 0;
 }
 
 static int BroadcastGameState(void)
@@ -232,7 +228,18 @@ static int BroadcastGameState(void)
 
     assert(client_index == client_count);
 
-    /* Then loop over the clients array again and send a GameStateMessage to each of them */
+    /* Build a GameStateMessage */
+    GameStateMessage *msg = NBN_GameServer_CreateUnreliableMessage(GAME_STATE_MESSAGE);
+
+    /* Check for errors */
+    if (msg == NULL)
+        return -1;
+
+    /* Fill message data */
+    msg->client_count = client_index;
+    memcpy(msg->client_states, client_states, sizeof(ClientState) * MAX_CLIENTS);
+
+    /* Broadcast GameStateMessage to all connected clients */
     for (int i = 0; i < MAX_CLIENTS; i++)
     {
         Client *client = clients[i];
@@ -240,19 +247,7 @@ static int BroadcastGameState(void)
         if (client == NULL)
             continue;
 
-        /* Build a GameStateMessage */
-        GameStateMessage *msg = NBN_GameServer_CreateMessage(GAME_STATE_MESSAGE);
-
-        /* Check for errors */
-        if (msg == NULL)
-            return -1;
-
-        /* Fill message data */
-        msg->client_count = client_index;
-        memcpy(msg->client_states, client_states, sizeof(ClientState) * MAX_CLIENTS);
-
-        /* Send the GameStateMessage to the client */
-        if (NBN_GameServer_EnqueueUnreliableMessageFor(client->connection) < 0)
+        if (NBN_GameServer_SendMessageTo(msg, client->connection) < 0)
         {
             TraceLog(LOG_WARNING, "Failed to send game state message to client %d, closing client", client->connection->id);
             NBN_GameServer_CloseClient(client->connection, -1);
@@ -283,16 +278,18 @@ int main(void)
     {
         NBN_GameServer_AddTime(tick_dt);
 
-        NBN_GameServerEvent ev;
+        int ev;
 
         while ((ev = NBN_GameServer_Poll()) != NBN_NO_EVENT)
         {
-            if (HandleGameServerEvent(ev) < 0)
+            if (ev < 0)
             {
                 TraceLog(LOG_WARNING, "An occured while polling network events. Exit");
 
                 break;
             }
+
+            HandleGameServerEvent(ev);
         }
 
         if (BroadcastGameState() < 0)

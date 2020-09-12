@@ -227,7 +227,7 @@ static void HandleReceivedMessage(void)
     }
 }
 
-static int HandleGameClientEvent(NBN_GameClientEvent ev)
+static void HandleGameClientEvent(int ev)
 {
     switch (ev)
     {
@@ -245,18 +245,13 @@ static int HandleGameClientEvent(NBN_GameClientEvent ev)
         /* We received a message from the server */
         HandleReceivedMessage();
         break;
-
-    case NBN_ERROR:
-        return -1;
     }
-
-    return 0;
 }
 
 static int SendPositionUpdate(void)
 {
     /* Create an UpdatePositionMessage */
-    UpdatePositionMessage *msg = NBN_GameClient_CreateMessage(UPDATE_POSITION_MESSAGE);
+    UpdatePositionMessage *msg = NBN_GameClient_CreateUnreliableMessage(UPDATE_POSITION_MESSAGE);
 
     /* Check for errors */
     if (msg == NULL)
@@ -265,9 +260,10 @@ static int SendPositionUpdate(void)
     /* Fill message data */
     msg->x = local_client_state.x;
     msg->y = local_client_state.y;
+    msg->val = 1;
 
     /* Send the message on the unreliable channel */
-    if (NBN_GameClient_EnqueueUnreliableMessage() < 0)
+    if (NBN_GameClient_SendMessage(msg) < 0)
         return -1;
 
     return 0;
@@ -276,7 +272,7 @@ static int SendPositionUpdate(void)
 static int SendColorUpdate(void)
 {
     /* Create an ChangeColorMessage */
-    ChangeColorMessage *msg = NBN_GameClient_CreateMessage(CHANGE_COLOR_MESSAGE);
+    ChangeColorMessage *msg = NBN_GameClient_CreateReliableMessage(CHANGE_COLOR_MESSAGE);
 
     /* Check for errors */
     if (msg == NULL)
@@ -286,7 +282,7 @@ static int SendColorUpdate(void)
     msg->color = local_client_state.color;
 
     /* Send the message on the reliable channel */
-    if (NBN_GameClient_EnqueueReliableMessage() < 0)
+    if (NBN_GameClient_SendMessage(msg) < 0)
         return -1;
 
     return 0;
@@ -323,6 +319,17 @@ static int Update(void)
         }
     }
 
+    /* Increasing/Decreasing floating point value */
+    if (IsKeyDown(KEY_K))
+    {
+        local_client_state.val = MIN(MAX_FLOAT_VAL, local_client_state.val + 0.005);
+    }
+
+    if (IsKeyDown(KEY_J))
+    {
+        local_client_state.val = MAX(MIN_FLOAT_VAL, local_client_state.val - 0.005);
+    }
+
     /* Send the latest client position to the server */
     if (SendPositionUpdate() < 0)
     {
@@ -336,7 +343,13 @@ static int Update(void)
 
 void DrawClient(ClientState *state, bool is_local)
 {
-    DrawRectangle(state->x, state->y, 50, 50, client_colors_to_raylib_colors[state->color]);
+    Color color = client_colors_to_raylib_colors[state->color];
+    const char *text = FormatText("%.3f", state->val);
+    int font_size = 20;
+    int text_width = MeasureText(text, font_size);
+
+    DrawText(text, (state->x + 25) - text_width / 2, state->y - 20, font_size, color);
+    DrawRectangle(state->x, state->y, 50, 50, color);
 
     if (is_local)
         DrawRectangleLinesEx((Rectangle){state->x, state->y, 50, 50}, 3, DARKBROWN);
@@ -399,7 +412,7 @@ void Draw(void)
 
 int main(void)
 {
-    SetTraceLogLevel(LOG_INFO);
+    SetTraceLogLevel(LOG_DEBUG);
 
     InitWindow(GAME_WIDTH, GAME_HEIGHT, "raylib client");
 
@@ -437,19 +450,21 @@ int main(void)
         */
         NBN_GameClient_AddTime(GetFrameTime());
 
-        NBN_GameClientEvent ev;
+        int ev;
 
         /*
             Poll network events.
         */
         while ((ev = NBN_GameClient_Poll()) != NBN_NO_EVENT)
         {
-            if (HandleGameClientEvent(ev) < 0)
+            if (ev < 0)
             {
                 TraceLog(LOG_WARNING, "An occured while polling network events. Exit");
 
                 break;
             }
+
+            HandleGameClientEvent(ev);
         }
 
         if (connected && !disconnected)
