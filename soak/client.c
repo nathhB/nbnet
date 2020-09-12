@@ -31,7 +31,7 @@ static int SendSoakMessages(void)
 
         for (int i = 0; i < count; i++)
         {
-            SoakMessage *msg = NBN_GameClient_CreateMessage(SOAK_MESSAGE);
+            SoakMessage *msg = NBN_GameClient_CreateReliableMessage(SOAK_MESSAGE);
 
             if (msg == NULL)
             {
@@ -42,12 +42,8 @@ static int SendSoakMessages(void)
 
             msg->data_length = rand() % (SOAK_MESSAGE_MAX_DATA_LENGTH - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
 
-            if (!NBN_GameClient_CanEnqueueMessage(NBN_RESERVED_RELIABLE_CHANNEL))
-            {
-                NBN_Message_Destroy(NBN_GameClient_GetOutgoingMessage(), true);
-
+            if (!NBN_GameClient_CanSendMessage(msg, true))
                 return 0;
-            }
 
             msg->id = next_msg_id++;
 
@@ -60,7 +56,7 @@ static int SendSoakMessages(void)
 
             Soak_LogInfo("Send soak message (id: %d, data length: %d)", msg->id, msg->data_length);
 
-            if (NBN_GameClient_EnqueueReliableMessage() < 0)
+            if (NBN_GameClient_SendMessage(msg) < 0)
                 return -1;
 
             sent_messages_count++;
@@ -128,10 +124,13 @@ static int Tick(void)
 {
     NBN_GameClient_AddTime(SOAK_TICK_DT);
 
-    NBN_GameClientEvent ev;
+    int ev;
 
     while ((ev = NBN_GameClient_Poll()) != NBN_NO_EVENT)
     {
+        if (ev < 0)
+            return -1;
+
         switch (ev)
         {
         case NBN_DISCONNECTED:
@@ -149,9 +148,6 @@ static int Tick(void)
             if (HandleReceivedMessage() < 0)
                 return -1;
             break;
-
-        case NBN_ERROR:
-            return -1;
         }
     }
 
