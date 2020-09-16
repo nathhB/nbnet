@@ -82,13 +82,12 @@ static void EchoReceivedSoakMessages(void)
             echo_msg->id = msg->id;
             echo_msg->data_length = msg->data_length;
 
-            if (!NBN_GameServer_CanSendMessageTo(echo_msg, soak_client->connection, true))
+            if (!NBN_GameServer_CanSendMessageTo(soak_client->connection, true))
                 break;
 
             memcpy(echo_msg->data, msg->data, msg->data_length);
 
-            if (NBN_GameServer_SendMessageTo(echo_msg, soak_client->connection) < 0)
-                NBN_GameServer_CloseClient(soak_client->connection, -1);
+            NBN_GameServer_SendMessageTo(soak_client->connection);
 
             free(NBN_List_Remove(soak_client->echo_queue, msg));
         }
@@ -184,8 +183,15 @@ static int Tick(void)
     return 0;
 }
 
+static void SigintHandler(int dummy)
+{
+    Soak_Stop();
+}
+
 int main(int argc, char *argv[])
 {
+    signal(SIGINT, SigintHandler);
+
     NBN_GameServer_Init(SOAK_PROTOCOL_NAME, SOAK_PORT);
 
     if (Soak_Init(argc, argv) < 0)

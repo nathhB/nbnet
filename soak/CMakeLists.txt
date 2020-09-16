@@ -5,9 +5,8 @@ project(soak C)
 add_executable(client client.c soak.c logging.c)
 add_executable(server server.c soak.c logging.c)
 
-# for packet simulator
-target_link_libraries(client pthread)
-target_link_libraries(server pthread)
+target_link_libraries(client pthread m)
+target_link_libraries(server pthread m)
 
 add_compile_options(-Wall -Wextra)
 

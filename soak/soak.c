@@ -52,7 +52,7 @@ void Soak_Deinit(void)
     Soak_LogInfo("Total created message count: %d", mem_report.created_message_count);
     Soak_LogInfo("Total destroyed message count: %d", mem_report.destroyed_message_count);
 
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 5; i++)
     {
         NBN_LogInfo("Object %d | Allocs: %d, Deallocs: %d", i, mem_report.object_allocs[i], mem_report.object_deallocs[i]);
     }

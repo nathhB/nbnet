@@ -42,7 +42,7 @@ static int SendSoakMessages(void)
 
             msg->data_length = rand() % (SOAK_MESSAGE_MAX_DATA_LENGTH - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
 
-            if (!NBN_GameClient_CanSendMessage(msg, true))
+            if (!NBN_GameClient_CanSendMessage(true))
                 return 0;
 
             msg->id = next_msg_id++;
@@ -56,7 +56,7 @@ static int SendSoakMessages(void)
 
             Soak_LogInfo("Send soak message (id: %d, data length: %d)", msg->id, msg->data_length);
 
-            if (NBN_GameClient_SendMessage(msg) < 0)
+            if (NBN_GameClient_SendMessage() < 0)
                 return -1;
 
             sent_messages_count++;
@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
     
     if (Soak_Init(argc, argv) < 0)
     {
-        NBN_GameClient_Stop(); /* TODO: segfault */
+        NBN_GameClient_Stop();
 
         return 1;
     }
