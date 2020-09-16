@@ -542,7 +542,7 @@ typedef struct
 #define NBN_MAX_PACKET_ENTRIES 1024
 
 /* Maximum number of packets sent at once */
-#define NBN_MAX_SENT_PACKET_COUNT 8
+#define NBN_MAX_SENT_PACKET_COUNT 4
 
 /* Number of seconds before the connection is considered stale and get closed */
 #define NBN_CONNECTION_STALE_TIME_THRESHOLD 3
