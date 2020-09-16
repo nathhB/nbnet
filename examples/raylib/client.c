@@ -263,7 +263,7 @@ static int SendPositionUpdate(void)
     msg->val = 1;
 
     /* Send the message on the unreliable channel */
-    if (NBN_GameClient_SendMessage(msg) < 0)
+    if (NBN_GameClient_SendMessage() < 0)
         return -1;
 
     return 0;
@@ -282,7 +282,7 @@ static int SendColorUpdate(void)
     msg->color = local_client_state.color;
 
     /* Send the message on the reliable channel */
-    if (NBN_GameClient_SendMessage(msg) < 0)
+    if (NBN_GameClient_SendMessage() < 0)
         return -1;
 
     return 0;

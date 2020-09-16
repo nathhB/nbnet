@@ -18,8 +18,8 @@ find_library(RAYLIB_LIBRARY raylib HINTS ${RAYLIB_LIBRARY_PATH} REQUIRED)
 
 message("Found raylib library: ${RAYLIB_LIBRARY}")
 
-target_link_libraries(client ${RAYLIB_LIBRARY})
-target_link_libraries(server ${RAYLIB_LIBRARY})
+target_link_libraries(client ${RAYLIB_LIBRARY} pthread m)
+target_link_libraries(server ${RAYLIB_LIBRARY} pthread m)
 
 # set RAYLIB_INCLUDE_PATH from command line
 

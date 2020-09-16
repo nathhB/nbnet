@@ -61,9 +61,7 @@ static int SendSpawnMessage(Client *client)
 
     TraceLog(LOG_INFO, "Send spawn message (%d, %d) to client %d", msg->x, msg->y, client->state.client_id);
 
-    /* Make sure we did not fail to send the message */
-    if (NBN_GameServer_SendMessageTo(msg, client->connection) < 0)
-        return -1;
+    NBN_GameServer_SendMessageTo(client->connection);
 
     return 0;
 }
@@ -240,19 +238,7 @@ static int BroadcastGameState(void)
     memcpy(msg->client_states, client_states, sizeof(ClientState) * MAX_CLIENTS);
 
     /* Broadcast GameStateMessage to all connected clients */
-    for (int i = 0; i < MAX_CLIENTS; i++)
-    {
-        Client *client = clients[i];
-
-        if (client == NULL)
-            continue;
-
-        if (NBN_GameServer_SendMessageTo(msg, client->connection) < 0)
-        {
-            TraceLog(LOG_WARNING, "Failed to send game state message to client %d, closing client", client->connection->id);
-            NBN_GameServer_CloseClient(client->connection, -1);
-        }
-    }
+    NBN_GameServer_BroadcastMessage();
 
     return 0;
 }
