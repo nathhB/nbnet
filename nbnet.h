@@ -77,7 +77,8 @@ typedef enum
     NBN_OBJ_MESSAGE,
     NBN_OBJ_MESSAGE_CHUNK,
     NBN_OBJ_CONNECTION,
-    NBN_OBJ_EVENT
+    NBN_OBJ_EVENT,
+    NBN_OBJ_OUTGOING_MSG_INFO
 } NBN_ObjectType;
 
 void *NBN_MemoryManager_Alloc(size_t);
@@ -301,10 +302,27 @@ typedef struct
     NBN_MessageSerializer serializer;
     NBN_MessageDestructor destructor;
     double last_send_time;
+    bool outgoing;
     bool sent;
     bool acked;
     void *data;
 } NBN_Message;
+
+typedef struct __NBN_OutgoingMessageInfo NBN_OutgoingMessageInfo;
+
+struct __NBN_OutgoingMessageInfo
+{
+    uint8_t type;
+    uint8_t channel_id;
+    unsigned int ref_count;
+    void *data;
+
+    /*
+        Used to keep a reference to the chunked message for each
+        of his chunk.
+    */
+    NBN_OutgoingMessageInfo *chunked_msg_info;
+};
 
 /*
  * Used in user code to hold information about a received message.
@@ -316,10 +334,14 @@ typedef struct
     NBN_Connection *sender;
 } NBN_MessageInfo;
 
-NBN_Message *NBN_Message_Create(uint8_t, uint8_t, NBN_MessageSerializer, NBN_MessageDestructor, void *);
+NBN_Message *NBN_Message_Create(uint8_t, uint8_t, NBN_MessageSerializer, NBN_MessageDestructor, bool, void *);
 void NBN_Message_Destroy(NBN_Message *, bool);
 int NBN_Message_SerializeHeader(NBN_MessageHeader *, NBN_Stream *);
 int NBN_Message_Measure(NBN_Message *, NBN_MeasureStream *);
+int NBN_Message_SerializeData(NBN_Message *, NBN_Stream *);
+void *NBN_Message_GetData(NBN_Message *);
+
+NBN_OutgoingMessageInfo *NBN_OutgoingMessageInfo_Create(uint8_t, uint8_t, void *);
 
 #pragma endregion /* NBN_Message */
 
@@ -591,7 +613,7 @@ NBN_Connection *NBN_Connection_Create(uint32_t, uint32_t, NBN_Endpoint *);
 void NBN_Connection_Destroy(NBN_Connection *);
 int NBN_Connection_ProcessReceivedPacket(NBN_Connection *, NBN_Packet *);
 NBN_Message *NBN_Connection_DequeueReceivedMessage(NBN_Connection *);
-int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *, void *);
+int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *);
 int NBN_Connection_FlushSendQueue(NBN_Connection *);
 int NBN_Connection_CreateChannel(NBN_Connection *, NBN_ChannelType, uint8_t);
 bool NBN_Connection_CheckIfStale(NBN_Connection *);
@@ -768,7 +790,7 @@ struct __NBN_Endpoint
     NBN_MessageDestructor message_destructors[NBN_MAX_MESSAGE_TYPES];
     NBN_MessageSerializer message_serializers[NBN_MAX_MESSAGE_TYPES];
     NBN_EventQueue *events_queue;
-    NBN_MessageHeader outgoing_message_header;
+    NBN_OutgoingMessageInfo *outgoing_message_info;
 
 #ifdef NBN_DEBUG
     /* Debug callbacks */
@@ -824,7 +846,7 @@ int NBN_GameClient_SendPackets(void);
 void *NBN_GameClient_CreateMessage(uint8_t, uint8_t);
 void *NBN_GameClient_CreateUnreliableMessage(uint8_t);
 void *NBN_GameClient_CreateReliableMessage(uint8_t);
-int NBN_GameClient_SendMessage(void *);
+int NBN_GameClient_SendMessage(void);
 NBN_Connection *NBN_GameClient_CreateServerConnection(void);
 NBN_MessageInfo NBN_GameClient_GetReceivedMessageInfo(void);
 NBN_ConnectionStats NBN_GameClient_GetStats(void);
@@ -833,7 +855,7 @@ int NBN_GameClient_GetClientClosedCode(void);
 #ifdef NBN_DEBUG
 
 void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
-bool NBN_GameClient_CanSendMessage(void *, bool);
+bool NBN_GameClient_CanSendMessage(bool);
 
 #endif /* NBN_DEBUG */
 
@@ -883,7 +905,8 @@ void NBN_GameServer_CloseClient(NBN_Connection *, int);
 void *NBN_GameServer_CreateMessage(uint8_t, uint8_t);
 void *NBN_GameServer_CreateUnreliableMessage(uint8_t);
 void *NBN_GameServer_CreateReliableMessage(uint8_t);
-int NBN_GameServer_SendMessageTo(void *, NBN_Connection *);
+void NBN_GameServer_SendMessageTo(NBN_Connection *);
+void NBN_GameServer_BroadcastMessage(void);
 NBN_Connection *NBN_GameServer_AcceptConnection(void);
 void NBN_GameServer_RejectConnection(int);
 uint32_t NBN_GameServer_GetDisconnectedClientId(void);
@@ -893,7 +916,7 @@ NBN_GameServerStats NBN_GameServer_GetStats(void);
 #ifdef NBN_DEBUG
 
 void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
-bool NBN_GameServer_CanSendMessageTo(void *, NBN_Connection *, bool);
+bool NBN_GameServer_CanSendMessageTo(NBN_Connection *, bool);
 
 #endif /* NBN_DEBUG */
 
@@ -994,6 +1017,10 @@ void *NBN_MemoryManager_AllocObject(NBN_ObjectType obj_type)
         
         case NBN_OBJ_EVENT:
             obj_ptr = NBN_MemoryManager_Alloc(sizeof(NBN_Event));
+            break;
+
+        case NBN_OBJ_OUTGOING_MSG_INFO:
+            obj_ptr = NBN_MemoryManager_Alloc(sizeof(NBN_OutgoingMessageInfo));
             break;
 
         default:
@@ -1815,7 +1842,7 @@ int NBN_Packet_WriteMessage(NBN_Packet *packet, NBN_Message *message)
     if (NBN_Message_SerializeHeader(&message->header, (NBN_Stream *)&packet->w_stream) < 0)
         return NBN_PACKET_WRITE_ERROR;
 
-    if (message->serializer(message->data, (NBN_Stream *)&packet->w_stream) < 0)
+    if (NBN_Message_SerializeData(message, (NBN_Stream *)&packet->w_stream) < 0)
         return NBN_PACKET_WRITE_ERROR;
 
     packet->size = (packet->m_stream.number_of_bits - 1) / 8 + 1;
@@ -1864,7 +1891,7 @@ static int NBN_Packet_SerializeHeader(NBN_Packet *packet, NBN_Stream *stream)
 #pragma region NBN_Message
 
 NBN_Message *NBN_Message_Create(
-    uint8_t type, uint8_t channel_id, NBN_MessageSerializer serializer, NBN_MessageDestructor destructor, void *data)
+    uint8_t type, uint8_t channel_id, NBN_MessageSerializer serializer, NBN_MessageDestructor destructor, bool outgoing, void *data)
 {
     NBN_Message *message = NBN_AllocObject(NBN_OBJ_MESSAGE);
 
@@ -1874,6 +1901,7 @@ NBN_Message *NBN_Message_Create(
 
     message->serializer = serializer;
     message->destructor = destructor;
+    message->outgoing = outgoing;
     message->sender = NULL;
     message->last_send_time = -1;
     message->sent = false;
@@ -1891,11 +1919,51 @@ void NBN_Message_Destroy(NBN_Message *message, bool free_data)
 {
     if (free_data)
     {
-        message->destructor(message->data);
+        if (message->outgoing)
+        {
+            NBN_OutgoingMessageInfo *msg_info = message->data;
+
+            if (--msg_info->ref_count == 0)
+            {
+                if (msg_info->type == NBN_MESSAGE_CHUNK_TYPE)
+                {
+                    assert(msg_info->chunked_msg_info != NULL);
+
+                    if (--msg_info->chunked_msg_info->ref_count == 0)
+                    {
+#if defined(NBN_GAME_SERVER)
+                        NBN_MessageDestructor msg_destructor =
+                            game_server.endpoint.message_destructors[msg_info->chunked_msg_info->type];
+#elif defined(NBN_GAME_CLIENT)
+                        NBN_MessageDestructor msg_destructor =
+                            game_client.endpoint.message_destructors[msg_info->chunked_msg_info->type];
+#endif
+
+                        msg_destructor(msg_info->chunked_msg_info->data);
+                        NBN_DeallocObject(NBN_OBJ_OUTGOING_MSG_INFO, msg_info->chunked_msg_info);
 
 #ifdef NBN_DEBUG
-        mem_manager.report.destroyed_message_count++;
+                        mem_manager.report.destroyed_message_count++;
 #endif
+                    }
+                }
+
+                message->destructor(msg_info->data);
+                NBN_DeallocObject(NBN_OBJ_OUTGOING_MSG_INFO, msg_info);
+
+#ifdef NBN_DEBUG
+                mem_manager.report.destroyed_message_count++;
+#endif
+            }
+        }
+        else
+        {
+            message->destructor(message->data);
+
+#ifdef NBN_DEBUG
+            mem_manager.report.destroyed_message_count++;
+#endif
+        }
     }
 
     NBN_DeallocObject(NBN_OBJ_MESSAGE, message);
@@ -1915,10 +1983,33 @@ int NBN_Message_Measure(NBN_Message *message, NBN_MeasureStream *m_stream)
     if (NBN_Message_SerializeHeader(&message->header, (NBN_Stream *)m_stream) < 0)
         return NBN_ERROR;
 
-    if (message->serializer(message->data, (NBN_Stream *)m_stream) < 0)
+    if (NBN_Message_SerializeData(message, (NBN_Stream *)m_stream) < 0)
         return NBN_ERROR;
 
     return m_stream->number_of_bits;
+}
+
+int NBN_Message_SerializeData(NBN_Message *message, NBN_Stream *stream)
+{
+    return message->serializer(NBN_Message_GetData(message), stream);
+}
+
+void *NBN_Message_GetData(NBN_Message *message)
+{
+    return message->outgoing ? ((NBN_OutgoingMessageInfo *)message->data)->data : message->data;
+}
+
+NBN_OutgoingMessageInfo *NBN_OutgoingMessageInfo_Create(uint8_t type, uint8_t channel_id, void *data)
+{
+    NBN_OutgoingMessageInfo *msg_info = NBN_AllocObject(NBN_OBJ_OUTGOING_MSG_INFO);
+
+    msg_info->type = type;
+    msg_info->channel_id = channel_id;
+    msg_info->data = data;
+    msg_info->ref_count = 0;
+    msg_info->chunked_msg_info = NULL;
+
+    return msg_info;
 }
 
 #pragma endregion /* NBN_Message */
@@ -2115,39 +2206,39 @@ NBN_Message *NBN_Connection_DequeueReceivedMessage(NBN_Connection *connection)
     return NULL;
 }
 
-int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection, void *msg_data)
+int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
 {
     assert(!connection->is_closed);
     assert(!connection->is_stale);
 
-    uint8_t msg_type = connection->endpoint->outgoing_message_header.type;
-    uint8_t channel_id = connection->endpoint->outgoing_message_header.channel_id;
+    NBN_OutgoingMessageInfo *msg_info = connection->endpoint->outgoing_message_info;
 
-    NBN_Channel *channel = connection->channels[channel_id];
+    NBN_Channel *channel = connection->channels[msg_info->channel_id];
 
     assert(channel != NULL);
 
-    NBN_MessageSerializer msg_serializer = connection->endpoint->message_serializers[msg_type];
+    NBN_MessageSerializer msg_serializer = connection->endpoint->message_serializers[msg_info->type];
 
     if (msg_serializer == NULL)
     {
-        NBN_LogError("No message serializer attached to messages of type %d", msg_type);
+        NBN_LogError("No message serializer attached to messages of type %d", msg_info->type);
 
         return NBN_ERROR;
     }
 
-    NBN_MessageDestructor msg_destructor = connection->endpoint->message_destructors[msg_type];
+    NBN_MessageDestructor msg_destructor = connection->endpoint->message_destructors[msg_info->type];
 
     if (msg_destructor == NULL)
     {
-        NBN_LogError("No message destructor is registered for messages of type %d", msg_type);
+        NBN_LogError("No message destructor is registered for messages of type %d", msg_info->type);
 
         return NBN_ERROR;
     }
 
-    NBN_Message *outgoing_message = NBN_Message_Create(msg_type, channel_id, msg_serializer, msg_destructor, msg_data);
+    NBN_Message *outgoing_message = NBN_Message_Create(
+        msg_info->type, msg_info->channel_id, msg_serializer, msg_destructor, true, msg_info);
 
-    if (msg_type == NBN_MESSAGE_CHUNK_TYPE)
+    if (msg_info->type == NBN_MESSAGE_CHUNK_TYPE)
     {
         NBN_Connection_AddMessageToSendQueue(connection, outgoing_message, channel);
 
@@ -2178,10 +2269,10 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection, void *msg_
         if (NBN_Message_SerializeHeader(&outgoing_message->header, (NBN_Stream *)&write_stream) < 0)
             return NBN_ERROR;
 
-        if (outgoing_message->serializer(outgoing_message->data, (NBN_Stream *)&write_stream) < 0)
+        if (NBN_Message_SerializeData(outgoing_message, (NBN_Stream *)&write_stream) < 0)
             return NBN_ERROR;
 
-        NBN_Message_Destroy(outgoing_message, true);
+        NBN_Message_Destroy(outgoing_message, false);
 
         unsigned int chunk_count = ((message_size - 1) / NBN_MESSAGE_CHUNK_SIZE) + 1;
 
@@ -2202,7 +2293,7 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection, void *msg_
             NBN_LogTrace("Enqueue chunk %d (size: %d)", i, chunk_size);
 
             NBN_MessageChunk *chunk = NBN_Endpoint_CreateOutgoingMessage(
-                connection->endpoint, NBN_MESSAGE_CHUNK_TYPE, channel_id);
+                connection->endpoint, NBN_MESSAGE_CHUNK_TYPE, msg_info->channel_id);
 
             assert(chunk != NULL);
 
@@ -2211,12 +2302,17 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection, void *msg_
 
             memcpy(chunk->data, chunk_start, chunk_size);
 
-            if (NBN_Connection_EnqueueOutgoingMessage(connection, chunk) < 0)
+            connection->endpoint->outgoing_message_info->chunked_msg_info = msg_info;
+
+            if (NBN_Connection_EnqueueOutgoingMessage(connection) < 0)
             {
                 NBN_Dealloc(message_bytes);
 
                 return NBN_ERROR;
             }
+
+            /* Increase message data reference count for every chunk we create out of it */
+            msg_info->ref_count++;
         }
 
         NBN_Dealloc(message_bytes);
@@ -2543,6 +2639,7 @@ static void NBN_Connection_AddMessageToSendQueue(NBN_Connection *connection, NBN
     NBN_LogTrace("Enqueue message of type %d for channel %d", message->header.type, channel->id);
     NBN_List_PushBack(connection->send_queue, message);
 
+    ((NBN_OutgoingMessageInfo *)message->data)->ref_count++;
     channel->outgoing_message_count++;
 }
 
@@ -2696,11 +2793,12 @@ static NBN_Message *NBN_Connection_ReadNextMessageFromStream(NBN_Connection *con
         return NULL;
     }
 
-    NBN_Message *message = NBN_Message_Create(msg_header.type, msg_header.channel_id, msg_serializer, msg_destructor, msg_builder());
+    NBN_Message *message = NBN_Message_Create(
+        msg_header.type, msg_header.channel_id, msg_serializer, msg_destructor, false, msg_builder());
 
     message->header.id = msg_header.id;
 
-    if (message->serializer(message->data, (NBN_Stream *)r_stream) < 0)
+    if (NBN_Message_SerializeData(message, (NBN_Stream *)r_stream) < 0)
     {
         NBN_LogError("Failed to read message body");
 
@@ -3244,10 +3342,9 @@ void* NBN_Endpoint_CreateOutgoingMessage(NBN_Endpoint *endpoint, uint8_t msg_typ
         return NULL;
     }
 
-    endpoint->outgoing_message_header.type = msg_type;
-    endpoint->outgoing_message_header.channel_id = channel_id;
+    endpoint->outgoing_message_info = NBN_OutgoingMessageInfo_Create(msg_type, channel_id, msg_builder());
 
-    return msg_builder();
+    return endpoint->outgoing_message_info->data;
 }
 
 static uint32_t NBN_Endpoint_BuildProtocolId(const char *protocol_name)
@@ -3394,9 +3491,9 @@ void *NBN_GameClient_CreateReliableMessage(uint8_t type)
     return NBN_GameClient_CreateMessage(type, NBN_CHANNEL_RESERVED_RELIABLE);
 }
 
-int NBN_GameClient_SendMessage(void *msg_data)
+int NBN_GameClient_SendMessage(void)
 {
-    return NBN_Connection_EnqueueOutgoingMessage(game_client.server_connection, msg_data);
+    return NBN_Connection_EnqueueOutgoingMessage(game_client.server_connection);
 }
 
 NBN_Connection *NBN_GameClient_CreateServerConnection(void)
@@ -3445,10 +3542,10 @@ void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, 
     }
 }
 
-bool NBN_GameClient_CanSendMessage(void *msg_data, bool destroy_message)
+bool NBN_GameClient_CanSendMessage(bool destroy_message)
 {
-    uint8_t msg_type = game_client.endpoint.outgoing_message_header.type;
-    uint8_t channel_id = game_client.endpoint.outgoing_message_header.channel_id;
+    uint8_t msg_type = game_client.endpoint.outgoing_message_info->type;
+    uint8_t channel_id = game_client.endpoint.outgoing_message_info->channel_id;
     NBN_Channel *channel = game_client.server_connection->channels[channel_id];
     NBN_MessageSerializer msg_serializer = game_client.endpoint.message_serializers[msg_type];
     NBN_MessageDestructor msg_destructor = game_client.endpoint.message_destructors[msg_type];
@@ -3461,7 +3558,7 @@ bool NBN_GameClient_CanSendMessage(void *msg_data, bool destroy_message)
     NBN_Message message = {
         .header = {.type = msg_type, .channel_id = channel_id},
         .serializer = msg_serializer,
-        .data = msg_data};
+        .data = game_client.endpoint.outgoing_message_info->data};
 
     NBN_MeasureStream_Init(&measure_stream);
 
@@ -3469,7 +3566,10 @@ bool NBN_GameClient_CanSendMessage(void *msg_data, bool destroy_message)
     bool ret = NBN_Channel_HasRoomForMessage(channel, message_size);
 
     if (!ret && destroy_message)
-        msg_destructor(msg_data);
+    {
+        msg_destructor(game_client.endpoint.outgoing_message_info->data);
+        NBN_DeallocObject(NBN_OBJ_OUTGOING_MSG_INFO, game_client.endpoint.outgoing_message_info);
+    }
 
     return ret;
 }
@@ -3766,7 +3866,8 @@ void NBN_GameServer_CloseClient(NBN_Connection *client, int code)
 
         msg->code = code;
 
-        NBN_GameServer_SendMessageTo(msg, client);
+        /* Do not call NBN_GameServer_SendTo on purpoise to avoid a potential infinite loop if the send fail */
+        NBN_Connection_EnqueueOutgoingMessage(client);
     }
 
     client->is_closed = true;
@@ -3787,12 +3888,28 @@ void *NBN_GameServer_CreateReliableMessage(uint8_t type)
     return NBN_GameServer_CreateMessage(type, NBN_CHANNEL_RESERVED_RELIABLE);
 }
 
-int NBN_GameServer_SendMessageTo(void *msg_data, NBN_Connection *client)
+void NBN_GameServer_SendMessageTo(NBN_Connection *client)
 {
-    return NBN_Connection_EnqueueOutgoingMessage(client, msg_data);
+    if (NBN_Connection_EnqueueOutgoingMessage(client) < 0)
+    {
+        NBN_LogError("Failed to send message to client %d. Closing client.", client->id);
+        NBN_GameServer_CloseClient(client, -1);
+    }
 }
 
+void NBN_GameServer_BroadcastMessage(void)
 {
+    NBN_ListNode *current_node = game_server.clients->head;
+
+    while (current_node)
+    {
+        NBN_Connection *client = current_node->data;
+
+        if (!client->is_closed && !client->is_stale && client->is_accepted)
+            NBN_GameServer_SendMessageTo(client);
+
+        current_node = current_node->next;
+    }
 }
 
 NBN_Connection *NBN_GameServer_AcceptConnection(void)
@@ -3849,10 +3966,10 @@ void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, 
     }
 }
 
-bool NBN_GameServer_CanSendMessageTo(void *msg_data, NBN_Connection *client, bool destroy_message)
+bool NBN_GameServer_CanSendMessageTo(NBN_Connection *client, bool destroy_message)
 {
-    uint8_t msg_type = game_server.endpoint.outgoing_message_header.type;
-    uint8_t channel_id = game_server.endpoint.outgoing_message_header.channel_id;
+    uint8_t msg_type = game_server.endpoint.outgoing_message_info->type;
+    uint8_t channel_id = game_server.endpoint.outgoing_message_info->channel_id;
     NBN_Channel *channel = client->channels[channel_id];
     NBN_MessageSerializer msg_serializer = game_server.endpoint.message_serializers[msg_type];
     NBN_MessageDestructor msg_destructor = game_server.endpoint.message_destructors[msg_type];
@@ -3865,7 +3982,8 @@ bool NBN_GameServer_CanSendMessageTo(void *msg_data, NBN_Connection *client, boo
     NBN_Message message = {
         .header = {.type = msg_type, .channel_id = channel_id},
         .serializer = msg_serializer,
-        .data = msg_data};
+        .outgoing = true,
+        .data = game_server.endpoint.outgoing_message_info};
 
     NBN_MeasureStream_Init(&measure_stream);
 
@@ -3873,7 +3991,10 @@ bool NBN_GameServer_CanSendMessageTo(void *msg_data, NBN_Connection *client, boo
     bool ret = NBN_Channel_HasRoomForMessage(channel, message_size);
 
     if (!ret && destroy_message)
-        msg_destructor(msg_data);
+    {
+        msg_destructor(game_server.endpoint.outgoing_message_info->data);
+        NBN_DeallocObject(NBN_OBJ_OUTGOING_MSG_INFO, game_server.endpoint.outgoing_message_info);
+    }
 
     return ret;
 }
