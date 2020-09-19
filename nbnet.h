@@ -1437,20 +1437,12 @@ int NBN_ReadStream_SerializeFloat(NBN_ReadStream *read_stream, float *value, flo
     unsigned int mult = pow(10, precision);
     int i_min = min * mult;
     int i_max = max * mult;
-    unsigned int abs_min = MIN(abs(i_min), abs(i_max));
-    unsigned int abs_max = MAX(abs(i_min), abs(i_max));
+    int i_val;
 
-    if (NBN_ReadStream_SerializeBool(read_stream, &isNegative) < 0)
+    if (NBN_ReadStream_SerializeInt(read_stream, &i_val, i_min, i_max) < 0)
         return NBN_ERROR;
 
-    if (NBN_ReadStream_SerializeUint(
-                read_stream, (unsigned int *)value, (min < 0 && max > 0) ? 0 : abs_min, abs_max) < 0)
-        return NBN_ERROR;
-
-    *value /= mult;
-
-    if (isNegative)
-        *value *= -1;
+    *value = (float)i_val / mult;
 
     return 0;
 }
@@ -1579,26 +1571,13 @@ int NBN_WriteStream_SerializeFloat(NBN_WriteStream *write_stream, float *value, 
 {
     assert(min <= max);
 
-    unsigned int isNegative = *value < 0;
     unsigned int mult = pow(10, precision);
     int i_min = min * mult;
     int i_max = max * mult;
-    unsigned int abs_min = MIN(abs(i_min), abs(i_max));
-    unsigned int abs_max = MAX(abs(i_min), abs(i_max));
+    int i_val = *value * mult;
 
-    *value = abs((int)(*value * mult));
-
-    if (NBN_WriteStream_SerializeBool(write_stream, &isNegative) < 0)
+    if (NBN_WriteStream_SerializeInt(write_stream, &i_val, i_min, i_max) < 0)
         return NBN_ERROR;
-
-    if (NBN_WriteStream_SerializeUint(
-                write_stream, (unsigned int *)value, (min < 0 && max > 0) ? 0 : abs_min, abs_max) < 0)
-        return NBN_ERROR;
-
-    if (isNegative)
-        *value *= -1;
-
-    *value /= mult;
 
     return 0;
 }
