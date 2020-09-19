@@ -1,14 +1,17 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "CuTest.h"
 
 #define NBNET_IMPL
 
-/* nbnet logging */
 #define NBN_LogInfo printf
 #define NBN_LogTrace printf
 #define NBN_LogDebug printf
 #define NBN_LogError printf
+
+#define NBN_Allocator malloc
+#define NBN_Deallocator free
 
 #include "../nbnet.h"
 
@@ -36,29 +39,19 @@ void BigMessage_Destroy(BigMessage *msg)
     free(msg);
 }
 
-NBN_Connection *Begin(void)
+static NBN_Endpoint endpoint;
+
+NBN_Connection *Begin(NBN_Endpoint *endpoint)
 {
-    NBN_MessageBuilder message_builders[NBN_MAX_MESSAGE_TYPES];
-    NBN_MessageDestructor message_destructors[NBN_MAX_MESSAGE_TYPES];
-    NBN_MessageSerializer message_serializers[NBN_MAX_MESSAGE_TYPES];
+    NBN_Endpoint_Init(endpoint, (NBN_Config){ .protocol_name = "tests" });
+    NBN_Endpoint_RegisterMessageBuilder(endpoint, (NBN_MessageBuilder)BigMessage_Create, BIG_MESSAGE_TYPE);
+    NBN_Endpoint_RegisterMessageSerializer(endpoint, (NBN_MessageSerializer)BigMessage_Serialize, BIG_MESSAGE_TYPE);
+    NBN_Endpoint_RegisterMessageDestructor(endpoint, (NBN_MessageDestructor)BigMessage_Destroy, BIG_MESSAGE_TYPE);
 
-    message_builders[NBN_MESSAGE_CHUNK_TYPE] = (NBN_MessageBuilder)NBN_MessageChunk_Create;
-    message_builders[BIG_MESSAGE_TYPE] = (NBN_MessageBuilder)BigMessage_Create;
-
-    message_destructors[NBN_MESSAGE_CHUNK_TYPE] = (NBN_MessageDestructor)NBN_MessageChunk_Destroy;
-    message_destructors[BIG_MESSAGE_TYPE] = (NBN_MessageDestructor)BigMessage_Destroy;
-
-    message_serializers[NBN_MESSAGE_CHUNK_TYPE] = (NBN_MessageSerializer)NBN_MessageChunk_Serialize;
-    message_serializers[BIG_MESSAGE_TYPE] = (NBN_MessageSerializer)BigMessage_Serialize;
-
-    NBN_Connection *conn = NBN_Connection_Create(0, 0, message_builders, message_destructors, message_serializers);
-
-    NBN_Connection_CreateChannel(conn, NBN_CHANNEL_RELIABLE_ORDERED, 0);
-
-    return conn;
+    return NBN_Endpoint_CreateConnection(endpoint, 0);
 }
 
-static void End(NBN_Connection *conn)
+static void End(NBN_Connection *conn, NBN_Endpoint *endpoint)
 {
     NBN_ListNode *current_node = conn->send_queue->head;
 
@@ -72,12 +65,14 @@ static void End(NBN_Connection *conn)
     }
 
     NBN_Connection_Destroy(conn);
+    NBN_Endpoint_Deinit(endpoint);
 }
 
 void Test_ChunksGeneration(CuTest *tc)
 {
-    NBN_Connection *conn = Begin();
-    BigMessage *msg = NBN_Connection_CreateOutgoingMessage(conn, BIG_MESSAGE_TYPE, 0);
+    NBN_Endpoint endpoint;
+    NBN_Connection *conn = Begin(&endpoint);
+    BigMessage *msg = NBN_Endpoint_CreateOutgoingMessage(&endpoint, BIG_MESSAGE_TYPE, NBN_CHANNEL_RESERVED_RELIABLE);
 
     CuAssertPtrNotNull(tc, msg);
 
@@ -89,13 +84,18 @@ void Test_ChunksGeneration(CuTest *tc)
 
     NBN_MeasureStream_Init(&m_stream);
 
-    unsigned int message_size = (NBN_Message_Measure(conn->message, &m_stream) - 1) / 8 + 1;
-    uint8_t *buffer = malloc(message_size);
+    NBN_Message message = {
+        .header = {.type = BIG_MESSAGE_TYPE, .channel_id = NBN_CHANNEL_RESERVED_RELIABLE},
+        .serializer = (NBN_MessageSerializer)BigMessage_Serialize,
+        .data = msg};
+    unsigned int message_size = (NBN_Message_Measure(&message, &m_stream) - 1) / 8 + 1;
+    uint8_t buffer[4096 * 8];
     NBN_WriteStream w_stream;
 
     NBN_WriteStream_Init(&w_stream, buffer, message_size);
 
-    CuAssertIntEquals(tc, 0, NBN_Message_SerializeHeader(&conn->message->header, (NBN_Stream *)&w_stream));
+    CuAssertIntEquals(tc, 0, NBN_Message_SerializeHeader(
+                &message.header, (NBN_Stream *)&w_stream));
     CuAssertIntEquals(tc, 0, BigMessage_Serialize(msg, (NBN_Stream *)&w_stream));
 
     CuAssertIntEquals(tc, 0, NBN_Connection_EnqueueOutgoingMessage(conn));
@@ -110,7 +110,7 @@ void Test_ChunksGeneration(CuTest *tc)
     for (int i = 0; current_node != NULL; i++)
     {
         NBN_Message *chunk_msg = current_node->data;
-        NBN_MessageChunk *chunk = chunk_msg->data;
+        NBN_MessageChunk *chunk = ((NBN_OutgoingMessageInfo *)chunk_msg->data)->data;
 
         CuAssertIntEquals(tc, NBN_MESSAGE_CHUNK_TYPE, chunk_msg->header.type);
         CuAssertIntEquals(tc, i, chunk->id);
@@ -129,17 +129,17 @@ void Test_ChunksGeneration(CuTest *tc)
 
     CuAssertIntEquals(tc, 0, memcmp(r_buffer, buffer, message_size));
 
-    free(buffer);
     free(r_buffer);
 
-    End(conn);
+    End(conn, &endpoint);
 }
 
 /* TODO: add more tests for cases like missing chunks etc. */
 void Test_NBN_Channel_AddChunk(CuTest *tc)
 {
-    NBN_Connection *conn = Begin();
-    BigMessage *msg = NBN_Connection_CreateOutgoingMessage(conn, BIG_MESSAGE_TYPE, 0);
+    NBN_Endpoint endpoint;
+    NBN_Connection *conn = Begin(&endpoint);
+    BigMessage *msg = NBN_Endpoint_CreateOutgoingMessage(&endpoint, BIG_MESSAGE_TYPE, NBN_CHANNEL_RESERVED_RELIABLE);
 
     CuAssertPtrNotNull(tc, msg);
 
@@ -149,7 +149,7 @@ void Test_NBN_Channel_AddChunk(CuTest *tc)
 
     NBN_Connection_EnqueueOutgoingMessage(conn);
 
-    BigMessage *msg2 = NBN_Connection_CreateOutgoingMessage(conn, BIG_MESSAGE_TYPE, 0);
+    BigMessage *msg2 = NBN_Endpoint_CreateOutgoingMessage(&endpoint, BIG_MESSAGE_TYPE, NBN_CHANNEL_RESERVED_RELIABLE);
 
     CuAssertPtrNotNull(tc, msg);
 
@@ -162,39 +162,44 @@ void Test_NBN_Channel_AddChunk(CuTest *tc)
     /* Should have generated 10 chunks */
     CuAssertIntEquals(tc, 10, conn->send_queue->count); 
 
-    NBN_Message *chunk_msg1 = NBN_List_GetAt(conn->send_queue, 0);
-    NBN_Message *chunk_msg2 = NBN_List_GetAt(conn->send_queue, 1);
-    NBN_Message *chunk_msg3 = NBN_List_GetAt(conn->send_queue, 2);
-    NBN_Message *chunk_msg4 = NBN_List_GetAt(conn->send_queue, 3);
-    NBN_Message *chunk_msg5 = NBN_List_GetAt(conn->send_queue, 4);
-    NBN_Message *chunk_msg6 = NBN_List_GetAt(conn->send_queue, 5);
-    NBN_Message *chunk_msg7 = NBN_List_GetAt(conn->send_queue, 6);
-    NBN_Message *chunk_msg8 = NBN_List_GetAt(conn->send_queue, 7);
-    NBN_Message *chunk_msg9 = NBN_List_GetAt(conn->send_queue, 8);
-    NBN_Message *chunk_msg10 = NBN_List_GetAt(conn->send_queue, 9);
+    NBN_Message *msg_chunks[10];
 
-    NBN_Channel *channel = conn->channels[0];
+    for (int i = 0; i < 10; i++)
+    {
+        NBN_Message *m = NBN_List_GetAt(conn->send_queue, i);
+        NBN_MessageChunk *chunk = ((NBN_OutgoingMessageInfo *)m->data)->data;
+
+        msg_chunks[i] = NBN_Message_Create(
+                NBN_MESSAGE_CHUNK_TYPE,
+                NBN_CHANNEL_RESERVED_RELIABLE,
+                (NBN_MessageSerializer)NBN_MessageChunk_Serialize,
+                (NBN_MessageDestructor)NBN_MessageChunk_Destroy,
+                false,
+                chunk);
+    }
+
+    NBN_Channel *channel = conn->channels[NBN_CHANNEL_RESERVED_RELIABLE];
 
     /* First message chunks */
 
-    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg1));
+    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, msg_chunks[0]));
     CuAssertIntEquals(tc, 0, channel->last_received_chunk_id);
     CuAssertIntEquals(tc, 1, channel->chunk_count);
 
-    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg2));
+    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, msg_chunks[1]));
     CuAssertIntEquals(tc, 1, channel->last_received_chunk_id);
     CuAssertIntEquals(tc, 2, channel->chunk_count);
 
-    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg3));
+    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, msg_chunks[2]));
     CuAssertIntEquals(tc, 2, channel->last_received_chunk_id);
     CuAssertIntEquals(tc, 3, channel->chunk_count);
 
-    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg4));
+    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, msg_chunks[3]));
     CuAssertIntEquals(tc, 3, channel->last_received_chunk_id);
     CuAssertIntEquals(tc, 4, channel->chunk_count);
 
     /* This is the last chunk of the first message so it should return true */
-    CuAssertTrue(tc, NBN_Channel_AddChunk(channel, chunk_msg5));
+    CuAssertTrue(tc, NBN_Channel_AddChunk(channel, msg_chunks[4]));
     CuAssertIntEquals(tc, -1, channel->last_received_chunk_id);
     CuAssertIntEquals(tc, 5, channel->chunk_count);
 
@@ -203,34 +208,35 @@ void Test_NBN_Channel_AddChunk(CuTest *tc)
 
     /* Second message chunks */
 
-    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg6));
+    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, msg_chunks[5]));
     CuAssertIntEquals(tc, 0, channel->last_received_chunk_id);
     CuAssertIntEquals(tc, 1, channel->chunk_count);
 
-    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg7));
+    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, msg_chunks[6]));
     CuAssertIntEquals(tc, 1, channel->last_received_chunk_id);
     CuAssertIntEquals(tc, 2, channel->chunk_count);
 
-    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg8));
+    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, msg_chunks[7]));
     CuAssertIntEquals(tc, 2, channel->last_received_chunk_id);
     CuAssertIntEquals(tc, 3, channel->chunk_count);
 
-    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg9));
+    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, msg_chunks[8]));
     CuAssertIntEquals(tc, 3, channel->last_received_chunk_id);
     CuAssertIntEquals(tc, 4, channel->chunk_count);
 
     /* This is the last chunk of the second message so it should return true */
-    CuAssertTrue(tc, NBN_Channel_AddChunk(channel, chunk_msg10));
+    CuAssertTrue(tc, NBN_Channel_AddChunk(channel, msg_chunks[9]));
     CuAssertIntEquals(tc, -1, channel->last_received_chunk_id);
     CuAssertIntEquals(tc, 5, channel->chunk_count);
 
-    End(conn);
+    End(conn, &endpoint);
 }
 
 void Test_NBN_Channel_ReconstructMessageFromChunks(CuTest *tc)
 {
-    NBN_Connection *conn = Begin();
-    BigMessage *msg = NBN_Connection_CreateOutgoingMessage(conn, BIG_MESSAGE_TYPE, 0);
+    NBN_Endpoint endpoint;
+    NBN_Connection *conn = Begin(&endpoint);
+    BigMessage *msg = NBN_Endpoint_CreateOutgoingMessage(&endpoint, BIG_MESSAGE_TYPE, NBN_CHANNEL_RESERVED_RELIABLE);
 
     CuAssertPtrNotNull(tc, msg);
 
@@ -238,32 +244,42 @@ void Test_NBN_Channel_ReconstructMessageFromChunks(CuTest *tc)
     for (int i = 0; i < sizeof(msg->data); i++)
         msg->data[i] = rand() % 255 + 1;
 
-    NBN_Connection_EnqueueOutgoingMessage(conn);
+    CuAssertIntEquals(tc, 0, NBN_Connection_EnqueueOutgoingMessage(conn));
 
     /* Should have generated 5 chunks */
     CuAssertIntEquals(tc, 5, conn->send_queue->count);
 
-    NBN_Message *chunk_msg1 = NBN_List_GetAt(conn->send_queue, 0);
-    NBN_Message *chunk_msg2 = NBN_List_GetAt(conn->send_queue, 1);
-    NBN_Message *chunk_msg3 = NBN_List_GetAt(conn->send_queue, 2);
-    NBN_Message *chunk_msg4 = NBN_List_GetAt(conn->send_queue, 3);
-    NBN_Message *chunk_msg5 = NBN_List_GetAt(conn->send_queue, 4);
+    NBN_Message *msg_chunks[5];
 
-    NBN_Channel *channel = conn->channels[0];
+    for (int i = 0; i < 5; i++)
+    {
+        NBN_Message *m = NBN_List_GetAt(conn->send_queue, i);
+        NBN_MessageChunk *chunk = ((NBN_OutgoingMessageInfo *)m->data)->data;
 
-    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg1));
-    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg2));
-    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg3));
-    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, chunk_msg4));
-    CuAssertTrue(tc, NBN_Channel_AddChunk(channel, chunk_msg5));
+        msg_chunks[i] = NBN_Message_Create(
+                NBN_MESSAGE_CHUNK_TYPE,
+                NBN_CHANNEL_RESERVED_RELIABLE,
+                (NBN_MessageSerializer)NBN_MessageChunk_Serialize,
+                (NBN_MessageDestructor)NBN_MessageChunk_Destroy,
+                false,
+                chunk);
+    }
+
+    NBN_Channel *channel = conn->channels[NBN_CHANNEL_RESERVED_RELIABLE];
+
+    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, msg_chunks[0]));
+    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, msg_chunks[1]));
+    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, msg_chunks[2]));
+    CuAssertTrue(tc, !NBN_Channel_AddChunk(channel, msg_chunks[3]));
+    CuAssertTrue(tc, NBN_Channel_AddChunk(channel, msg_chunks[4]));
 
     NBN_Message *r_msg = NBN_Channel_ReconstructMessageFromChunks(channel, conn);
 
     CuAssertIntEquals(tc, 0, r_msg->header.type);
-    CuAssertIntEquals(tc, 0, r_msg->header.channel_id);
+    CuAssertIntEquals(tc, NBN_CHANNEL_RESERVED_RELIABLE, r_msg->header.channel_id);
     CuAssertIntEquals(tc, 0, memcmp(r_msg->data, msg->data, 4096));
 
-    End(conn);
+    End(conn, &endpoint);
 }
 
 int main(int argc, char *argv[])
