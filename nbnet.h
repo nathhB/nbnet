@@ -302,6 +302,7 @@ struct __NBN_OutgoingMessageInfo
     uint8_t channel_id;
     unsigned int ref_count;
     void *data;
+    NBN_MessageDestructor message_destructor;
 
     /*
        Used to keep a reference to the chunked message for each
@@ -327,7 +328,7 @@ int NBN_Message_Measure(NBN_Message *, NBN_MeasureStream *);
 int NBN_Message_SerializeData(NBN_Message *, NBN_Stream *);
 void *NBN_Message_GetData(NBN_Message *);
 
-NBN_OutgoingMessageInfo *NBN_OutgoingMessageInfo_Create(uint8_t, uint8_t, void *);
+NBN_OutgoingMessageInfo *NBN_OutgoingMessageInfo_Create(NBN_Endpoint *, uint8_t, uint8_t, void *);
 
 #pragma endregion /* NBN_Message */
 
@@ -1921,15 +1922,8 @@ void NBN_Message_Destroy(NBN_Message *message, bool free_data)
 
                     if (--msg_info->chunked_msg_info->ref_count == 0)
                     {
-#if defined(NBN_GAME_SERVER)
-                        NBN_MessageDestructor msg_destructor =
-                            game_server.endpoint.message_destructors[msg_info->chunked_msg_info->type];
-#elif defined(NBN_GAME_CLIENT)
-                        NBN_MessageDestructor msg_destructor =
-                            game_client.endpoint.message_destructors[msg_info->chunked_msg_info->type];
-#endif
+                        msg_info->chunked_msg_info->message_destructor(msg_info->chunked_msg_info->data);
 
-                        msg_destructor(msg_info->chunked_msg_info->data);
                         NBN_MemoryManager_DeallocObject(NBN_OBJ_OUTGOING_MSG_INFO, msg_info->chunked_msg_info);
 
 #ifdef NBN_DEBUG
@@ -1989,7 +1983,8 @@ void *NBN_Message_GetData(NBN_Message *message)
     return message->outgoing ? ((NBN_OutgoingMessageInfo *)message->data)->data : message->data;
 }
 
-NBN_OutgoingMessageInfo *NBN_OutgoingMessageInfo_Create(uint8_t type, uint8_t channel_id, void *data)
+NBN_OutgoingMessageInfo *NBN_OutgoingMessageInfo_Create(
+        NBN_Endpoint *endpoint, uint8_t type, uint8_t channel_id, void *data)
 {
     NBN_OutgoingMessageInfo *msg_info = NBN_MemoryManager_AllocObject(NBN_OBJ_OUTGOING_MSG_INFO);
 
@@ -1997,6 +1992,7 @@ NBN_OutgoingMessageInfo *NBN_OutgoingMessageInfo_Create(uint8_t type, uint8_t ch
     msg_info->channel_id = channel_id;
     msg_info->data = data;
     msg_info->ref_count = 0;
+    msg_info->message_destructor = endpoint->message_destructors[type];
     msg_info->chunked_msg_info = NULL;
 
     return msg_info;
@@ -3345,7 +3341,7 @@ void* NBN_Endpoint_CreateOutgoingMessage(NBN_Endpoint *endpoint, uint8_t msg_typ
         return NULL;
     }
 
-    endpoint->outgoing_message_info = NBN_OutgoingMessageInfo_Create(msg_type, channel_id, msg_builder());
+    endpoint->outgoing_message_info = NBN_OutgoingMessageInfo_Create(endpoint, msg_type, channel_id, msg_builder());
 
     return endpoint->outgoing_message_info->data;
 }
