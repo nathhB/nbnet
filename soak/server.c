@@ -1,3 +1,5 @@
+#include <signal.h>
+
 #define NBNET_IMPL
 
 #include "soak.h"

@@ -54,7 +54,7 @@ void Soak_Deinit(void)
 
     for (int i = 0; i < 5; i++)
     {
-        NBN_LogInfo("Object %d | Allocs: %d, Deallocs: %d", i, mem_report.object_allocs[i], mem_report.object_deallocs[i]);
+        Soak_LogInfo("Object %d | Allocs: %d, Deallocs: %d", i, mem_report.object_allocs[i], mem_report.object_deallocs[i]);
     }
 }
 
