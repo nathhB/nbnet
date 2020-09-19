@@ -29,6 +29,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <limits.h>
 #include <math.h>
 #include <assert.h>
 
@@ -837,7 +838,7 @@ int NBN_GameClient_SendMessage(void);
 NBN_Connection *NBN_GameClient_CreateServerConnection(void);
 NBN_MessageInfo NBN_GameClient_GetReceivedMessageInfo(void);
 NBN_ConnectionStats NBN_GameClient_GetStats(void);
-int NBN_GameClient_GetClientClosedCode(void);
+int NBN_GameClient_GetServerCloseCode(void);
 
 #ifdef NBN_DEBUG
 
@@ -888,14 +889,16 @@ void NBN_GameServer_AddTime(double);
 int NBN_GameServer_Poll(void);
 int NBN_GameServer_SendPackets(void);
 NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t);
-void NBN_GameServer_CloseClient(NBN_Connection *, int);
+void NBN_GameServer_CloseClient(NBN_Connection *);
+void NBN_GameServer_CloseClientWithCode(NBN_Connection *, int);
 void *NBN_GameServer_CreateMessage(uint8_t, uint8_t);
 void *NBN_GameServer_CreateUnreliableMessage(uint8_t);
 void *NBN_GameServer_CreateReliableMessage(uint8_t);
 void NBN_GameServer_SendMessageTo(NBN_Connection *);
 void NBN_GameServer_BroadcastMessage(void);
 NBN_Connection *NBN_GameServer_AcceptConnection(void);
-void NBN_GameServer_RejectConnection(int);
+void NBN_GameServer_RejectConnectionWithCode(int);
+void NBN_GameServer_RejectConnection(void);
 uint32_t NBN_GameServer_GetDisconnectedClientId(void);
 NBN_MessageInfo NBN_GameServer_GetReceivedMessageInfo(void);
 NBN_GameServerStats NBN_GameServer_GetStats(void);
@@ -986,7 +989,7 @@ void *NBN_MemoryManager_Alloc(size_t size)
 
     if (ptr == NULL)
     {
-        NBN_LogError("Failed to allocate memory (%d bytes)", size);
+        NBN_LogError("Failed to allocate memory (%ld bytes)", size);
         NBN_Abort();
     }
 
@@ -2038,7 +2041,7 @@ void NBN_ClientClosedMessage_Destroy(NBN_ClientClosedMessage *msg)
 
 int NBN_ClientClosedMessage_Serialize(NBN_ClientClosedMessage *msg, NBN_Stream *stream)
 {
-    SERIALIZE_INT(msg->code, 0, UINT32_MAX);
+    SERIALIZE_INT(msg->code, SHRT_MIN, SHRT_MAX);
 
     return 0;
 }
@@ -3527,7 +3530,7 @@ NBN_ConnectionStats NBN_GameClient_GetStats(void)
     return game_client.server_connection->stats;
 }
 
-int NBN_GameClient_GetClientClosedCode(void)
+int NBN_GameClient_GetServerCloseCode(void)
 {
     return last_client_closed_code;
 }
@@ -3846,7 +3849,7 @@ NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t id)
     return client;
 }
 
-void NBN_GameServer_CloseClient(NBN_Connection *client, int code)
+void NBN_GameServer_CloseClientWithCode(NBN_Connection *client, int code)
 {
     assert(NBN_List_Includes(game_server.clients, client));
 
@@ -3862,18 +3865,20 @@ void NBN_GameServer_CloseClient(NBN_Connection *client, int code)
 
     NBN_Connection_ClearMessageQueue(client->send_queue);
 
-    if (code != -1)
-    {
-        NBN_ClientClosedMessage *msg = (NBN_ClientClosedMessage *)NBN_GameServer_CreateReliableMessage(
-                NBN_CLIENT_CLOSED_MESSAGE_TYPE);
+    NBN_ClientClosedMessage *msg = (NBN_ClientClosedMessage *)NBN_GameServer_CreateReliableMessage(
+            NBN_CLIENT_CLOSED_MESSAGE_TYPE);
 
-        msg->code = code;
+    msg->code = code;
 
-        /* Do not call NBN_GameServer_SendTo on purpoise to avoid a potential infinite loop if the send fails */
-        NBN_Connection_EnqueueOutgoingMessage(client);
-    }
+    /* Do not call NBN_GameServer_SendTo on purpoise to avoid a potential infinite loop if the send fails */
+    NBN_Connection_EnqueueOutgoingMessage(client);
 
     client->is_closed = true;
+}
+
+void NBN_GameServer_CloseClient(NBN_Connection *client)
+{
+    NBN_GameServer_CloseClientWithCode(client, -1);
 }
 
 void *NBN_GameServer_CreateMessage(uint8_t type, uint8_t channel_id)
@@ -3896,7 +3901,7 @@ void NBN_GameServer_SendMessageTo(NBN_Connection *client)
     if (NBN_Connection_EnqueueOutgoingMessage(client) < 0)
     {
         NBN_LogError("Failed to send message to client %d. Closing client.", client->id);
-        NBN_GameServer_CloseClient(client, -1);
+        NBN_GameServer_CloseClient(client);
     }
 }
 
@@ -3925,12 +3930,17 @@ NBN_Connection *NBN_GameServer_AcceptConnection(void)
     return last_event_client;
 }
 
-void NBN_GameServer_RejectConnection(int code)
+void NBN_GameServer_RejectConnectionWithCode(int code)
 {
     assert(last_event_type == NBN_NEW_CONNECTION);
     assert(last_event_client != NULL);
 
-    NBN_GameServer_CloseClient(last_event_client, code);
+    NBN_GameServer_CloseClientWithCode(last_event_client, code);
+}
+
+void NBN_GameServer_RejectConnection(void)
+{
+    NBN_GameServer_RejectConnectionWithCode(-1);
 }
 
 uint32_t NBN_GameServer_GetDisconnectedClientId(void)
@@ -4041,7 +4051,7 @@ static void NBN_GameServer_CloseStaleClientConnections(void)
 
             client->is_stale = true;
 
-            NBN_GameServer_CloseClient(client, -1);
+            NBN_GameServer_CloseClient(client);
         }
     }
 }
@@ -4184,7 +4194,7 @@ static void NBN_GServ_Driver_OnClientPacketReceived(NBN_Packet *packet)
     if (NBN_Endpoint_ProcessReceivedPacket(&game_server.endpoint, packet, packet->sender) < 0)
     {
         NBN_LogError("An error occured while processing packet from client %d, closing the client", packet->sender->id);
-        NBN_GameServer_CloseClient(packet->sender, -1);
+        NBN_GameServer_CloseClient(packet->sender);
     }
 }
 
