@@ -25,7 +25,7 @@ static unsigned int client_count = 0;
 static void HandleNewConnection(void)
 {
     if (client_count == SOAK_MAX_CLIENTS)
-        NBN_GameServer_RejectConnection(-1);
+        NBN_GameServer_RejectConnection();
 
     assert(clients[client_count] == NULL);
 
@@ -76,7 +76,7 @@ static void EchoReceivedSoakMessages(void)
             if (echo_msg == NULL)
             {
                 Soak_LogError("Failed to create soak message");
-                NBN_GameServer_CloseClient(soak_client->connection, -1);
+                NBN_GameServer_CloseClient(soak_client->connection);
 
                 return;
             }
@@ -135,13 +135,13 @@ static void HandleReceivedMessage(void)
     {
     case SOAK_MESSAGE:
         if (HandleReceivedSoakMessage((SoakMessage *)msg.data, msg.sender) < 0)
-            NBN_GameServer_CloseClient(msg.sender, -1);
+            NBN_GameServer_CloseClient(msg.sender);
         break;
     
     default:
         Soak_LogError("Received unexpected message (type: %d)", msg.type);
 
-        NBN_GameServer_CloseClient(msg.sender, -1);
+        NBN_GameServer_CloseClient(msg.sender);
         break;
     }
 }
