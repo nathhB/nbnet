@@ -1433,7 +1433,6 @@ int NBN_ReadStream_SerializeFloat(NBN_ReadStream *read_stream, float *value, flo
 {
     assert(min <= max);
 
-    unsigned int isNegative = 0;
     unsigned int mult = pow(10, precision);
     int i_min = min * mult;
     int i_max = max * mult;
@@ -1685,17 +1684,11 @@ int NBN_MeasureStream_SerializeFloat(
     assert(*value >= min && *value <= max);
 
     unsigned int mult = pow(10, precision);
-    int i_min = min * precision;
-    int i_max = max * precision;
-    unsigned int abs_min = MIN(abs(i_min), abs(i_max));
-    unsigned int abs_max = MAX(abs(i_min), abs(i_max));
-    unsigned int abs_value = abs((int)(*value * mult));
-    unsigned number_of_bits = NBN_MeasureStream_SerializeUint(
-            measure_stream, &abs_value, (min < 0 && max > 0) ? 0 : abs_min, abs_max);
+    int i_min = min * mult;
+    int i_max = max * mult;
+    int i_val = *value * mult;
 
-    measure_stream->number_of_bits++; // +1 for float sign
-
-    return number_of_bits + 1;
+    return NBN_MeasureStream_SerializeInt(measure_stream, &i_val, i_min, i_max);
 }
 
 int NBN_MeasureStream_SerializeBool(NBN_MeasureStream *measure_stream, unsigned int *value)
