@@ -1,3 +1,27 @@
+/*
+
+   Copyright (C) 2020 BIAGINI Nathan
+
+   This software is provided 'as-is', without any express or implied
+   warranty.  In no event will the authors be held liable for any damages
+   arising from the use of this software.
+
+   Permission is granted to anyone to use this software for any purpose,
+   including commercial applications, and to alter it and redistribute it
+   freely, subject to the following restrictions:
+
+   1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+
+   2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+
+   3. This notice may not be removed or altered from any source distribution.
+
+*/
+
 #include <signal.h>
 
 #define NBNET_IMPL
@@ -101,12 +125,12 @@ static int HandleReceivedSoakMessage(SoakMessage *msg, NBN_Connection *sender)
     SoakClient *soak_client = clients[sender->id];
 
     if (soak_client->error)
-      return 0;
+        return 0;
 
     if (msg->id != soak_client->last_recved_message_id + 1)
     {
         Soak_LogError("Expected to receive message %d but received message %d (from client: %d)\n",
-          soak_client->last_recved_message_id + 1, msg->id, sender->id);
+                soak_client->last_recved_message_id + 1, msg->id, sender->id);
 
         soak_client->error = true;
 
@@ -133,16 +157,16 @@ static void HandleReceivedMessage(void)
 
     switch (msg.type)
     {
-    case SOAK_MESSAGE:
-        if (HandleReceivedSoakMessage((SoakMessage *)msg.data, msg.sender) < 0)
-            NBN_GameServer_CloseClient(msg.sender);
-        break;
-    
-    default:
-        Soak_LogError("Received unexpected message (type: %d)", msg.type);
+        case SOAK_MESSAGE:
+            if (HandleReceivedSoakMessage((SoakMessage *)msg.data, msg.sender) < 0)
+                NBN_GameServer_CloseClient(msg.sender);
+            break;
 
-        NBN_GameServer_CloseClient(msg.sender);
-        break;
+        default:
+            Soak_LogError("Received unexpected message (type: %d)", msg.type);
+
+            NBN_GameServer_CloseClient(msg.sender);
+            break;
     }
 }
 
@@ -159,17 +183,17 @@ static int Tick(void)
 
         switch (ev)
         {
-        case NBN_NEW_CONNECTION:
-            HandleNewConnection();
-            break;
+            case NBN_NEW_CONNECTION:
+                HandleNewConnection();
+                break;
 
-        case NBN_CLIENT_DISCONNECTED:
-            HandleClientDisconnection(NBN_GameServer_GetDisconnectedClientId());
-            break;
+            case NBN_CLIENT_DISCONNECTED:
+                HandleClientDisconnection(NBN_GameServer_GetDisconnectedClientId());
+                break;
 
-        case NBN_CLIENT_MESSAGE_RECEIVED:
-            HandleReceivedMessage();
-            break;
+            case NBN_CLIENT_MESSAGE_RECEIVED:
+                HandleReceivedMessage();
+                break;
         }
     }
 

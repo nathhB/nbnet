@@ -1,3 +1,27 @@
+/*
+
+   Copyright (C) 2020 BIAGINI Nathan
+
+   This software is provided 'as-is', without any express or implied
+   warranty.  In no event will the authors be held liable for any damages
+   arising from the use of this software.
+
+   Permission is granted to anyone to use this software for any purpose,
+   including commercial applications, and to alter it and redistribute it
+   freely, subject to the following restrictions:
+
+   1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+
+   2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+
+   3. This notice may not be removed or altered from any source distribution.
+
+*/
+
 #include "logging.h"
 
 /* I did not write this library: https://github.com/rxi/log.c */
@@ -89,8 +113,8 @@ void log_log(int level, const char *file, int line, const char *fmt, ...)
         buf[strftime(buf, sizeof(buf), "%H:%M:%S", lt)] = '\0';
 #ifdef LOG_USE_COLOR
         fprintf(
-            stderr, "%s %s%-5s\x1b[0m \x1b[90m%s:%d:\x1b[0m ",
-            buf, level_colors[level], level_names[level], file, line);
+                stderr, "%s %s%-5s\x1b[0m \x1b[90m%s:%d:\x1b[0m ",
+                buf, level_colors[level], level_names[level], file, line);
 #else
         fprintf(stderr, "%s %-5s %s:%d: ", buf, level_names[level], file, line);
 #endif

@@ -226,7 +226,7 @@ static void HandleReceivedMessage(void)
             HandleSpawnMessage(msg_info.data);
             break;
 
-        // We received the latest game state from the server
+            // We received the latest game state from the server
         case GAME_STATE_MESSAGE:
             HandleGameStateMessage(msg_info.data);
             break;
@@ -422,7 +422,7 @@ int main(int argc, char *argv[])
     if (ReadCommandLine(argc, argv))
     {
         printf("Usage: client [--packet_loss=<value>] [--packet_duplication=<value>] [--ping=<value>] \
-[--jitter=<value>]\n");
+                [--jitter=<value>]\n");
 
         return 1;
     }
@@ -460,7 +460,7 @@ int main(int argc, char *argv[])
         // Very basic fixed timestep implementation
         // Target FPS is 100 but the simulation runs at TICK_RATE ticks per second
         // We keep track of accumulated times and simulates as many tick as we can using that time
-        
+
         acc += GetFrameTime(); // Accumulates time
 
         // Simulates as many ticks as we can

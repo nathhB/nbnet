@@ -260,7 +260,7 @@ int main(int argc, char *argv[])
     if (ReadCommandLine(argc, argv))
     {
         printf("Usage: server [--packet_loss=<value>] [--packet_duplication=<value>] [--ping=<value>] \
-[--jitter=<value>]\n");
+                [--jitter=<value>]\n");
 
         return 1;
     }

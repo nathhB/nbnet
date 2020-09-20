@@ -1,3 +1,27 @@
+/*
+
+   Copyright (C) 2020 BIAGINI Nathan
+
+   This software is provided 'as-is', without any express or implied
+   warranty.  In no event will the authors be held liable for any damages
+   arising from the use of this software.
+
+   Permission is granted to anyone to use this software for any purpose,
+   including commercial applications, and to alter it and redistribute it
+   freely, subject to the following restrictions:
+
+   1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+
+   2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+
+   3. This notice may not be removed or altered from any source distribution.
+
+*/
+
 #include <stdlib.h>
 #include <stdbool.h>
 #include <getopt.h>
@@ -64,7 +88,7 @@ int Soak_ReadCommandLine(int argc, char *argv[])
     if (argc < 2)
     {
         printf("Usage: client --message_count=<value> [--packet_loss=<value>] \
-            [--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
+                [--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
 
         return -1;
     }
@@ -85,32 +109,32 @@ int Soak_ReadCommandLine(int argc, char *argv[])
         switch (opt)
         {
 #ifdef NBN_GAME_CLIENT
-        case OPT_MESSAGES_COUNT:
-            soak_options.messages_count = atoi(optarg);
-            break;
+            case OPT_MESSAGES_COUNT:
+                soak_options.messages_count = atoi(optarg);
+                break;
 #endif
 
-        case OPT_PACKET_LOSS:
-            soak_options.packet_loss = atof(optarg);
-            break;
+            case OPT_PACKET_LOSS:
+                soak_options.packet_loss = atof(optarg);
+                break;
 
-        case OPT_PACKET_DUPLICATION:
-            soak_options.packet_duplication = atof(optarg);
-            break;
+            case OPT_PACKET_DUPLICATION:
+                soak_options.packet_duplication = atof(optarg);
+                break;
 
-        case OPT_PING:
-            soak_options.ping = atof(optarg);
-            break;
+            case OPT_PING:
+                soak_options.ping = atof(optarg);
+                break;
 
-        case OPT_JITTER:
-            soak_options.jitter = atof(optarg);
-            break;
+            case OPT_JITTER:
+                soak_options.jitter = atof(optarg);
+                break;
 
-        case '?':
-            return -1;
-        
-        default:
-            return -1;
+            case '?':
+                return -1;
+
+            default:
+                return -1;
         }
     }
 
@@ -125,12 +149,12 @@ int Soak_MainLoop(int (*Tick)(void))
             return 1;
 
 #ifdef __EMSCRIPTEN__
-    emscripten_sleep(1.f / SOAK_TICK_RATE);
+        emscripten_sleep(1.f / SOAK_TICK_RATE);
 #else
-    long nanos = SOAK_TICK_DT * 1e9;
-    struct timespec t = { .tv_sec = nanos / 999999999, .tv_nsec = nanos % 999999999 };
+        long nanos = SOAK_TICK_DT * 1e9;
+        struct timespec t = { .tv_sec = nanos / 999999999, .tv_nsec = nanos % 999999999 };
 
-    nanosleep(&t, &t);
+        nanosleep(&t, &t);
 #endif
     }
 
