@@ -63,4 +63,4 @@ Same thing for memory allocation and deallocation:
 #define NBN_Allocator malloc
 #define NBN_Deallocator free
 ```
-From here I suggest you look into the examples folder.
+From here I suggest you hop into the examples.
