@@ -39,8 +39,8 @@ typedef struct
     unsigned int messages_count;
     float packet_loss; /* 0 - 1 */
     float packet_duplication; /* 0 - 1 */
-    unsigned int ping; /* in ms */
-    unsigned int jitter; /* in ms */
+    float ping; /* in seconds */
+    float jitter; /* in seconds */
 } SoakOptions;
 
 typedef struct

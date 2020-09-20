@@ -99,11 +99,11 @@ int Soak_ReadCommandLine(int argc, char *argv[])
             break;
 
         case OPT_PING:
-            soak_options.ping = atoi(optarg);
+            soak_options.ping = atof(optarg);
             break;
 
         case OPT_JITTER:
-            soak_options.jitter = atoi(optarg);
+            soak_options.jitter = atof(optarg);
             break;
 
         case '?':
