@@ -671,7 +671,7 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *);
 typedef struct
 {
     NBN_Packet *packet;
-    uint32_t receiver_id;
+    NBN_Connection *receiver;
     double delay;
     double enqueued_at;
 } NBN_PacketSimulatorEntry;
@@ -699,7 +699,7 @@ typedef struct
 
 NBN_PacketSimulator *NBN_PacketSimulator_Create(void);
 void NBN_PacketSimulator_Destroy(NBN_PacketSimulator *);
-void NBN_PacketSimulator_EnqueuePacket(NBN_PacketSimulator *, NBN_Packet *, uint32_t);
+void NBN_PacketSimulator_EnqueuePacket(NBN_PacketSimulator *, NBN_Packet *, NBN_Connection *);
 void NBN_PacketSimulator_Start(NBN_PacketSimulator *);
 void NBN_PacketSimulator_Stop(NBN_PacketSimulator *);
 void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
@@ -2677,10 +2677,13 @@ static int NBN_Connection_SendPacket(NBN_Connection *connection, NBN_Packet *pac
 #ifdef NBN_GAME_SERVER
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
-    NBN_PacketSimulator_EnqueuePacket(game_server.endpoint.packet_simulator, packet, connection->id);
+    NBN_PacketSimulator_EnqueuePacket(game_server.endpoint.packet_simulator, packet, connection);
 
     return 0;
 #else
+    if (connection->is_stale || connection->is_closed)
+        return 0;
+
     return NBN_Driver_GServ_SendPacketTo(packet, connection->id);
 #endif
 
@@ -2689,7 +2692,7 @@ static int NBN_Connection_SendPacket(NBN_Connection *connection, NBN_Packet *pac
 #ifdef NBN_GAME_CLIENT
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
-    NBN_PacketSimulator_EnqueuePacket(game_client.endpoint.packet_simulator, packet, connection->id);
+    NBN_PacketSimulator_EnqueuePacket(game_client.endpoint.packet_simulator, packet, connection);
 
     return 0;
 #else
@@ -4177,7 +4180,7 @@ static void NBN_GServ_Driver_OnClientPacketReceived(NBN_Packet *packet)
 #define RAND_RATIO_BETWEEN(min, max) (((rand() % (int)((max * 100.f) - (min * 100.f) + 1)) + (min * 100.f)) / 100.f) 
 #define RAND_RATIO RAND_RATIO_BETWEEN(0, 1)
 
-static NBN_PacketSimulatorEntry *NBN_PacketSimulator_CreateEntry(NBN_PacketSimulator *, NBN_Packet *, uint32_t);
+static NBN_PacketSimulatorEntry *NBN_PacketSimulator_CreateEntry(NBN_PacketSimulator *, NBN_Packet *, NBN_Connection *);
 static void NBN_PacketSimulator_DestroyEntry(NBN_PacketSimulatorEntry *);
 
 #ifdef NBNET_WINDOWS
@@ -4186,7 +4189,7 @@ DWORD WINAPI NBN_PacketSimulator_Routine(LPVOID);
 static void *NBN_PacketSimulator_Routine(void *);
 #endif
 
-static int NBN_PacketSimulator_SendPacket(NBN_PacketSimulator *, NBN_Packet *, uint32_t);
+static int NBN_PacketSimulator_SendPacket(NBN_PacketSimulator *, NBN_Packet *, NBN_Connection *receiver);
 static unsigned int NBN_PacketSimulator_GetRandomDuplicatePacketCount(NBN_PacketSimulator *);
 
 NBN_PacketSimulator *NBN_PacketSimulator_Create(void)
@@ -4220,7 +4223,7 @@ void NBN_PacketSimulator_Destroy(NBN_PacketSimulator *packet_simulator)
 }
 
 void NBN_PacketSimulator_EnqueuePacket(
-        NBN_PacketSimulator *packet_simulator, NBN_Packet *packet, uint32_t receiver_id)
+        NBN_PacketSimulator *packet_simulator, NBN_Packet *packet, NBN_Connection *receiver)
 {
 #ifdef NBNET_WINDOWS
     WaitForSingleObject(packet_simulator->packets_queue_mutex, INFINITE);
@@ -4232,7 +4235,7 @@ void NBN_PacketSimulator_EnqueuePacket(
 
     memcpy(dup_packet, packet, sizeof(NBN_Packet));
 
-    NBN_PacketSimulatorEntry *entry = NBN_PacketSimulator_CreateEntry(packet_simulator, dup_packet, receiver_id);
+    NBN_PacketSimulatorEntry *entry = NBN_PacketSimulator_CreateEntry(packet_simulator, dup_packet, receiver);
 
     /*
        Compute jitter in range [ -jitter, +jitter ].
@@ -4282,12 +4285,12 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *packet_simulator, double t
 }
 
 static NBN_PacketSimulatorEntry *NBN_PacketSimulator_CreateEntry(
-        NBN_PacketSimulator *packet_simulator, NBN_Packet *packet, uint32_t receiver_id)
+        NBN_PacketSimulator *packet_simulator, NBN_Packet *packet, NBN_Connection *receiver)
 {
     NBN_PacketSimulatorEntry *entry = NBN_MemoryManager_Alloc(sizeof(NBN_PacketSimulatorEntry));
 
     entry->packet = packet;
-    entry->receiver_id = receiver_id;
+    entry->receiver = receiver;
     entry->delay = 0;
     entry->enqueued_at = packet_simulator->time;
 
@@ -4328,13 +4331,13 @@ static void *NBN_PacketSimulator_Routine(void *arg)
                 continue;
 
             NBN_List_Remove(packet_simulator->packets_queue, entry);
-            NBN_PacketSimulator_SendPacket(packet_simulator, entry->packet, entry->receiver_id);
+            NBN_PacketSimulator_SendPacket(packet_simulator, entry->packet, entry->receiver);
 
             for (unsigned int i = 0; i < NBN_PacketSimulator_GetRandomDuplicatePacketCount(packet_simulator); i++)
             {
                 NBN_LogDebug("Duplicate packet %d (count: %d)", entry->packet->header.seq_number, i + 1);
 
-                NBN_PacketSimulator_SendPacket(packet_simulator, entry->packet, entry->receiver_id);
+                NBN_PacketSimulator_SendPacket(packet_simulator, entry->packet, entry->receiver);
             }
 
             NBN_PacketSimulator_DestroyEntry(entry);
@@ -4355,7 +4358,7 @@ static void *NBN_PacketSimulator_Routine(void *arg)
 }
 
 static int NBN_PacketSimulator_SendPacket(
-        NBN_PacketSimulator *packet_simulator, NBN_Packet *packet, uint32_t receiver_id)
+        NBN_PacketSimulator *packet_simulator, NBN_Packet *packet, NBN_Connection *receiver)
 {
     if (RAND_RATIO < packet_simulator->packet_loss_ratio)
     {
@@ -4365,13 +4368,16 @@ static int NBN_PacketSimulator_SendPacket(
     }
 
 #ifdef NBN_GAME_CLIENT
-    (void)receiver_id;
+    (void)receiver;
 
     return NBN_Driver_GCli_SendPacket(packet);
 #endif
 
 #ifdef NBN_GAME_SERVER
-    return NBN_Driver_GServ_SendPacketTo(packet, receiver_id);
+    if (receiver->is_stale || receiver->is_closed)
+        return 0;
+
+    return NBN_Driver_GServ_SendPacketTo(packet, receiver->id);
 #endif
 
     return NBN_ERROR;
