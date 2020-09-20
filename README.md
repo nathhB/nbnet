@@ -3,6 +3,8 @@
 nbnet is a single header C (C99) library to implement client-server network code for games, it is more precisely designed for fast paced action games.
 nbnet is based on this [great series of articles](https://gafferongames.com/) by Glenn Fiedler.
 
+**Disclaimer**: nbnet is in the early stages of his development and is first and foremost a learning project of mine as I explore online game development. If you are looking for a profesionnal production ready library, this is not the one.
+
 The library currently implements the following features:
 
 - Connection management
