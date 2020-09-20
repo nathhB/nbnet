@@ -33,7 +33,7 @@ freely, subject to the following restrictions:
 
 #ifdef NBNET_IMPL
 
-#include <stdlib.h>
+#include <stdio.h>
 #include <errno.h>
 #include <assert.h>
 
