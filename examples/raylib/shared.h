@@ -1,22 +1,22 @@
 /*
 
-Copyright (C) 2020 BIAGINI Nathan
+   Copyright (C) 2020 BIAGINI Nathan
 
-This software is provided 'as-is', without any express or implied
-warranty.  In no event will the authors be held liable for any damages
-arising from the use of this software.
+   This software is provided 'as-is', without any express or implied
+   warranty.  In no event will the authors be held liable for any damages
+   arising from the use of this software.
 
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
+   Permission is granted to anyone to use this software for any purpose,
+   including commercial applications, and to alter it and redistribute it
+   freely, subject to the following restrictions:
 
-1. The origin of this software must not be misrepresented; you must not
+   1. The origin of this software must not be misrepresented; you must not
    claim that you wrote the original software. If you use this software
    in a product, an acknowledgment in the product documentation would be
    appreciated but is not required.
-2. Altered source versions must be plainly marked as such, and must not be
+   2. Altered source versions must be plainly marked as such, and must not be
    misrepresented as being the original software.
-3. This notice may not be removed or altered from any source distribution.
+   3. This notice may not be removed or altered from any source distribution.
 
 */
 
@@ -28,12 +28,11 @@ freely, subject to the following restrictions:
 #if defined(_WIN32) || defined(_WIN64)
 
 /*
-    The following defines are meant to avoid conflicts between raylib and windows.h.
+ * The following defines are meant to avoid conflicts between raylib and windows.h
+ * https://github.com/raysan5/raylib/issues/857
+ */
 
-    https://github.com/raysan5/raylib/issues/857
-*/
-
-/* If defined, the following flags inhibit definition of the indicated items.*/
+// If defined, the following flags inhibit definition of the indicated items
 #define NOGDICAPMASKS     // CC_*, LC_*, PC_*, CP_*, TC_*, RC_
 #define NOVIRTUALKEYCODES // VK_*
 #define NOWINMESSAGES     // WM_*, EM_*, LB_*, CB_*
@@ -74,85 +73,60 @@ freely, subject to the following restrictions:
 #define NODEFERWINDOWPOS  // DeferWindowPos routines
 #define NOMCX             // Modem Configuration Extensions
 
-/* Type required before windows.h inclusion  */
+// Type required before windows.h inclusion
 typedef struct tagMSG *LPMSG;
 
-#include <winsock2.h> /* Has to be included before windows.h */
+#include <winsock2.h> // Has to be included before windows.h
 #include <windows.h>
 
-#endif /* WINDOWS */
+#endif // WINDOWS
 
 #define RAYLIB_EXAMPLE_PROTOCOL_NAME "raylib-example"
 #define RAYLIB_EXAMPLE_PORT 42042
 
-/* nbnet logging */
+// nbnet logging, use raylib logging
 
 #define NBN_LogInfo(...) TraceLog(LOG_INFO, __VA_ARGS__)
 
-/* TraceLog with LOG_ERROR seems to exit the application, i do not want that so i use LOG_WARNING */
-#define NBN_LogError(...) TraceLog(LOG_WARNING, __VA_ARGS__)
+#define NBN_LogError(...) TraceLog(LOG_ERROR, __VA_ARGS__)
 #define NBN_LogWarning(...) TraceLog(LOG_WARNING, __VA_ARGS__)
 #define NBN_LogDebug(...) TraceLog(LOG_DEBUG, __VA_ARGS__)
 #define NBN_LogTrace(...) TraceLog(LOG_TRACE, __VA_ARGS__)
 
+#define NBN_Allocator malloc // nbnet allocation function
+#define NBN_Deallocator free // nbnet deallocation function
+
 #include "../../nbnet.h"
 #include "../../net_drivers/udp.h"
 
-/*
-    Simulation tick rate.
-*/
-#define TICK_RATE 60
+#define TICK_RATE 60 // Simulation tick rate
 
-/*
-    Used for client window size but also to cap serialized position values inside messages
-*/
+// Window size, used to display window but also to cap the serialized position values within messages
 #define GAME_WIDTH 800
 #define GAME_HEIGHT 600
 
-/*
-    Maximum and minimum values of networked client float value
-*/
-#define MIN_FLOAT_VAL -5
-#define MAX_FLOAT_VAL 5
+#define MIN_FLOAT_VAL -5 // Minimum value of networked client float value
+#define MAX_FLOAT_VAL 5 // Maximum value of networked client float value
 
-/* Max number of connected clients */
+// Maximum number of connected clients at a time
 #define MAX_CLIENTS 4
 
-/* Max number of client colors */
+// Max number of colors for client to switch between
 #define MAX_COLORS 7
 
-/*
-    A code passed by the server when closing a client connection due to
-    being full (max client count reached).
-*/
+// A code passed by the server when closing a client connection due to being full (max client count reached)
 #define SERVER_FULL_CODE 42
 
-/*
-    We are going to use four different messages:
-
-    1.  SpawnMessage: a reliable message that will be sent by the server to the client when it connects
-    2.  ChangeColorMessage: a reliable message that will be sent by the client to the server when it
-        wants to change his color
-    3.  UpdatePositionMessage: an unreliable message that will be sent by the client every frame to
-        update his current position.
-    4.  GameStateMessage: an unreliable message that will be sent by the server to all clients with information
-        about the latest states of each client (position and color).
-
-    The first two messages are *important* messages that need to be received, therefore they will be channeled into the 
-    reliable channel. On the other hand, the last two messages are time critical and sent at a very high rate which means
-    we do not care about occasionally losing one of those, therefore it will be channelled into the unreliable channel.
-*/
-
-/* Enum for message ids */
+// Message ids
 enum
 {
     SPAWN_MESSAGE,
     CHANGE_COLOR_MESSAGE,
-    UPDATE_POSITION_MESSAGE,
+    UPDATE_STATE_MESSAGE,
     GAME_STATE_MESSAGE
 };
 
-/* Message types */
+// Messages
 
 typedef struct
 {
@@ -166,9 +140,9 @@ typedef struct
     int x;
     int y;
     float val;
-} UpdatePositionMessage;
+} UpdateStateMessage;
 
-/* Enum for client colors used for ChangeColorMessage and GameStateMessage */
+// Client colors used for ChangeColorMessage and GameStateMessage messages
 typedef enum
 {
     CLI_RED,
@@ -185,13 +159,14 @@ typedef struct
     ClientColor color;
 } ChangeColorMessage;
 
+// Client state, represents a client over the network
 typedef struct
 {
     uint32_t client_id;
-    ClientColor color;
     int x;
     int y;
     float val;
+    ClientColor color;
 } ClientState;
 
 typedef struct
@@ -200,53 +175,35 @@ typedef struct
     ClientState client_states[MAX_CLIENTS];
 } GameStateMessage;
 
-/*
-    Message builders.
+// Store all options from the command line
+typedef struct
+{
+    float packet_loss;
+    float packet_duplication;
+    float ping;
+    float jitter;
+} Options;
 
-    Each message needs to have a builder attached.
-    
-    A message builder is a function that returns a pointer to a message.
-    A simple message builder implementation is to use malloc to allocate memory for the message and return
-    the pointer to that memory region.
-*/
+// Message builders
 SpawnMessage *SpawnMessage_Create(void);
 ChangeColorMessage *ChangeColorMessage_Create(void);
-UpdatePositionMessage *UpdatePositionMessage_Create(void);
+UpdateStateMessage *UpdateStateMessage_Create(void);
 GameStateMessage* GameStateMessage_Create(void);
 
-/*
-    Message serializers.
-
-    Each message needs to have a serializer attached (see RegisterMessages function definition)
-
-    A message serializer is a function that takes two parameters:
-        - the message to serialize
-        - a nbnet stream
-
-    You don't have to worry about the stream parameter but *it has to be named "stream"* due
-    to how serialization macros are defined.
-    A message serializer has to return 0 upon success, you don't have to worry about handling serialization errors
-    since it is done by the serialization macros.
-*/
+// Message serializers
 int SpawnMessage_Serialize(SpawnMessage *, NBN_Stream *);
 int ChangeColorMessage_Serialize(ChangeColorMessage *, NBN_Stream *);
-int UpdatePositionMessage_Serialize(UpdatePositionMessage *, NBN_Stream *);
+int UpdateStateMessage_Serialize(UpdateStateMessage *, NBN_Stream *);
 int GameStateMessage_Serialize(GameStateMessage *, NBN_Stream *);
 
-/*
-    Message destructors.
-
-    Each message needs to have a destructor attached.
-    
-    A message destructor is a function that takes a pointer to previously built message and has to release
-    the resources that were allocated. If you opted for a simple malloc implementation in your message builder
-    you can simply call free in the message destructor.
-*/
+// Message destructors
 void SpawnMessage_Destroy(SpawnMessage *);
 void ChangeColorMessage_Destroy(ChangeColorMessage *);
-void UpdatePositionMessage_Destroy(UpdatePositionMessage *);
+void UpdateStateMessage_Destroy(UpdateStateMessage *);
 void GameStateMessage_Destroy(GameStateMessage *);
 
 void RegisterMessages(void);
+int ReadCommandLine(int, char *[]);
+Options GetOptions(void);
 
 #endif /* RAYLIB_EXAMPLE_SHARED_H */
