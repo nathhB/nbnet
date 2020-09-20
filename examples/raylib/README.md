@@ -8,6 +8,8 @@ Each client is represented as a colored square and can perform following actions
 - switch color (using the spacebar)
 - increase or decrease a float value (used to demonstrate float serialization)
 
+![Screenshot](screenshot.png)
+
 Each client is responsible of sending updates about his own state to the server.
 The server gather states from all clients and store them.
 Every tick, the server pack the latest received client states in a message that is then broadcasted to all clients.
