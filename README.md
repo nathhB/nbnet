@@ -20,7 +20,7 @@ What is not *yet* implemented but will be in the future:
 
 nbnet does not directly implement any low level "transport" code and rely on the concept of *drivers*. A driver is a set of function definitions that live outside nbnet header and provide a transport layer implementation that will be used by the library to send and receive packets.
 
-nbnet currently comes with a single UDP driver that you can use for desktop games. I have plans for a WebRTC driver so that the library could be used for browser games.
+As of today nbnet only comes with a UDP driver that can be used for desktop games. I have plans to add a WebRTC driver to support browser games.
 
 ## How to use
 
