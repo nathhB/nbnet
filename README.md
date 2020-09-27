@@ -24,6 +24,14 @@ nbnet does not directly implement any low level "transport" code and rely on the
 
 As of today nbnet only comes with a UDP driver that can be used for desktop games. I have plans to add a WebRTC driver to support browser games.
 
+## Portability
+
+nbnet is developed with portability in mind. I tested (and will continue to do so) the library on the following systems:
+
+- Windows
+- OSX
+- Linux
+
 ## How to use
 
 In *exactly one* of your source file do:
