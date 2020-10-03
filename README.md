@@ -27,6 +27,8 @@ nbnet comes with two drivers:
 - UDP : work with a single UDP socket, designed for desktop games
 - WebRTC : work with a single unreliable/unordered data channel, designed for web browser games
 
+You can see it in action [in this video](https://www.youtube.com/watch?v=BJl_XN3QJhQ&ab_channel=NathanBIAGINI).
+
 ## Portability
 
 nbnet is developed with portability in mind. I tested (and will continue to do so) the library on the following systems:
