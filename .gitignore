@@ -3,5 +3,8 @@ tests/build
 examples/raylib/build
 examples/echo/client
 examples/echo/server
+examples/echo/*.js
+examples/echo/*.wasm
 .vscode
 .ccls
+**/node_modules
