@@ -95,7 +95,9 @@ do is add:
 
 The nbnet JS API uses a bunch of async functions that you need to let emscripten know about:
 
-`-s ASYNCIFY` and `-s ASYNCIFY_IMPORTS="[\"__js_game_client_start\", \"__js_game_client_close\", \"__js_game_server_start\\"]"`
+`-s ASYNCIFY`
+
+`-s ASYNCIFY_IMPORTS="[\"__js_game_client_start\", \"__js_game_client_close\", \"__js_game_server_start\\"]"`
 
 nbnet connection simulation run in a separate thread so if you want to use it you need to compile with:
 
