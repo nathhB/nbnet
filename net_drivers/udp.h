@@ -27,8 +27,7 @@ freely, subject to the following restrictions:
 
     How to use:
 
-        Include this header *once* after including nbnet header in the same file where you defined
-        the NBNET_IMPL macro.
+        Include this header *once* after the nbnet header in the same file where you defined the NBNET_IMPL macro.
 */
 
 #ifdef NBNET_IMPL
