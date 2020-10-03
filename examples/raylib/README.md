@@ -46,7 +46,9 @@ Information about the network will be displayed in the bottom right of the clien
 To compile the example for the web:
 
 `mkdir build`
+
 `cd build`
+
 `emcmake cmake -DRAYLIB_LIBRARY_PATH=<path to libraylib.bc file> -DRAYLIB_INCLUDE_PATH=<path to raylib headers>`
 
 To run the server:
