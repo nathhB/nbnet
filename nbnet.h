@@ -2704,7 +2704,8 @@ static bool NBN_Connection_IsPacketReceived(NBN_Connection *connection, uint16_t
 
 static int NBN_Connection_SendPacket(NBN_Connection *connection, NBN_Packet *packet)
 {
-    NBN_LogTrace("Send packet %d (messages count: %d)", packet->header.seq_number, packet->header.messages_count);
+    NBN_LogTrace("Send packet %d to client %d (messages count: %d)",
+            packet->header.seq_number, connection->id, packet->header.messages_count);
 
 #ifdef NBN_GAME_SERVER
 
@@ -3909,13 +3910,14 @@ void NBN_GameServer_CloseClientWithCode(NBN_Connection *client, int code)
 
     NBN_Connection_ClearMessageQueue(client->send_queue);
 
-    NBN_ClientClosedMessage *msg = (NBN_ClientClosedMessage *)NBN_GameServer_CreateReliableMessage(
-            NBN_CLIENT_CLOSED_MESSAGE_TYPE);
+    NBN_ClientClosedMessage *msg = NBN_GameServer_CreateReliableMessage(NBN_CLIENT_CLOSED_MESSAGE_TYPE);
 
     msg->code = code;
 
     /* Do not call NBN_GameServer_SendTo on purpoise to avoid a potential infinite loop if the send fails */
     NBN_Connection_EnqueueOutgoingMessage(client);
+
+    NBN_LogDebug("Enqueued close message for client %d (code: %d)", client->id, code);
 
     client->is_closed = true;
 }
