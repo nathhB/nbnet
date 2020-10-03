@@ -953,6 +953,7 @@ void NBN_GameServer_RejectConnectionWithCode(int);
 void NBN_GameServer_RejectConnection(void);
 NBN_Connection *NBN_GameServer_GetIncomingConnection(void);
 uint32_t NBN_GameServer_GetDisconnectedClientId(void);
+NBN_Connection *NBN_GameServer_FindClientById(uint32_t);
 NBN_MessageInfo NBN_GameServer_GetReceivedMessageInfo(void);
 NBN_GameServerStats NBN_GameServer_GetStats(void);
 
@@ -4027,6 +4028,23 @@ uint32_t NBN_GameServer_GetDisconnectedClientId(void)
     assert(last_event_type == NBN_CLIENT_DISCONNECTED);
 
     return last_event_client->id;
+}
+
+NBN_Connection *NBN_GameServer_FindClientById(uint32_t client_id)
+{
+    NBN_ListNode *current_node = game_server.clients->head;
+
+    while (current_node)
+    {
+        NBN_Connection *client = current_node->data;
+
+        if (client->id == client_id)
+            return client;
+
+        current_node = current_node->next;
+    }
+
+    return NULL;
 }
 
 NBN_MessageInfo NBN_GameServer_GetReceivedMessageInfo(void)
