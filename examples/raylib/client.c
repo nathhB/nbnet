@@ -21,7 +21,13 @@
 
 #include <stdio.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
+
 #include "shared.h"
+
+#define TARGET_FPS 100
 
 static bool connected = false; // Connected to the server
 static bool disconnected = false; // Got disconnected from the server
@@ -62,14 +68,14 @@ static void HandleDisconnection()
     server_close_code = code;
 }
 
-static void HandleSpawnMessage(SpawnMessage *msg)
+static void SpawnLocalClient(int x, int y, uint32_t client_id)
 {
-    TraceLog(LOG_INFO, "Received spawn message, position: (%d, %d), client id: %d", msg->x, msg->y, msg->client_id);
+    TraceLog(LOG_INFO, "Received spawn message, position: (%d, %d), client id: %d", x, y, client_id);
 
     // Update the local client state based on spawn info sent by the server
-    local_client_state.client_id = msg->client_id;
-    local_client_state.x = msg->x;
-    local_client_state.y = msg->y;
+    local_client_state.client_id = client_id;
+    local_client_state.x = x;
+    local_client_state.y = y;
 
     spawned = true;
 }
@@ -221,12 +227,7 @@ static void HandleReceivedMessage(void)
 
     switch (msg_info.type)
     {
-        // The server has accepted our connection and has sent spawning info
-        case SPAWN_MESSAGE: 
-            HandleSpawnMessage(msg_info.data);
-            break;
-
-            // We received the latest game state from the server
+        // We received the latest game state from the server
         case GAME_STATE_MESSAGE:
             HandleGameStateMessage(msg_info.data);
             break;
@@ -239,6 +240,11 @@ static void HandleGameClientEvent(int ev)
     {
         case NBN_CONNECTED:
             // We are connected to the server
+            SpawnLocalClient(
+                    NBN_GameClient_AcceptData_ReadUint(),
+                    NBN_GameClient_AcceptData_ReadUint(),
+                    NBN_GameClient_AcceptData_ReadUint());
+
             connected = true;
             break;
 
@@ -416,20 +422,84 @@ void Draw(void)
     EndDrawing();
 }
 
+static double tick_dt = 1.0 / TICK_RATE; // Tick delta time (in seconds)
+static double acc = 0;
+
+void UpdateAndDraw(void)
+{
+    // Very basic fixed timestep implementation.
+    // Target FPS is either 100 (in desktop) or whatever the browser frame rate is (in web) but the simulation runs at
+    // TICK_RATE ticks per second.
+    //
+    // We keep track of accumulated times and simulates as many tick as we can using that time
+
+    acc += GetFrameTime(); // Accumulates time
+
+    // Simulates as many ticks as we can
+    while (acc >= tick_dt)
+    {
+        NBN_GameClient_AddTime(tick_dt);
+
+        int ev;
+
+        while ((ev = NBN_GameClient_Poll()) != NBN_NO_EVENT)
+        {
+            if (ev < 0)
+            {
+                TraceLog(LOG_WARNING, "An occured while polling network events. Exit");
+
+                break;
+            }
+
+            HandleGameClientEvent(ev);
+        }
+
+        if (connected && !disconnected)
+        {
+            if (Update() < 0)
+                break;
+        }
+
+        if (!disconnected)
+        {
+            if (NBN_GameClient_SendPackets() < 0)
+            {
+                TraceLog(LOG_ERROR, "An occured while flushing the send queue. Exit");
+
+                break;
+            }
+        }
+
+        acc -= tick_dt; // Consumes time
+    } 
+
+    Draw();
+}
+
 int main(int argc, char *argv[])
 {
-    // Read command line arguments
-    if (ReadCommandLine(argc, argv))
+    // Read command line arguments expect when we are running in a web browser.
+    // When running in web browser we need another way to provide arguments (TODO)
+#ifdef __EMSCRIPTEN__
+    if (ReadCommandLine(argc, argv) < 0)
     {
         printf("Usage: client [--packet_loss=<value>] [--packet_duplication=<value>] [--ping=<value>] \
-                [--jitter=<value>]\n");
+[--jitter=<value>]\n");
 
         return 1;
     }
+#else
+    (void)argc;
+    (void)argv;
+#endif
 
     SetTraceLogLevel(LOG_DEBUG);
     InitWindow(GAME_WIDTH, GAME_HEIGHT, "raylib client");
-    SetTargetFPS(100);
+
+    // Set target FPS to 100 when we are not running in a web browser
+#ifndef __EMSCRIPTEN__
+    SetTargetFPS(TARGET_FPS);
+#endif
 
     // Init client with a protocol name (must be the same than the one used by the server), the server ip address
     // and port
@@ -449,63 +519,34 @@ int main(int argc, char *argv[])
     {
         TraceLog(LOG_WARNING, "Game client failed to start. Exit");
 
+        // Deinit the client
+        NBN_GameClient_Deinit();
+
         return 1;
     }
 
-    float tick_dt = 1.f / TICK_RATE; // Tick delta time (in seconds)
-    double acc = 0;
-
-    while (!WindowShouldClose())
+    // Main loop
+#ifdef __EMSCRIPTEN__
+    while (true)
     {
-        // Very basic fixed timestep implementation
-        // Target FPS is 100 but the simulation runs at TICK_RATE ticks per second
-        // We keep track of accumulated times and simulates as many tick as we can using that time
+        UpdateAndDraw();
 
-        acc += GetFrameTime(); // Accumulates time
-
-        // Simulates as many ticks as we can
-        while (acc >= tick_dt)
-        {
-            NBN_GameClient_AddTime(tick_dt);
-
-            int ev;
-
-            while ((ev = NBN_GameClient_Poll()) != NBN_NO_EVENT)
-            {
-                if (ev < 0)
-                {
-                    TraceLog(LOG_WARNING, "An occured while polling network events. Exit");
-
-                    break;
-                }
-
-                HandleGameClientEvent(ev);
-            }
-
-            if (connected && !disconnected)
-            {
-                if (Update() < 0)
-                    break;
-            }
-
-            if (!disconnected)
-            {
-                if (NBN_GameClient_SendPackets() < 0)
-                {
-                    TraceLog(LOG_ERROR, "An occured while flushing the send queue. Exit");
-
-                    break;
-                }
-            }
-
-            acc -= tick_dt; // Consumes time
-        } 
-
-        Draw();
+        // Since we don't set any target FPS when running in a web browser we need to sleep for the correct amount
+        // of time to achieve the targetted FPS
+        emscripten_sleep(1000 / TARGET_FPS);
     }
+#else
+    while (!WindowShouldClose())
+    { 
+        UpdateAndDraw();
+    }
+#endif
 
     // Stop the client
     NBN_GameClient_Stop();
+
+    // Deinit the client
+    NBN_GameClient_Deinit();
 
     CloseWindow();
 

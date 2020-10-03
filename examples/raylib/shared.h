@@ -97,7 +97,12 @@ typedef struct tagMSG *LPMSG;
 #define NBN_Deallocator free // nbnet deallocation function
 
 #include "../../nbnet.h"
+
+#ifdef __EMSCRIPTEN__
+#include "../../net_drivers/webrtc.h"
+#else
 #include "../../net_drivers/udp.h"
+#endif
 
 #define TICK_RATE 60 // Simulation tick rate
 
@@ -120,20 +125,12 @@ typedef struct tagMSG *LPMSG;
 // Message ids
 enum
 {
-    SPAWN_MESSAGE,
     CHANGE_COLOR_MESSAGE,
     UPDATE_STATE_MESSAGE,
     GAME_STATE_MESSAGE
 };
 
 // Messages
-
-typedef struct
-{
-    uint32_t client_id;
-    int x;
-    int y;
-} SpawnMessage;
 
 typedef struct
 {
@@ -184,26 +181,31 @@ typedef struct
     float jitter;
 } Options;
 
-// Message builders
-SpawnMessage *SpawnMessage_Create(void);
-ChangeColorMessage *ChangeColorMessage_Create(void);
-UpdateStateMessage *UpdateStateMessage_Create(void);
-GameStateMessage* GameStateMessage_Create(void);
-
-// Message serializers
-int SpawnMessage_Serialize(SpawnMessage *, NBN_Stream *);
-int ChangeColorMessage_Serialize(ChangeColorMessage *, NBN_Stream *);
-int UpdateStateMessage_Serialize(UpdateStateMessage *, NBN_Stream *);
-int GameStateMessage_Serialize(GameStateMessage *, NBN_Stream *);
-
-// Message destructors
-void SpawnMessage_Destroy(SpawnMessage *);
-void ChangeColorMessage_Destroy(ChangeColorMessage *);
-void UpdateStateMessage_Destroy(UpdateStateMessage *);
-void GameStateMessage_Destroy(GameStateMessage *);
-
 void RegisterMessages(void);
 int ReadCommandLine(int, char *[]);
 Options GetOptions(void);
+
+BEGIN_MESSAGE(ChangeColorMessage)
+    SERIALIZE_UINT(msg->color, 0, MAX_COLORS - 1);
+END_MESSAGE
+
+BEGIN_MESSAGE(UpdateStateMessage)
+    SERIALIZE_UINT(msg->x, 0, GAME_WIDTH);
+    SERIALIZE_UINT(msg->y, 0, GAME_HEIGHT);
+    SERIALIZE_FLOAT(msg->val, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
+END_MESSAGE
+
+BEGIN_MESSAGE(GameStateMessage)
+    SERIALIZE_UINT(msg->client_count, 0, MAX_CLIENTS);
+
+    for (unsigned int i = 0; i < msg->client_count; i++)
+    {
+        SERIALIZE_UINT(msg->client_states[i].client_id, 0, UINT_MAX);
+        SERIALIZE_UINT(msg->client_states[i].color, 0, MAX_COLORS - 1);
+        SERIALIZE_UINT(msg->client_states[i].x, 0, GAME_WIDTH);
+        SERIALIZE_UINT(msg->client_states[i].y, 0, GAME_HEIGHT);
+        SERIALIZE_FLOAT(msg->client_states[i].val, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
+    }
+END_MESSAGE
 
 #endif /* RAYLIB_EXAMPLE_SHARED_H */
