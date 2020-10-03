@@ -1,0 +1,13 @@
+{
+  "name": "nbnet",
+  "version": "0.0.1",
+  "description": "WebRTC driver for the nbnet library",
+  "author": "BIAGINI Nathan",
+  "license": "MIT",
+  "main": "js/index.js",
+  "dependencies": {
+    "websocket": "^1.0.31",
+    "winston": "^3.2.1",
+    "wrtc": "^0.4.2"
+  }
+}
