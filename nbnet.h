@@ -2714,7 +2714,7 @@ static int NBN_Connection_SendPacket(NBN_Connection *connection, NBN_Packet *pac
 
     return 0;
 #else
-    if (connection->is_stale || connection->is_closed)
+    if (connection->is_stale)
         return 0;
 
     return NBN_Driver_GServ_SendPacketTo(packet, connection->id);
@@ -4505,7 +4505,7 @@ static int NBN_PacketSimulator_SendPacket(
 #endif
 
 #ifdef NBN_GAME_SERVER
-    if (receiver->is_stale || receiver->is_closed)
+    if (receiver->is_stale)
         return 0;
 
     return NBN_Driver_GServ_SendPacketTo(packet, receiver->id);
