@@ -874,6 +874,7 @@ typedef struct
 extern NBN_GameClient game_client;
 
 void NBN_GameClient_Init(const char *, const char *, uint16_t);
+void NBN_GameClient_Deinit(void);
 int NBN_GameClient_Start(void);
 void NBN_GameClient_Stop(void);
 void NBN_GameClient_AddTime(double);
@@ -932,6 +933,7 @@ typedef struct
 extern NBN_GameServer game_server;
 
 void NBN_GameServer_Init(const char *, uint16_t);
+void NBN_GameServer_Deinit(void);
 int NBN_GameServer_Start(void);
 void NBN_GameServer_Stop(void);
 void NBN_GameServer_AddTime(double);
@@ -3415,6 +3417,12 @@ void NBN_GameClient_Init(const char *protocol_name, const char *ip_address, uint
             (NBN_Config){.protocol_name = protocol_name, .ip_address = ip_address, .port = port});
 }
 
+void NBN_GameClient_Deinit(void)
+{
+    NBN_Endpoint_Deinit(&game_client.endpoint);
+    NBN_Connection_Destroy(game_client.server_connection);
+}
+
 int NBN_GameClient_Start(void)
 {
     NBN_Config config = game_client.endpoint.config;
@@ -3431,8 +3439,6 @@ void NBN_GameClient_Stop(void)
 {
     NBN_Driver_GCli_Stop();
     NBN_GameClient_Poll(); /* Poll one last time to clear remaining events */
-    NBN_Endpoint_Deinit(&game_client.endpoint);
-    NBN_Connection_Destroy(game_client.server_connection);
 
     NBN_LogInfo("Stopped");
 }
@@ -3765,6 +3771,12 @@ void NBN_GameServer_Init(const char *protocol_name, uint16_t port)
     game_server.clients = NBN_List_Create();
 }
 
+void NBN_GameServer_Deinit(void)
+{
+    NBN_Endpoint_Deinit(&game_server.endpoint);
+    NBN_List_Destroy(game_server.clients, true, (NBN_List_FreeItemFunc)NBN_Connection_Destroy);
+}
+
 int NBN_GameServer_Start(void)
 {
     NBN_Config config = game_server.endpoint.config;
@@ -3785,8 +3797,6 @@ void NBN_GameServer_Stop(void)
 {
     NBN_Driver_GServ_Stop();
     NBN_GameServer_Poll(); /* Poll one last time to clear remaining events */
-    NBN_Endpoint_Deinit(&game_server.endpoint);
-    NBN_List_Destroy(game_server.clients, true, (NBN_List_FreeItemFunc)NBN_Connection_Destroy);
 
     NBN_LogInfo("Stopped");
 }
