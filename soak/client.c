@@ -26,10 +26,13 @@
 
 #include "soak.h"
 
-/* nbnet UDP driver implementation */
-#define NBN_DRIVER_UDP_IMPL
-
+#ifdef __EMSCRIPTEN__
+/* Use WebRTC driver */
+#include "../net_drivers/webrtc.h"
+#else
+/* Use UDP driver */
 #include "../net_drivers/udp.h"
+#endif
 
 static unsigned int sent_messages_count = 0;
 static unsigned int next_msg_id = 1;
@@ -118,7 +121,7 @@ static int HandleReceivedSoakMessage(SoakMessage *msg)
         Soak_LogInfo("Received all soak message echoes");
         Soak_Stop();
 
-        return -1;
+        return SOAK_DONE;
     }
 
     return 0;
@@ -131,9 +134,7 @@ static int HandleReceivedMessage(void)
     switch (msg.type)
     {
         case SOAK_MESSAGE:
-            if (HandleReceivedSoakMessage((SoakMessage *)msg.data) < 0)
-                return -1;
-            break;
+            return HandleReceivedSoakMessage((SoakMessage *)msg.data);
 
         default:
             Soak_LogError("Received unexpected message (type: %d)", msg.type);
@@ -160,11 +161,12 @@ static int Tick(void)
             case NBN_DISCONNECTED:
                 connected = false;
 
-                Soak_LogInfo("Disconnected");
+                Soak_LogInfo("Disconnected from server (code: %d)", NBN_GameClient_GetServerCloseCode());
                 Soak_Stop();
                 return 0;
 
             case NBN_CONNECTED: 
+                Soak_LogInfo("Connected to server");
                 connected = true;
                 break;
 
@@ -193,11 +195,13 @@ static int Tick(void)
 
 int main(int argc, char *argv[])
 {
+    Soak_SetLogLevel(LOG_TRACE);
+
     NBN_GameClient_Init(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT);
 
     if (Soak_Init(argc, argv) < 0)
     {
-        NBN_GameClient_Stop();
+        NBN_GameClient_Deinit();
 
         return 1;
     }
@@ -213,13 +217,16 @@ int main(int argc, char *argv[])
     {
         Soak_LogError("Failed to start game client. Exit");
 
+        NBN_GameClient_Deinit();
+
+#ifdef __EMSCRIPTEN__
+        emscripten_force_exit(1);
+#else
         return 1;
+#endif
     } 
 
-    int ret = Soak_MainLoop(Tick);
-
-    NBN_GameClient_Stop();
-    Soak_Deinit();
+    int ret = Soak_MainLoop(Tick); 
 
     for (int i = 0; i < Soak_GetOptions().messages_count; i++)
     {
@@ -229,5 +236,13 @@ int main(int argc, char *argv[])
 
     free(messages_data);
 
+    NBN_GameClient_Stop();
+    Soak_Deinit();
+    NBN_GameClient_Deinit();
+
+#ifdef __EMSCRIPTEN__
+    emscripten_force_exit(ret);
+#else
     return ret;
+#endif
 }

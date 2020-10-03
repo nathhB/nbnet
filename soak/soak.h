@@ -56,7 +56,9 @@
 #define SOAK_MESSAGE_MAX_DATA_LENGTH 4096
 #define SOAK_MESSAGE 0
 #define SOAK_SEED time(NULL)
+#define SOAK_DONE 1
 #define SOAK_MAX_CLIENTS 4
+#define SOAK_SERVER_FULL_CODE 42
 
 typedef struct
 {
@@ -74,15 +76,18 @@ typedef struct
     uint8_t data[SOAK_MESSAGE_MAX_DATA_LENGTH];
 } SoakMessage;
 
+BEGIN_MESSAGE(SoakMessage)
+    SERIALIZE_UINT(msg->id, 0, UINT32_MAX);
+    SERIALIZE_UINT(msg->data_length, 1, SOAK_MESSAGE_MAX_DATA_LENGTH);
+    SERIALIZE_BYTES(msg->data, msg->data_length);
+END_MESSAGE
+
 int Soak_Init(int, char *[]);
 void Soak_Deinit(void);
 int Soak_ReadCommandLine(int, char *[]);
 int Soak_MainLoop(int (*)(void));
 void Soak_Stop(void);
 SoakOptions Soak_GetOptions(void);
-SoakMessage *SoakMessage_Create(void);
-void SoakMessage_Destroy(SoakMessage *);
-int SoakMessage_Serialize(SoakMessage*, NBN_Stream *);
 void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *, NBN_Message *);
 
 #endif // SOAK_H_INCLUDED

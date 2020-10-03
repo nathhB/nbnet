@@ -53,7 +53,7 @@ int Soak_Init(int argc, char *argv[])
     if (Soak_ReadCommandLine(argc, argv) < 0)
         return -1;
 
-    NBN_RegisterMessage(SOAK_MESSAGE, SoakMessage_Create, SoakMessage_Serialize, SoakMessage_Destroy);
+    NBN_RegisterMessage(SOAK_MESSAGE, SoakMessage);
 
     /* Packet simulator configuration */
     NBN_Debug_SetPing(soak_options.ping);
@@ -88,7 +88,7 @@ int Soak_ReadCommandLine(int argc, char *argv[])
     if (argc < 2)
     {
         printf("Usage: client --message_count=<value> [--packet_loss=<value>] \
-                [--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
+[--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
 
         return -1;
     }
@@ -145,11 +145,16 @@ int Soak_MainLoop(int (*Tick)(void))
 {
     while (running)
     {
-        if (Tick() < 0)
+        int ret = Tick();
+
+        if (ret < 0) // Error
             return 1;
 
+        if (ret == SOAK_DONE) // All soak messages have been received
+            return 0;
+
 #ifdef __EMSCRIPTEN__
-        emscripten_sleep(1.f / SOAK_TICK_RATE);
+        emscripten_sleep(SOAK_TICK_DT * 1000);
 #else
         long nanos = SOAK_TICK_DT * 1e9;
         struct timespec t = { .tv_sec = nanos / 999999999, .tv_nsec = nanos % 999999999 };
@@ -171,29 +176,6 @@ void Soak_Stop(void)
 SoakOptions Soak_GetOptions(void)
 {
     return soak_options;
-}
-
-SoakMessage *SoakMessage_Create(void)
-{
-    SoakMessage *msg = malloc(sizeof(SoakMessage));
-
-    msg->id = 0;
-
-    return msg; 
-}
-
-void SoakMessage_Destroy(SoakMessage *msg)
-{
-    free(msg);
-}
-
-int SoakMessage_Serialize(SoakMessage *msg, NBN_Stream *stream)
-{
-    SERIALIZE_UINT(msg->id, 0, UINT32_MAX);
-    SERIALIZE_UINT(msg->data_length, 1, SOAK_MESSAGE_MAX_DATA_LENGTH);
-    SERIALIZE_BYTES(msg->data, msg->data_length);
-
-    return 0;
 }
 
 void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *conn, NBN_Message *msg)

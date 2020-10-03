@@ -52,6 +52,7 @@ enum { LOG_TRACE, LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR, LOG_FATAL };
 #define Soak_LogWarn(...)  log_log(LOG_WARN,  __FILENAME__, __LINE__, __VA_ARGS__)
 #define Soak_LogError(...) log_log(LOG_ERROR, __FILENAME__, __LINE__, __VA_ARGS__)
 #define Soak_LogFatal(...) log_log(LOG_FATAL, __FILENAME__, __LINE__, __VA_ARGS__)
+#define Soak_SetLogLevel(level) log_set_level(level)
 
 void log_set_udata(void *udata);
 void log_set_lock(log_LockFn fn);
