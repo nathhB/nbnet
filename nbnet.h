@@ -266,6 +266,35 @@ void NBN_MeasureStream_Reset(NBN_MeasureStream *);
 #define NBN_MAX_MESSAGE_TYPES 255 /* Maximum value of uint8_t, see message header */
 #define NBN_MESSAGE_RESEND_DELAY 0.1 /* Number of seconds before a message is resent (reliable messages redundancy) */
 
+/*
+ * Message definition macro, use it like this in an header file shared between your client and server code:
+ *
+ * typedef struct
+ * {
+ *     ...
+ * } SomeMessage;
+ *
+ * BEGIN_MESSAGE(SomeMessage)
+ *     < USE SERIALIZATION MACROS HERE >
+ * END_MESSAGE
+ */
+
+#define BEGIN_MESSAGE(name) \
+static inline name *name##_Create() \
+{ \
+    return NBN_Allocator(sizeof(name)); \
+} \
+static inline void name##_Destroy(name *msg) \
+{ \
+    NBN_Deallocator(msg); \
+} \
+static inline int name##_Serialize(name *msg, NBN_Stream *stream) \
+{
+
+#define END_MESSAGE \
+    return 0; \
+}
+
 typedef int (*NBN_MessageSerializer)(void *, NBN_Stream *);
 typedef void *(*NBN_MessageBuilder)(void);
 typedef void (*NBN_MessageDestructor)(void *);
@@ -418,9 +447,9 @@ typedef struct
     int code;
 } NBN_ClientClosedMessage;
 
-NBN_MessageChunk *NBN_ClientClosedMessage_Create(void);
-void NBN_ClientClosedMessage_Destroy(NBN_ClientClosedMessage *);
-int NBN_ClientClosedMessage_Serialize(NBN_ClientClosedMessage *, NBN_Stream *);
+BEGIN_MESSAGE(NBN_ClientClosedMessage)
+    SERIALIZE_INT(msg->code, SHRT_MIN, SHRT_MAX);
+END_MESSAGE
 
 #pragma endregion /* NBN_ClientClosedMessage */
 
@@ -721,16 +750,16 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 
 #ifdef NBN_GAME_CLIENT
 
-#define NBN_RegisterMessage(type, builder, serializer, destructor) \
+#define NBN_RegisterMessage(type, name) \
 { \
     if (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE) \
     { \
         NBN_LogError("Message type %d is reserved by the library", type); \
         NBN_Abort(); \
     } \
-    NBN_Endpoint_RegisterMessageBuilder(&game_client.endpoint, (NBN_MessageBuilder)builder, type); \
-    NBN_Endpoint_RegisterMessageDestructor(&game_client.endpoint, (NBN_MessageDestructor)destructor, type); \
-    NBN_Endpoint_RegisterMessageSerializer(&game_client.endpoint, (NBN_MessageSerializer)serializer, type); \
+    NBN_Endpoint_RegisterMessageBuilder(&game_client.endpoint, (NBN_MessageBuilder)name##_Create, type); \
+    NBN_Endpoint_RegisterMessageDestructor(&game_client.endpoint, (NBN_MessageDestructor)name##_Destroy, type); \
+    NBN_Endpoint_RegisterMessageSerializer(&game_client.endpoint, (NBN_MessageSerializer)name##_Serialize, type); \
 }
 
 #define NBN_RegisterChannel(type, id) \
@@ -747,16 +776,16 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 
 #ifdef NBN_GAME_SERVER
 
-#define NBN_RegisterMessage(type, builder, serializer, destructor) \
+#define NBN_RegisterMessage(type, name) \
 { \
     if (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE) \
     { \
         NBN_LogError("Message type %d is reserved by the library", type); \
         NBN_Abort(); \
     } \
-    NBN_Endpoint_RegisterMessageBuilder(&game_server.endpoint, (NBN_MessageBuilder)builder, type); \
-    NBN_Endpoint_RegisterMessageDestructor(&game_server.endpoint, (NBN_MessageDestructor)destructor, type); \
-    NBN_Endpoint_RegisterMessageSerializer(&game_server.endpoint, (NBN_MessageSerializer)serializer, type); \
+    NBN_Endpoint_RegisterMessageBuilder(&game_server.endpoint, (NBN_MessageBuilder)name##_Create, type); \
+    NBN_Endpoint_RegisterMessageDestructor(&game_server.endpoint, (NBN_MessageDestructor)name##_Destroy, type); \
+    NBN_Endpoint_RegisterMessageSerializer(&game_server.endpoint, (NBN_MessageSerializer)name##_Serialize, type); \
 }
 
 #define NBN_RegisterChannel(type, id) \
@@ -1994,27 +2023,6 @@ int NBN_MessageChunk_Serialize(NBN_MessageChunk *chunk, NBN_Stream *stream)
 }
 
 #pragma endregion /* NBN_MessageChunk */
-
-#pragma region NBN_ClientClosedMessage
-
-NBN_MessageChunk *NBN_ClientClosedMessage_Create(void)
-{
-    return NBN_MemoryManager_Alloc(sizeof(NBN_ClientClosedMessage));
-}
-
-void NBN_ClientClosedMessage_Destroy(NBN_ClientClosedMessage *msg)
-{
-    NBN_MemoryManager_Dealloc(msg);
-}
-
-int NBN_ClientClosedMessage_Serialize(NBN_ClientClosedMessage *msg, NBN_Stream *stream)
-{
-    SERIALIZE_INT(msg->code, SHRT_MIN, SHRT_MAX);
-
-    return 0;
-}
-
-#pragma endregion /* NBN_ClientClosedMessage */
 
 #pragma region NBN_Connection
 
