@@ -61,6 +61,8 @@ static int EchoReceivedMessage(void)
     return 0;
 }
 
+static bool error = false;
+
 int main(void)
 {
     // Init server with a protocol name and a port, must be done first
@@ -71,7 +73,19 @@ int main(void)
 
     // Start the server
     if (NBN_GameServer_Start() < 0)
-        return 1; // Error, quit the server application
+    {
+        Log(LOG_ERROR, "Failed to start the server");
+
+        // Deinit server
+        NBN_GameServer_Deinit();
+
+        // Error, quit the server application
+#ifdef __EMSCRIPTEN__
+        emscripten_force_exit(1);
+#else
+        return 1;
+#endif
+    }
 
     // Number of seconds between server ticks
     double dt = 1.0 / ECHO_TICK_RATE;
@@ -87,7 +101,13 @@ int main(void)
         while ((ev = NBN_GameServer_Poll()) != NBN_NO_EVENT)
         {
             if (ev < 0)
-                return 1; // Error, quit the server application
+            {
+                Log(LOG_ERROR, "Something went wrong");
+
+                // Error, quit the server application
+                error = true;
+                break;
+            }
 
             switch (ev)
             {
@@ -95,9 +115,15 @@ int main(void)
                 case NBN_NEW_CONNECTION:
                     // Echo server work with one single client at a time
                     if (client != NULL)
+                    {
                         NBN_GameServer_RejectConnectionWithCode(ECHO_SERVER_BUSY_CODE);
+                    }
                     else
-                        client = NBN_GameServer_AcceptConnection();
+                    {
+                        client = NBN_GameServer_GetIncomingConnection();
+
+                        NBN_GameServer_AcceptConnection();
+                    }
 
                     break;
 
@@ -111,14 +137,25 @@ int main(void)
                     // A message has been received from the client
                 case NBN_CLIENT_MESSAGE_RECEIVED:
                     if (EchoReceivedMessage() < 0)
-                        return 1;
+                    {
+                        Log(LOG_ERROR, "Failed to echo received message");
+
+                        // Error, quit the server application
+                        error = true;
+                    }
                     break;
             }
         }
 
         // Pack all enqueued messages as packets and send them
         if (NBN_GameServer_SendPackets() < 0)
-            return 1; // Error, quit the server application
+        {
+            Log(LOG_ERROR, "Failed to send packets");
+
+            // Error, quit the server application
+            error = true;
+            break;
+        }
 
         // Cap the server tick rate
         Sleep(dt);
@@ -127,5 +164,14 @@ int main(void)
     // Stop the server
     NBN_GameServer_Stop();
 
-    return 0;
+    // Deinit server
+    NBN_GameServer_Deinit();
+
+    int ret = error ? 1 : 0;
+
+#ifdef __EMSCRIPTEN__
+    emscripten_force_exit(ret);
+#else
+    return ret;
+#endif
 }

@@ -95,7 +95,12 @@ int main(int argc, char *argv[])
     {
         printf("Usage: client MSG\n");
 
+// Error, quit the client application
+#ifdef __EMSCRIPTEN__
+        emscripten_force_exit(1);
+#else
         return 1;
+#endif
     }
 
     const char *msg = argv[1];
@@ -104,7 +109,12 @@ int main(int argc, char *argv[])
     {
         Log(LOG_ERROR, "Message length cannot exceed %d. Exit", ECHO_MESSAGE_LENGTH - 1);
 
+// Error, quit the client application
+#ifdef __EMSCRIPTEN__
+        emscripten_force_exit(1);
+#else
         return 1;
+#endif
     }
 
     // Init client with a protocol name (must be the same than the one used by the server), the server ip address
@@ -119,7 +129,15 @@ int main(int argc, char *argv[])
     {
         Log(LOG_ERROR, "Failed to start client");
 
-        return 1; // Error, quit the client application
+        // Deinit the client
+        NBN_GameClient_Deinit();
+
+// Error, quit the client application
+#ifdef __EMSCRIPTEN__
+        emscripten_force_exit(1);
+#else
+        return 1;
+#endif 
     }
 
     // Number of seconds between client ticks
@@ -195,5 +213,12 @@ int main(int argc, char *argv[])
     // Stop the client
     NBN_GameClient_Stop();
 
+    // Deinit the client
+    NBN_GameClient_Deinit();
+
+#ifdef __EMSCRIPTEN__
+    emscripten_force_exit(0);
+#else
     return 0;
+#endif
 }

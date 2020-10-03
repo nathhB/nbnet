@@ -25,7 +25,9 @@
 #include <stdarg.h>
 
 // Sleep function
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(__EMSCRIPTEN__)
+#include <emscripten/emscripten.h>
+#elif defined(_WIN32) || defined(_WIN64)
 #include <synchapi.h>
 #else
 #include <time.h>
@@ -33,37 +35,18 @@
 
 #include "shared.h"
 
-// EchoMessage builder
-EchoMessage *EchoMessage_Create(void)
-{
-    return malloc(sizeof(EchoMessage));
-}
-
-// EchoMessage destructor
-void EchoMessage_Destroy(EchoMessage *msg)
-{
-    free(msg);
-}
-
-// EchoMessage serializer
-int EchoMessage_Serialize(EchoMessage *msg, NBN_Stream *stream)
-{
-    SERIALIZE_UINT(msg->length, 0, ECHO_MESSAGE_LENGTH);
-    SERIALIZE_BYTES(msg->data, msg->length);
-
-    return 0;
-}
-
 void RegisterMessages(void)
 {
-    NBN_RegisterMessage(ECHO_MESSAGE_TYPE, EchoMessage_Create, EchoMessage_Serialize, EchoMessage_Destroy);
+    NBN_RegisterMessage(ECHO_MESSAGE_TYPE, EchoMessage);
 }
 
 // Sleep for a given amount of seconds
 // Used to limit client and server tick rate
 void Sleep(double sec)
 {
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(__EMSCRIPTEN__)
+    emscripten_sleep(sec * 1000);
+#elif defined(_WIN32) || defined(_WIN64)
     Sleep(sec * 1000);
 #else /* UNIX / OSX */
     long nanos = sec * 1e9;

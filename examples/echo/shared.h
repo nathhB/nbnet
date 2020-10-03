@@ -53,7 +53,12 @@ enum
 void Log(int, const char *, ...);
 
 #include "../../nbnet.h"
+
+#ifdef __EMSCRIPTEN__
+#include "../../net_drivers/webrtc.h"
+#else
 #include "../../net_drivers/udp.h"
+#endif
 
 typedef struct
 {
@@ -61,9 +66,10 @@ typedef struct
     char data[ECHO_MESSAGE_LENGTH];
 } EchoMessage;
 
-EchoMessage *EchoMessage_Create(void);
-void EchoMessage_Destroy(EchoMessage *);
-int EchoMessage_Serialize(EchoMessage *, NBN_Stream *);
+BEGIN_MESSAGE(EchoMessage)
+    SERIALIZE_UINT(msg->length, 0, ECHO_MESSAGE_LENGTH);
+    SERIALIZE_BYTES(msg->data, msg->length);
+END_MESSAGE
 
 void RegisterMessages(void);
 void Sleep(double);
