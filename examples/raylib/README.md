@@ -15,11 +15,7 @@ The server gather states from all clients and store them.
 Every tick, the server pack the latest received client states in a message that is then broadcasted to all clients.
 Each client displays a representation of other clients based on the latest received states from the server.
 
-This example protocol is implemented using four messages:
-
-- SpawnMessage (reliable)
-		
-	This message is sent by the server to a client when it connects and get accepted. The message contains initial data about this client like his position inside the window.
+This example protocol is implemented using three messages:
 
 - UpdateStateMessage (unreliabe)
 
@@ -44,3 +40,18 @@ This example also demonstrates how to use nbnet to simulates bad network conditi
 `--jitter=<value> # in seconds, float value`
 
 Information about the network will be displayed in the bottom right of the client window.
+
+## Web
+
+To compile the example for the web:
+
+`mkdir build`
+`cd build`
+`emcmake cmake -DRAYLIB_LIBRARY_PATH=<path to libraylib.bc file> -DRAYLIB_INCLUDE_PATH=<path to raylib headers>`
+
+To run the server:
+
+`npm run server`
+
+To run the client you need to run an HTTP server that serves the build directory (it contains the HTML file) and
+then open the URL in your browser.
