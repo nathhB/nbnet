@@ -59,6 +59,6 @@ You can pass options to the server like so:
 
 `npm run server -- --packet_loss=<value> ...`
 
-To run the client you need to have an HTTP server running and serving the build directory (it contains the HTML file), then you just have to open *http://localhost:<PORT>/client.html* in your browser.
+To run the client you need to have an HTTP server running and serving the build directory (it contains the HTML file), then you just have to open `http://localhost:<PORT>/client.html` in your browser.
 
 *NOTE: For now there is no way to pass options to the client when it's running in the browser*
