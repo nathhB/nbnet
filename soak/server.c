@@ -55,7 +55,7 @@ static void HandleNewConnection(void)
     {
         NBN_LogInfo("Connection rejected");
 
-        NBN_GameServer_RejectConnectionWithCode(SOAK_SERVER_FULL_CODE);
+        NBN_GameServer_RejectIncomingConnectionWithCode(SOAK_SERVER_FULL_CODE);
 
         return;
     }
@@ -64,7 +64,7 @@ static void HandleNewConnection(void)
 
     NBN_Connection *connection = NBN_GameServer_GetIncomingConnection();
 
-    NBN_GameServer_AcceptConnection();
+    NBN_GameServer_AcceptIncomingConnection(NULL);
 
     SoakClient *soak_client = malloc(sizeof(SoakClient));
 
