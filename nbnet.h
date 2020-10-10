@@ -61,7 +61,8 @@ typedef enum
     NBN_OBJ_MESSAGE_CHUNK,
     NBN_OBJ_CONNECTION,
     NBN_OBJ_EVENT,
-    NBN_OBJ_OUTGOING_MSG_INFO
+    NBN_OBJ_OUTGOING_MSG_INFO,
+    NBN_OBJ_ACCEPT_DATA
 } NBN_ObjectType;
 
 void *NBN_MemoryManager_Alloc(size_t);
@@ -653,6 +654,29 @@ void NBN_Connection_AddTime(NBN_Connection *, double);
 
 #pragma endregion /* NBN_Connection */
 
+#pragma region NBN_AcceptData
+
+typedef struct
+{
+    uint8_t buffer[NBN_ACCEPT_DATA_MAX_SIZE];
+    NBN_WriteStream write_stream;
+    NBN_ReadStream read_stream;
+} NBN_AcceptData;
+
+NBN_AcceptData *NBN_AcceptData_Create(void);
+NBN_AcceptData *NBN_AcceptData_Read(uint8_t *);
+void NBN_AcceptData_Destroy(NBN_AcceptData *);
+void NBN_AcceptData_WriteUInt(NBN_AcceptData *, unsigned int);
+void NBN_AcceptData_WriteInt(NBN_AcceptData *, int);
+void NBN_AcceptData_WriteFloat(NBN_AcceptData *, float);
+void NBN_AcceptData_WriteBytes(NBN_AcceptData *, uint8_t *, unsigned int);
+unsigned int NBN_AcceptData_ReadUInt(NBN_AcceptData *);
+int NBN_AcceptData_ReadInt(NBN_AcceptData *);
+float NBN_AcceptData_ReadFloat(NBN_AcceptData *);
+uint8_t *NBN_AcceptData_ReadBytes(NBN_AcceptData *, uint8_t *, unsigned int);
+
+#pragma endregion /* NBN_AcceptData */
+
 #define NBN_NO_EVENT 0 /* No event left in the events queue */
 
 #pragma region NBN_EventQueue
@@ -869,6 +893,7 @@ typedef struct
 {
     NBN_Endpoint endpoint;
     NBN_Connection *server_connection;
+    NBN_AcceptData *accept_data;
 } NBN_GameClient;
 
 extern NBN_GameClient game_client;
@@ -888,7 +913,7 @@ NBN_Connection *NBN_GameClient_CreateServerConnection(void);
 NBN_MessageInfo NBN_GameClient_GetReceivedMessageInfo(void);
 NBN_ConnectionStats NBN_GameClient_GetStats(void);
 int NBN_GameClient_GetServerCloseCode(void);
-uint32_t NBN_GameClient_AcceptData_ReadUint(void);
+NBN_AcceptData *NBN_GameClient_GetAcceptData(void);
 
 #ifdef NBN_DEBUG
 
@@ -947,10 +972,9 @@ void *NBN_GameServer_CreateUnreliableMessage(uint8_t);
 void *NBN_GameServer_CreateReliableMessage(uint8_t);
 bool NBN_GameServer_SendMessageTo(NBN_Connection *);
 void NBN_GameServer_BroadcastMessage(void);
-void NBN_GameServer_AcceptConnection(void);
-void NBN_GameServer_AcceptData_AddUInt(uint32_t);
-void NBN_GameServer_RejectConnectionWithCode(int);
-void NBN_GameServer_RejectConnection(void);
+void NBN_GameServer_AcceptIncomingConnection(NBN_AcceptData *);
+void NBN_GameServer_RejectIncomingConnectionWithCode(int);
+void NBN_GameServer_RejectIncomingConnection(void);
 NBN_Connection *NBN_GameServer_GetIncomingConnection(void);
 uint32_t NBN_GameServer_GetDisconnectedClientId(void);
 NBN_Connection *NBN_GameServer_FindClientById(uint32_t);
@@ -1076,6 +1100,10 @@ void *NBN_MemoryManager_AllocObject(NBN_ObjectType obj_type)
 
         case NBN_OBJ_OUTGOING_MSG_INFO:
             obj_ptr = NBN_MemoryManager_Alloc(sizeof(NBN_OutgoingMessageInfo));
+            break;
+
+        case NBN_OBJ_ACCEPT_DATA:
+            obj_ptr = NBN_MemoryManager_Alloc(sizeof(NBN_AcceptData));
             break;
 
         default:
@@ -2881,6 +2909,104 @@ static void NBN_Connection_ClearMessageQueue(NBN_List *queue)
 
 #pragma endregion /* NBN_Connection */
 
+#pragma region NBN_AcceptData
+
+NBN_AcceptData *NBN_AcceptData_Create(void)
+{
+    NBN_AcceptData *accept_data = NBN_MemoryManager_AllocObject(NBN_OBJ_ACCEPT_DATA);
+
+    memset(accept_data->buffer, 0, NBN_ACCEPT_DATA_MAX_SIZE);
+    NBN_WriteStream_Init(&accept_data->write_stream, accept_data->buffer, NBN_ACCEPT_DATA_MAX_SIZE);
+
+    return accept_data;
+}
+
+NBN_AcceptData *NBN_AcceptData_Read(uint8_t *buffer)
+{
+    NBN_AcceptData *accept_data = NBN_MemoryManager_AllocObject(NBN_OBJ_ACCEPT_DATA);
+
+    memcpy(accept_data->buffer, buffer, NBN_ACCEPT_DATA_MAX_SIZE);
+    NBN_ReadStream_Init(&accept_data->read_stream, accept_data->buffer, NBN_ACCEPT_DATA_MAX_SIZE);
+
+    return accept_data;
+}
+
+void NBN_AcceptData_Destroy(NBN_AcceptData *accept_data)
+{
+    NBN_MemoryManager_DeallocObject(NBN_OBJ_ACCEPT_DATA, accept_data);
+}
+
+void NBN_AcceptData_WriteUInt(NBN_AcceptData *accept_data, unsigned int v)
+{
+    int ret = NBN_WriteStream_SerializeUint(&accept_data->write_stream, &v, 0, UINT_MAX);
+
+    assert(ret == 0);
+}
+
+void NBN_AcceptData_WriteInt(NBN_AcceptData *accept_data, int v)
+{
+    int ret = NBN_WriteStream_SerializeInt(&accept_data->write_stream, &v, INT_MIN, INT_MAX);
+
+    assert(ret == 0);
+}
+
+void NBN_AcceptData_WriteFloat(NBN_AcceptData *accept_data, float v)
+{
+    unsigned int mult = pow(10, 3);
+    int ret = NBN_WriteStream_SerializeFloat(&accept_data->write_stream, &v, INT_MIN / mult, INT_MAX / mult, 3);
+
+    assert(ret == 0);
+}
+
+void NBN_AcceptData_WriteBytes(NBN_AcceptData *accept_data, uint8_t *bytes, unsigned int length)
+{
+    int ret = NBN_WriteStream_SerializeBytes(&accept_data->write_stream, bytes, length);
+
+    assert(ret == 0);
+}
+
+unsigned int NBN_AcceptData_ReadUInt(NBN_AcceptData *accept_data)
+{
+    uint32_t v;
+    int ret = NBN_ReadStream_SerializeUint(&accept_data->read_stream, &v, 0, UINT_MAX);
+
+    assert(ret == 0);
+
+    return v;
+}
+
+int NBN_AcceptData_ReadInt(NBN_AcceptData *accept_data)
+{
+    int v;
+    int ret = NBN_ReadStream_SerializeInt(&accept_data->read_stream, &v, INT_MIN, INT_MAX);
+
+    assert(ret == 0);
+
+    return v;
+}
+
+float NBN_AcceptData_ReadFloat(NBN_AcceptData *accept_data)
+{
+    float v;
+    unsigned int mult = pow(10, 3);
+    int ret = NBN_ReadStream_SerializeFloat(&accept_data->read_stream, &v, INT_MIN / mult, INT_MAX / mult, 3);
+
+    assert(ret == 0);
+
+    return v;
+}
+
+uint8_t *NBN_AcceptData_ReadBytes(NBN_AcceptData *accept_data, uint8_t *buffer, unsigned int length)
+{
+    int ret = NBN_ReadStream_SerializeBytes(&accept_data->read_stream, buffer, length);
+
+    assert(ret == 0);
+
+    return buffer;
+}
+
+#pragma endregion /* NBN_AcceptData */
+
 #pragma region NBN_Channel
 
 void NBN_Channel_AddTime(NBN_Channel *channel, double time)
@@ -3403,8 +3529,6 @@ static int last_event_type = NBN_NO_EVENT;
 static uint8_t last_received_message_type;
 static void *last_received_message_data = NULL;
 static int last_client_closed_code = -1;
-static uint8_t *accept_data_buffer;
-static NBN_ReadStream accept_data_rstream;
 
 static void NBN_GameClient_ProcessReceivedMessage(NBN_Message *, NBN_Connection *);
 static int NBN_GameClient_HandleEvent(int);
@@ -3417,12 +3541,16 @@ void NBN_GameClient_Init(const char *protocol_name, const char *ip_address, uint
     NBN_Endpoint_Init(
             &game_client.endpoint,
             (NBN_Config){.protocol_name = protocol_name, .ip_address = ip_address, .port = port});
+    game_client.accept_data = NULL;
 }
 
 void NBN_GameClient_Deinit(void)
 {
     NBN_Endpoint_Deinit(&game_client.endpoint);
     NBN_Connection_Destroy(game_client.server_connection);
+
+    if (game_client.accept_data != NULL)
+        NBN_AcceptData_Destroy(game_client.accept_data);
 }
 
 int NBN_GameClient_Start(void)
@@ -3553,14 +3681,9 @@ int NBN_GameClient_GetServerCloseCode(void)
     return last_client_closed_code;
 }
 
-uint32_t NBN_GameClient_AcceptData_ReadUint(void)
+NBN_AcceptData *NBN_GameClient_GetAcceptData(void)
 {
-    uint32_t v;
-    int ret = NBN_ReadStream_SerializeUint(&accept_data_rstream, &v, 0, UINT_MAX);
-
-    assert(ret == 0);
-
-    return v;
+    return game_client.accept_data;
 }
 
 #ifdef NBN_DEBUG
@@ -3659,8 +3782,7 @@ static int NBN_GameClient_HandleMessageReceivedEvent(void)
     }
     else if (message->header.type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE)
     {
-        memcpy(accept_data_buffer, ((NBN_ClientAcceptedMessage *)message->data)->data, NBN_ACCEPT_DATA_MAX_SIZE);
-        NBN_ReadStream_Init(&accept_data_rstream, accept_data_buffer, NBN_ACCEPT_DATA_MAX_SIZE);
+        game_client.accept_data = NBN_AcceptData_Read(((NBN_ClientAcceptedMessage *)message->data)->data); 
 
         ret = NBN_CONNECTED;
     }
@@ -3752,8 +3874,6 @@ static int last_event_type = NBN_NO_EVENT;
 static NBN_Connection *last_event_client = NULL;
 static void *last_received_message_data = NULL;
 static uint8_t last_received_message_type;
-static uint8_t accept_data_buffer[NBN_ACCEPT_DATA_MAX_SIZE] = {0};
-static NBN_WriteStream accept_data_wstream;
 
 static void NBN_GameServer_ProcessReceivedMessage(NBN_Message *, NBN_Connection *);
 static void NBN_GameServer_CloseStaleClientConnections(void);
@@ -3974,18 +4094,21 @@ void NBN_GameServer_BroadcastMessage(void)
     }
 }
 
-void NBN_GameServer_AcceptConnection(void)
+void NBN_GameServer_AcceptIncomingConnection(NBN_AcceptData *accept_data)
 {
     assert(last_event_type == NBN_NEW_CONNECTION);
     assert(last_event_client != NULL);
 
     NBN_ClientAcceptedMessage *msg = NBN_GameServer_CreateReliableMessage(NBN_CLIENT_ACCEPTED_MESSAGE_TYPE);
 
-    int ret = NBN_WriteStream_Flush(&accept_data_wstream);
+    if (accept_data != NULL)
+    {
+        int ret = NBN_WriteStream_Flush(&accept_data->write_stream);
 
-    assert(ret == 0);
+        assert(ret == 0);
 
-    memcpy(msg->data, accept_data_buffer, NBN_ACCEPT_DATA_MAX_SIZE);
+        memcpy(msg->data, accept_data->buffer, NBN_ACCEPT_DATA_MAX_SIZE);
+    }
 
     if (!NBN_GameServer_SendMessageTo(last_event_client))
     {
@@ -3995,16 +4118,12 @@ void NBN_GameServer_AcceptConnection(void)
     }
 
     last_event_client->is_accepted = true;
+
+    if (accept_data != NULL)
+        NBN_AcceptData_Destroy(accept_data);
 }
 
-void NBN_GameServer_AcceptData_AddUInt(uint32_t v)
-{
-    int ret = NBN_WriteStream_SerializeUint(&accept_data_wstream, &v, 0, UINT_MAX);
-
-    assert(ret == 0);
-}
-
-void NBN_GameServer_RejectConnectionWithCode(int code)
+void NBN_GameServer_RejectIncomingConnectionWithCode(int code)
 {
     assert(last_event_type == NBN_NEW_CONNECTION);
     assert(last_event_client != NULL);
@@ -4012,9 +4131,9 @@ void NBN_GameServer_RejectConnectionWithCode(int code)
     NBN_GameServer_CloseClientWithCode(last_event_client, code);
 }
 
-void NBN_GameServer_RejectConnection(void)
+void NBN_GameServer_RejectIncomingConnection(void)
 {
-    NBN_GameServer_RejectConnectionWithCode(-1);
+    NBN_GameServer_RejectIncomingConnectionWithCode(-1);
 }
 
 NBN_Connection *NBN_GameServer_GetIncomingConnection(void)
@@ -4199,9 +4318,6 @@ static void NBN_GameServer_HandleEvent(int event_type)
 static void NBN_GameServer_HandleClientConnectionEvent(void)
 {
     last_event_client = game_server.endpoint.events_queue->last_event_data;
-
-    memset(accept_data_buffer, 0, NBN_ACCEPT_DATA_MAX_SIZE);
-    NBN_WriteStream_Init(&accept_data_wstream, accept_data_buffer, NBN_ACCEPT_DATA_MAX_SIZE);
 }
 
 static void NBN_GameServer_HandleClientDisconnectedEvent(void)
