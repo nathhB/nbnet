@@ -66,7 +66,7 @@ static int HandleNewConnection(void)
     {
         // Reject the connection (send a SERVER_FULL_CODE code to the client)
         TraceLog(LOG_INFO, "Connection rejected");
-        NBN_GameServer_RejectConnectionWithCode(SERVER_FULL_CODE);
+        NBN_GameServer_RejectIncomingConnectionWithCode(SERVER_FULL_CODE);
 
         return 0;
     }
@@ -80,12 +80,14 @@ static int HandleNewConnection(void)
     Vector2 spawn = spawns[connection->id % MAX_CLIENTS];
 
     // Build some "initial" data that will be sent to the connected client
-    NBN_GameServer_AcceptData_AddUInt((uint32_t)spawn.x);
-    NBN_GameServer_AcceptData_AddUInt((uint32_t)spawn.y);
-    NBN_GameServer_AcceptData_AddUInt(connection->id);
+    NBN_AcceptData *accept_data = NBN_AcceptData_Create();
+
+    NBN_AcceptData_WriteUInt(accept_data, spawn.x);
+    NBN_AcceptData_WriteUInt(accept_data, spawn.y);
+    NBN_AcceptData_WriteUInt(accept_data, connection->id);
 
     // Accept the connection
-    NBN_GameServer_AcceptConnection();
+    NBN_GameServer_AcceptIncomingConnection(accept_data);
 
     TraceLog(LOG_INFO, "Connection accepted (ID: %d)", connection->id);
 

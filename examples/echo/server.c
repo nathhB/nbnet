@@ -116,13 +116,13 @@ int main(void)
                     // Echo server work with one single client at a time
                     if (client != NULL)
                     {
-                        NBN_GameServer_RejectConnectionWithCode(ECHO_SERVER_BUSY_CODE);
+                        NBN_GameServer_RejectIncomingConnectionWithCode(ECHO_SERVER_BUSY_CODE);
                     }
                     else
                     {
                         client = NBN_GameServer_GetIncomingConnection();
 
-                        NBN_GameServer_AcceptConnection();
+                        NBN_GameServer_AcceptIncomingConnection(NULL);
                     }
 
                     break;

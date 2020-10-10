@@ -58,16 +58,6 @@ Color client_colors_to_raylib_colors[] = {
     PINK        // CLI_PINK
 };
 
-static void HandleDisconnection()
-{
-    int code = NBN_GameClient_GetServerCloseCode(); // Get the server code used when closing the client connection
-
-    TraceLog(LOG_INFO, "Disconnected from server (code: %d)", code);
-
-    disconnected = true;
-    server_close_code = code;
-}
-
 static void SpawnLocalClient(int x, int y, uint32_t client_id)
 {
     TraceLog(LOG_INFO, "Received spawn message, position: (%d, %d), client id: %d", x, y, client_id);
@@ -78,6 +68,26 @@ static void SpawnLocalClient(int x, int y, uint32_t client_id)
     local_client_state.y = y;
 
     spawned = true;
+}
+
+static void HandleConnection(void)
+{
+    SpawnLocalClient(
+            NBN_AcceptData_ReadUInt(NBN_GameClient_GetAcceptData()),
+            NBN_AcceptData_ReadUInt(NBN_GameClient_GetAcceptData()),
+            NBN_AcceptData_ReadUInt(NBN_GameClient_GetAcceptData()));
+
+    connected = true;
+}
+
+static void HandleDisconnection(void)
+{
+    int code = NBN_GameClient_GetServerCloseCode(); // Get the server code used when closing the client connection
+
+    TraceLog(LOG_INFO, "Disconnected from server (code: %d)", code);
+
+    disconnected = true;
+    server_close_code = code;
 }
 
 static bool ClientExists(uint32_t client_id)
@@ -240,12 +250,7 @@ static void HandleGameClientEvent(int ev)
     {
         case NBN_CONNECTED:
             // We are connected to the server
-            SpawnLocalClient(
-                    NBN_GameClient_AcceptData_ReadUint(),
-                    NBN_GameClient_AcceptData_ReadUint(),
-                    NBN_GameClient_AcceptData_ReadUint());
-
-            connected = true;
+            HandleConnection(); 
             break;
 
         case NBN_DISCONNECTED:
