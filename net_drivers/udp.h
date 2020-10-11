@@ -90,12 +90,6 @@ typedef struct
 static SOCKET udp_sock;
 static uint32_t protocol_id;
 
-#ifdef NBN_GAME_CLIENT
-
-static NBN_UDPConnection server_connection;
-
-#endif /* NBN_GAME_CLIENT */
-
 #pragma region Socket functions
 
 #ifdef PLATFORM_WINDOWS
@@ -108,12 +102,6 @@ static int InitSocket(void);
 static void DeinitSocket(void);
 static int BindSocket(uint16_t);
 static char *GetLastErrorMessage(void);
-
-#ifdef NBN_GAME_CLIENT
-
-static int ResolveIpAddress(const char *, uint16_t, NBN_IPAddress *);
-
-#endif
 
 static int InitSocket(void)
 {
@@ -181,8 +169,6 @@ static int BindSocket(uint16_t port)
     return 0;
 }
 
-#ifdef NBN_GAME_CLIENT
-
 static int ResolveIpAddress(const char *host, uint16_t port, NBN_IPAddress *address)
 {
     char *dup_host = strdup(host);
@@ -212,8 +198,6 @@ static int ResolveIpAddress(const char *host, uint16_t port, NBN_IPAddress *addr
     return 0;
 }
 
-#endif /* NBN_GAME_CLIENT */
-
 static char *GetLastErrorMessage(void)
 {
 #ifdef PLATFORM_WINDOWS
@@ -228,8 +212,6 @@ static char *GetLastErrorMessage(void)
 #pragma endregion /* Socket functions */
 
 #pragma region Game server
-
-#ifdef NBN_GAME_SERVER
 
 static NBN_List *connections = NULL;
 static uint32_t next_conn_id = 0;
@@ -380,15 +362,14 @@ static NBN_UDPConnection *FindClientConnectionById(uint32_t conn_id)
     return NULL;
 }
 
-#endif /* NBN_GAME_SERVER */
-
 #pragma endregion /* Game server */
 
 #pragma region Game client
 
-#ifdef NBN_GAME_CLIENT
-
+static NBN_UDPConnection server_connection;
 static bool is_connected_to_server = false;
+
+static int ResolveIpAddress(const char *, uint16_t, NBN_IPAddress *);
 
 int NBN_Driver_GCli_Start(uint32_t proto_id, const char *host, uint16_t port)
 {
@@ -478,8 +459,6 @@ int NBN_Driver_GCli_SendPacket(NBN_Packet *packet)
 
     return 0;
 }
-
-#endif /* NBN_GAME_CLIENT */
 
 #pragma endregion /* Game client */
 
