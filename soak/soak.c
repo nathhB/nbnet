@@ -53,13 +53,28 @@ int Soak_Init(int argc, char *argv[])
     if (Soak_ReadCommandLine(argc, argv) < 0)
         return -1;
 
-    NBN_RegisterMessage(SOAK_MESSAGE, SoakMessage);
+#ifdef NBN_GAME_CLIENT
+    NBN_GameClient_RegisterMessage(SOAK_MESSAGE, SoakMessage);
+#endif
+
+#ifdef NBN_GAME_SERVER
+    NBN_GameServer_RegisterMessage(SOAK_MESSAGE, SoakMessage);
+#endif
 
     /* Packet simulator configuration */
-    NBN_Debug_SetPing(soak_options.ping);
-    NBN_Debug_SetJitter(soak_options.jitter);
-    NBN_Debug_SetPacketLoss(soak_options.packet_loss);
-    NBN_Debug_SetPacketDuplication(soak_options.packet_duplication);
+#ifdef NBN_GAME_CLIENT
+    NBN_GameClient_SetPing(soak_options.ping);
+    NBN_GameClient_SetJitter(soak_options.jitter);
+    NBN_GameClient_SetPacketLoss(soak_options.packet_loss);
+    NBN_GameClient_SetPacketDuplication(soak_options.packet_duplication);
+#endif
+
+#ifdef NBN_GAME_SERVER
+    NBN_GameServer_SetPing(soak_options.ping);
+    NBN_GameServer_SetJitter(soak_options.jitter);
+    NBN_GameServer_SetPacketLoss(soak_options.packet_loss);
+    NBN_GameServer_SetPacketDuplication(soak_options.packet_duplication);
+#endif
 
     return 0;
 }
