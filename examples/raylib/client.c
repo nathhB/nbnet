@@ -515,10 +515,10 @@ int main(int argc, char *argv[])
     RegisterMessages();
 
     // Network conditions simulated variables (read from the command line, default is always 0)
-    NBN_Debug_SetPing(GetOptions().ping);
-    NBN_Debug_SetJitter(GetOptions().jitter);
-    NBN_Debug_SetPacketLoss(GetOptions().packet_loss);
-    NBN_Debug_SetPacketDuplication(GetOptions().packet_duplication);
+    NBN_GameClient_SetPing(GetOptions().ping);
+    NBN_GameClient_SetJitter(GetOptions().jitter);
+    NBN_GameClient_SetPacketLoss(GetOptions().packet_loss);
+    NBN_GameClient_SetPacketDuplication(GetOptions().packet_duplication);
 
     if (NBN_GameClient_Start() < 0)
     {

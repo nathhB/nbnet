@@ -31,9 +31,15 @@
 // Register all messages, called on both client and server side
 void RegisterMessages(void)
 {
-    NBN_RegisterMessage(CHANGE_COLOR_MESSAGE, ChangeColorMessage);
-    NBN_RegisterMessage(UPDATE_STATE_MESSAGE, UpdateStateMessage);
-    NBN_RegisterMessage(GAME_STATE_MESSAGE, GameStateMessage);
+#if defined(NBN_GAME_CLIENT)
+    NBN_GameClient_RegisterMessage(CHANGE_COLOR_MESSAGE, ChangeColorMessage);
+    NBN_GameClient_RegisterMessage(UPDATE_STATE_MESSAGE, UpdateStateMessage);
+    NBN_GameClient_RegisterMessage(GAME_STATE_MESSAGE, GameStateMessage);
+#elif defined(NBN_GAME_SERVER)
+    NBN_GameServer_RegisterMessage(CHANGE_COLOR_MESSAGE, ChangeColorMessage);
+    NBN_GameServer_RegisterMessage(UPDATE_STATE_MESSAGE, UpdateStateMessage);
+    NBN_GameServer_RegisterMessage(GAME_STATE_MESSAGE, GameStateMessage);
+#endif
 }
 
 // Command line options

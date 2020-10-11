@@ -37,7 +37,11 @@
 
 void RegisterMessages(void)
 {
-    NBN_RegisterMessage(ECHO_MESSAGE_TYPE, EchoMessage);
+#if defined(NBN_GAME_CLIENT)
+    NBN_GameClient_RegisterMessage(ECHO_MESSAGE_TYPE, EchoMessage);
+#elif defined(NBN_GAME_SERVER)
+    NBN_GameServer_RegisterMessage(ECHO_MESSAGE_TYPE, EchoMessage);
+#endif
 }
 
 // Sleep for a given amount of seconds
