@@ -719,23 +719,15 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *);
 #include <pthread.h>
 #endif /* NBNET_WINDOWS */
 
-#ifdef NBN_GAME_CLIENT
+#define NBN_GameClient_SetPing(v) { game_client.endpoint.packet_simulator->ping = v; }
+#define NBN_GameClient_SetJitter(v) { game_client.endpoint.packet_simulator->jitter = v; }
+#define NBN_GameClient_SetPacketLoss(v) { game_client.endpoint.packet_simulator->packet_loss_ratio = v; }
+#define NBN_GameClient_SetPacketDuplication(v) { game_client.endpoint.packet_simulator->packet_duplication_ratio = v; }
 
-#define NBN_Debug_SetPing(v) { game_client.endpoint.packet_simulator->ping = v; }
-#define NBN_Debug_SetJitter(v) { game_client.endpoint.packet_simulator->jitter = v; }
-#define NBN_Debug_SetPacketLoss(v) { game_client.endpoint.packet_simulator->packet_loss_ratio = v; }
-#define NBN_Debug_SetPacketDuplication(v) { game_client.endpoint.packet_simulator->packet_duplication_ratio = v; }
-
-#endif /* NBN_GAME_CLIENT */
-
-#ifdef NBN_GAME_SERVER
-
-#define NBN_Debug_SetPing(v) { game_server.endpoint.packet_simulator->ping = v; }
-#define NBN_Debug_SetJitter(v) { game_server.endpoint.packet_simulator->jitter = v; }
-#define NBN_Debug_SetPacketLoss(v) { game_server.endpoint.packet_simulator->packet_loss_ratio = v; }
-#define NBN_Debug_SetPacketDuplication(v) { game_server.endpoint.packet_simulator->packet_duplication_ratio = v; }
-
-#endif /* NBN_GAME_SERVER */
+#define NBN_GameServer_SetPing(v) { game_server.endpoint.packet_simulator->ping = v; }
+#define NBN_GameServer_SetJitter(v) { game_server.endpoint.packet_simulator->jitter = v; }
+#define NBN_GameServer_SetPacketLoss(v) { game_server.endpoint.packet_simulator->packet_loss_ratio = v; }
+#define NBN_GameServer_SetPacketDuplication(v) { game_server.endpoint.packet_simulator->packet_duplication_ratio = v; }
 
 typedef struct
 {
@@ -775,12 +767,15 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 
 #else
 
-#define NBN_Debug_SetPing(v) { NBN_LogInfo("NBN_Debug_SetPing: packet simulator is not enabled, ignore"); }
-#define NBN_Debug_SetJitter(v) { NBN_LogInfo("NBN_Debug_SetJitter: packet simulator is not enabled, ignore"); }
-#define NBN_Debug_SetPacketLoss(v) { NBN_LogInfo("NBN_Debug_SetPacketLoss: packet simulator is not enabled, ignore"); }
-#define NBN_Debug_SetPacketDuplication(v) { \
-    NBN_LogInfo("NBN_Debug_SetPacketDuplication: packet simulator is not enabled, ignore"); \
-}
+#define NBN_GameClient_SetPing(v) NBN_LogInfo("NBN_Debug_SetPing: packet simulator is not enabled, ignore")
+#define NBN_GameClient_SetJitter(v) NBN_LogInfo("NBN_Debug_SetJitter: packet simulator is not enabled, ignore")
+#define NBN_GameClient_SetPacketLoss(v) NBN_LogInfo("NBN_Debug_SetPacketLoss: packet simulator is not enabled, ignore")
+#define NBN_GameClient_SetPacketDuplication(v) NBN_LogInfo("NBN_Debug_SetPacketDuplication: packet simulator is not enabled, ignore")
+
+#define NBN_GameServer_SetPing(v) NBN_LogInfo("NBN_Debug_SetPing: packet simulator is not enabled, ignore")
+#define NBN_GameServer_SetJitter(v) NBN_LogInfo("NBN_Debug_SetJitter: packet simulator is not enabled, ignore")
+#define NBN_GameServer_SetPacketLoss(v) NBN_LogInfo("NBN_Debug_SetPacketLoss: packet simulator is not enabled, ignore")
+#define NBN_GameServer_SetPacketDuplication(v) NBN_LogInfo("NBN_Debug_SetPacketDuplication: packet simulator is not enabled, ignore")
 
 #endif /* NBN_DEBUG && NBN_USE_PACKET_SIMULATOR */
 
@@ -788,9 +783,7 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 
 #pragma region NBN_Endpoint
 
-#ifdef NBN_GAME_CLIENT
-
-#define NBN_RegisterMessage(type, name) \
+#define NBN_GameClient_RegisterMessage(type, name) \
 { \
     if (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE \
             || type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE) \
@@ -803,7 +796,7 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
     NBN_Endpoint_RegisterMessageSerializer(&game_client.endpoint, (NBN_MessageSerializer)name##_Serialize, type); \
 }
 
-#define NBN_RegisterChannel(type, id) \
+#define NBN_GameClient_RegisterChannel(type, id) \
 { \
     if (id == NBN_CHANNEL_RESERVED_UNRELIABLE || id == NBN_CHANNEL_RESERVED_RELIABLE) \
     { \
@@ -813,11 +806,7 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
     NBN_Endpoint_RegisterChannel(&game_client.endpoint, type, id); \
 }
 
-#endif /* NBN_GAME_CLIENT */
-
-#ifdef NBN_GAME_SERVER
-
-#define NBN_RegisterMessage(type, name) \
+#define NBN_GameServer_RegisterMessage(type, name) \
 { \
     if (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE \
             || type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE) \
@@ -830,7 +819,7 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
     NBN_Endpoint_RegisterMessageSerializer(&game_server.endpoint, (NBN_MessageSerializer)name##_Serialize, type); \
 }
 
-#define NBN_RegisterChannel(type, id) \
+#define NBN_GameServer_RegisterChannel(type, id) \
 { \
     if (id == NBN_CHANNEL_RESERVED_UNRELIABLE || id == NBN_CHANNEL_RESERVED_RELIABLE) \
     { \
@@ -839,8 +828,6 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
     } \
     NBN_Endpoint_RegisterChannel(&game_server.endpoint, type, id); \
 }
-
-#endif /* NBN_GAME_SERVER */
 
 struct __NBN_Endpoint
 {
@@ -851,6 +838,7 @@ struct __NBN_Endpoint
     NBN_MessageSerializer message_serializers[NBN_MAX_MESSAGE_TYPES];
     NBN_EventQueue *events_queue;
     NBN_OutgoingMessageInfo *outgoing_message_info;
+    bool is_server;
 
 #ifdef NBN_DEBUG
     /* Debug callbacks */
@@ -862,7 +850,7 @@ struct __NBN_Endpoint
 #endif
 };
 
-void NBN_Endpoint_Init(NBN_Endpoint *, NBN_Config);
+void NBN_Endpoint_Init(NBN_Endpoint *, NBN_Config, bool);
 void NBN_Endpoint_Deinit(NBN_Endpoint *);
 void NBN_Endpoint_RegisterMessageBuilder(NBN_Endpoint *, NBN_MessageBuilder, uint8_t);
 void NBN_Endpoint_RegisterMessageDestructor(NBN_Endpoint *, NBN_MessageDestructor, uint8_t);
@@ -874,8 +862,6 @@ void* NBN_Endpoint_CreateOutgoingMessage(NBN_Endpoint *, uint8_t, uint8_t);
 #pragma endregion /* NBN_Endpoint */
 
 #pragma region NBN_GameClient
-
-#ifdef NBN_GAME_CLIENT
 
 enum
 {
@@ -922,13 +908,9 @@ bool NBN_GameClient_CanSendMessage(bool);
 
 #endif /* NBN_DEBUG */
 
-#endif /* NBN_GAME_CLIENT */
-
 #pragma endregion /* NBN_GameClient */
 
 #pragma region NBN_GameServer
-
-#ifdef NBN_GAME_SERVER
 
 enum
 {
@@ -988,30 +970,13 @@ bool NBN_GameServer_CanSendMessageTo(NBN_Connection *, bool);
 
 #endif /* NBN_DEBUG */
 
-#endif /* NBN_GAME_SERVER */
-
 #pragma endregion /* NBN_GameServer */
 
 #pragma region Network driver
 
-#ifdef NBN_GAME_SERVER
-
-typedef enum
-{
-    NBN_DRIVER_GSERV_CLIENT_CONNECTED,
-    NBN_DRIVER_GSERV_CLIENT_PACKET_RECEIVED
-} NBN_Driver_GServ_EventType;
-
-int NBN_Driver_GServ_Start(uint32_t, uint16_t);
-void NBN_Driver_GServ_Stop(void);
-int NBN_Driver_GServ_RecvPackets(void);
-void NBN_Driver_GServ_DestroyClientConnection(uint32_t);
-int NBN_Driver_GServ_SendPacketTo(NBN_Packet *, uint32_t);
-void NBN_Driver_GServ_RaiseEvent(NBN_Driver_GServ_EventType, void *);
-
-#endif /* NBN_GAME_SERVER */
-
-#ifdef NBN_GAME_CLIENT
+/*
+ * Game client driver
+ */
 
 typedef enum
 {
@@ -1025,7 +990,22 @@ int NBN_Driver_GCli_RecvPackets(void);
 int NBN_Driver_GCli_SendPacket(NBN_Packet *);
 void NBN_Driver_GCli_RaiseEvent(NBN_Driver_GCli_EventType, void *);
 
-#endif /* NBN_GAME_CLIENT */
+/*
+ * Game server driver
+ */
+
+typedef enum
+{
+    NBN_DRIVER_GSERV_CLIENT_CONNECTED,
+    NBN_DRIVER_GSERV_CLIENT_PACKET_RECEIVED
+} NBN_Driver_GServ_EventType;
+
+int NBN_Driver_GServ_Start(uint32_t, uint16_t);
+void NBN_Driver_GServ_Stop(void);
+int NBN_Driver_GServ_RecvPackets(void);
+void NBN_Driver_GServ_DestroyClientConnection(uint32_t);
+int NBN_Driver_GServ_SendPacketTo(NBN_Packet *, uint32_t);
+void NBN_Driver_GServ_RaiseEvent(NBN_Driver_GServ_EventType, void *);
 
 #pragma endregion /* Network driver */
 
@@ -2735,36 +2715,29 @@ static int NBN_Connection_SendPacket(NBN_Connection *connection, NBN_Packet *pac
     NBN_LogTrace("Send packet %d to client %d (messages count: %d)",
             packet->header.seq_number, connection->id, packet->header.messages_count);
 
-#ifdef NBN_GAME_SERVER
-
+    if (connection->endpoint->is_server)
+    {
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
-    NBN_PacketSimulator_EnqueuePacket(game_server.endpoint.packet_simulator, packet, connection);
+        NBN_PacketSimulator_EnqueuePacket(game_server.endpoint.packet_simulator, packet, connection);
 
-    return 0;
-#else
-    if (connection->is_stale)
         return 0;
-
-    return NBN_Driver_GServ_SendPacketTo(packet, connection->id);
-#endif
-
-#endif /* NBN_GAME_SERVER */
-
-#ifdef NBN_GAME_CLIENT
-
-#if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
-    NBN_PacketSimulator_EnqueuePacket(game_client.endpoint.packet_simulator, packet, connection);
-
-    return 0;
 #else
-    (void)connection;
+        if (connection->is_stale)
+            return 0;
 
-    return NBN_Driver_GCli_SendPacket(packet);
+        return NBN_Driver_GServ_SendPacketTo(packet, connection->id);
 #endif
+    }
+    else
+    {
+#if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
+        NBN_PacketSimulator_EnqueuePacket(game_client.endpoint.packet_simulator, packet, connection);
 
-#endif /* NBN_GAME_CLIENT */
-
-    return NBN_ERROR;
+        return 0;
+#else
+        return NBN_Driver_GCli_SendPacket(packet);
+#endif
+    }
 }
 
 static NBN_Message *NBN_Connection_FindOutgoingMessage(NBN_Connection *connection, uint16_t id)
@@ -3361,9 +3334,10 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *events_queue)
 static uint32_t NBN_Endpoint_BuildProtocolId(const char *);
 static int NBN_Endpoint_ProcessReceivedPacket(NBN_Endpoint *, NBN_Packet *, NBN_Connection *);
 
-void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config)
+void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server)
 {
     endpoint->config = config;
+    endpoint->is_server = is_server;
 
     for (int i = 0; i < NBN_MAX_CHANNELS; i++)
         endpoint->channels[i] = NBN_CHANNEL_UNDEFINED;
@@ -3521,14 +3495,12 @@ static int NBN_Endpoint_ProcessReceivedPacket(NBN_Endpoint *endpoint, NBN_Packet
 
 #pragma region NBN_GameClient
 
-#ifdef NBN_GAME_CLIENT
-
 NBN_GameClient game_client;
 
-static int last_event_type = NBN_NO_EVENT;
-static uint8_t last_received_message_type;
-static void *last_received_message_data = NULL;
-static int last_client_closed_code = -1;
+static int client_last_event_type = NBN_NO_EVENT;
+static uint8_t client_last_received_message_type;
+static void *client_last_received_message_data = NULL;
+static int client_closed_code = -1;
 
 static void NBN_GameClient_ProcessReceivedMessage(NBN_Message *, NBN_Connection *);
 static int NBN_GameClient_HandleEvent(int);
@@ -3540,7 +3512,8 @@ void NBN_GameClient_Init(const char *protocol_name, const char *ip_address, uint
 {
     NBN_Endpoint_Init(
             &game_client.endpoint,
-            (NBN_Config){.protocol_name = protocol_name, .ip_address = ip_address, .port = port});
+            (NBN_Config){.protocol_name = protocol_name, .ip_address = ip_address, .port = port},
+            false);
     game_client.accept_data = NULL;
 }
 
@@ -3617,7 +3590,7 @@ int NBN_GameClient_Poll(void)
     }
 
     int ev_type = NBN_EventQueue_Dequeue(game_client.endpoint.events_queue);
-    last_event_type = ev_type;
+    client_last_event_type = ev_type;
 
     return NBN_GameClient_HandleEvent(ev_type);
 }
@@ -3662,12 +3635,12 @@ NBN_Connection *NBN_GameClient_CreateServerConnection(void)
 
 NBN_MessageInfo NBN_GameClient_GetReceivedMessageInfo(void)
 {
-    assert(last_event_type == NBN_MESSAGE_RECEIVED);
-    assert(last_received_message_data != NULL);
+    assert(client_last_event_type == NBN_MESSAGE_RECEIVED);
+    assert(client_last_received_message_data != NULL);
 
     return (NBN_MessageInfo){
-        .type = last_received_message_type,
-            .data = last_received_message_data,
+        .type = client_last_received_message_type,
+            .data = client_last_received_message_data,
             .sender = NULL};
 }
 
@@ -3678,7 +3651,7 @@ NBN_ConnectionStats NBN_GameClient_GetStats(void)
 
 int NBN_GameClient_GetServerCloseCode(void)
 {
-    return last_client_closed_code;
+    return client_closed_code;
 }
 
 NBN_AcceptData *NBN_GameClient_GetAcceptData(void)
@@ -3769,14 +3742,14 @@ static int NBN_GameClient_HandleMessageReceivedEvent(void)
 {
     NBN_Message *message = game_client.endpoint.events_queue->last_event_data;
 
-    last_received_message_type = message->header.type;
-    last_received_message_data = message->data;
+    client_last_received_message_type = message->header.type;
+    client_last_received_message_data = message->data;
 
     int ret;
 
     if (message->header.type == NBN_CLIENT_CLOSED_MESSAGE_TYPE)
     {
-        last_client_closed_code = ((NBN_ClientClosedMessage *)message->data)->code;
+        client_closed_code = ((NBN_ClientClosedMessage *)message->data)->code;
 
         ret = NBN_DISCONNECTED;
     }
@@ -3798,7 +3771,7 @@ static int NBN_GameClient_HandleMessageReceivedEvent(void)
 
 static void NBN_GameClient_ReleaseLastEvent(void)
 {
-    switch (last_event_type)
+    switch (client_last_event_type)
     {
         case NBN_MESSAGE_RECEIVED:
             NBN_GameClient_ReleaseMessageReceivedEvent();
@@ -3808,27 +3781,23 @@ static void NBN_GameClient_ReleaseLastEvent(void)
             break;
     }
 
-    last_received_message_data = NULL;
+    client_last_received_message_data = NULL;
 }
 
 static void NBN_GameClient_ReleaseMessageReceivedEvent(void)
 {
-    assert(last_received_message_data != NULL);
+    assert(client_last_received_message_data != NULL);
 
-    game_client.endpoint.message_destructors[last_received_message_type](last_received_message_data);
+    game_client.endpoint.message_destructors[client_last_received_message_type](client_last_received_message_data);
 
 #ifdef NBN_DEBUG
     mem_manager.report.destroyed_message_count++;
 #endif
 }
 
-#endif /* NBN_GAME_CLIENT */
-
 #pragma endregion /* NBN_GameClient */
 
 #pragma region Game client driver
-
-#ifdef NBN_GAME_CLIENT
 
 static void NBN_Driver_GCli_OnConnected(void);
 static void NBN_Driver_GCli_OnPacketReceived(NBN_Packet *packet);
@@ -3860,20 +3829,16 @@ static void NBN_Driver_GCli_OnPacketReceived(NBN_Packet *packet)
     assert(ret == 0);
 }
 
-#endif /* NBN_GAME_CLIENT */
-
 #pragma endregion /* Game Client driver */
 
 #pragma region NBN_GameServer
 
-#ifdef NBN_GAME_SERVER
-
 NBN_GameServer game_server;
 
-static int last_event_type = NBN_NO_EVENT;
-static NBN_Connection *last_event_client = NULL;
-static void *last_received_message_data = NULL;
-static uint8_t last_received_message_type;
+static int server_last_event_type = NBN_NO_EVENT;
+static NBN_Connection *server_last_event_client = NULL;
+static void *server_last_received_message_data = NULL;
+static uint8_t server_last_received_message_type;
 
 static void NBN_GameServer_ProcessReceivedMessage(NBN_Message *, NBN_Connection *);
 static void NBN_GameServer_CloseStaleClientConnections(void);
@@ -3888,7 +3853,10 @@ static void NBN_GameServer_ReleaseClientDisconnectedEvent(void);
 
 void NBN_GameServer_Init(const char *protocol_name, uint16_t port)
 {
-    NBN_Endpoint_Init(&game_server.endpoint, (NBN_Config){.protocol_name = protocol_name, .port = port});
+    NBN_Endpoint_Init(
+            &game_server.endpoint,
+            (NBN_Config){.protocol_name = protocol_name, .port = port},
+            true);
 
     game_server.clients = NBN_List_Create();
 }
@@ -3976,7 +3944,7 @@ int NBN_GameServer_Poll(void)
     }
 
     int ev_type = NBN_EventQueue_Dequeue(game_server.endpoint.events_queue);
-    last_event_type = ev_type;
+    server_last_event_type = ev_type;
 
     NBN_GameServer_HandleEvent(ev_type);
 
@@ -4096,8 +4064,8 @@ void NBN_GameServer_BroadcastMessage(void)
 
 void NBN_GameServer_AcceptIncomingConnection(NBN_AcceptData *accept_data)
 {
-    assert(last_event_type == NBN_NEW_CONNECTION);
-    assert(last_event_client != NULL);
+    assert(server_last_event_type == NBN_NEW_CONNECTION);
+    assert(server_last_event_client != NULL);
 
     NBN_ClientAcceptedMessage *msg = NBN_GameServer_CreateReliableMessage(NBN_CLIENT_ACCEPTED_MESSAGE_TYPE);
 
@@ -4110,14 +4078,14 @@ void NBN_GameServer_AcceptIncomingConnection(NBN_AcceptData *accept_data)
         memcpy(msg->data, accept_data->buffer, NBN_ACCEPT_DATA_MAX_SIZE);
     }
 
-    if (!NBN_GameServer_SendMessageTo(last_event_client))
+    if (!NBN_GameServer_SendMessageTo(server_last_event_client))
     {
-        NBN_LogError("Failed to send accept message to client %d. Client was closed.", last_event_client->id);
+        NBN_LogError("Failed to send accept message to client %d. Client was closed.", server_last_event_client->id);
 
         return;
     }
 
-    last_event_client->is_accepted = true;
+    server_last_event_client->is_accepted = true;
 
     if (accept_data != NULL)
         NBN_AcceptData_Destroy(accept_data);
@@ -4125,10 +4093,10 @@ void NBN_GameServer_AcceptIncomingConnection(NBN_AcceptData *accept_data)
 
 void NBN_GameServer_RejectIncomingConnectionWithCode(int code)
 {
-    assert(last_event_type == NBN_NEW_CONNECTION);
-    assert(last_event_client != NULL);
+    assert(server_last_event_type == NBN_NEW_CONNECTION);
+    assert(server_last_event_client != NULL);
 
-    NBN_GameServer_CloseClientWithCode(last_event_client, code);
+    NBN_GameServer_CloseClientWithCode(server_last_event_client, code);
 }
 
 void NBN_GameServer_RejectIncomingConnection(void)
@@ -4138,17 +4106,17 @@ void NBN_GameServer_RejectIncomingConnection(void)
 
 NBN_Connection *NBN_GameServer_GetIncomingConnection(void)
 {
-    assert(last_event_type == NBN_NEW_CONNECTION);
-    assert(last_event_client != NULL);
+    assert(server_last_event_type == NBN_NEW_CONNECTION);
+    assert(server_last_event_client != NULL);
 
-    return last_event_client;
+    return server_last_event_client;
 }
 
 uint32_t NBN_GameServer_GetDisconnectedClientId(void)
 {
-    assert(last_event_type == NBN_CLIENT_DISCONNECTED);
+    assert(server_last_event_type == NBN_CLIENT_DISCONNECTED);
 
-    return last_event_client->id;
+    return server_last_event_client->id;
 }
 
 NBN_Connection *NBN_GameServer_FindClientById(uint32_t client_id)
@@ -4170,14 +4138,14 @@ NBN_Connection *NBN_GameServer_FindClientById(uint32_t client_id)
 
 NBN_MessageInfo NBN_GameServer_GetReceivedMessageInfo(void)
 {
-    assert(last_event_type == NBN_CLIENT_MESSAGE_RECEIVED);
-    assert(last_received_message_data != NULL);
-    assert(last_event_client != NULL);
+    assert(server_last_event_type == NBN_CLIENT_MESSAGE_RECEIVED);
+    assert(server_last_received_message_data != NULL);
+    assert(server_last_event_client != NULL);
 
     return (NBN_MessageInfo){
-        .type = last_received_message_type,
-            .data = last_received_message_data,
-            .sender = last_event_client};
+        .type = server_last_received_message_type,
+            .data = server_last_received_message_data,
+            .sender = server_last_event_client};
 }
 
 NBN_GameServerStats NBN_GameServer_GetStats(void)
@@ -4317,28 +4285,28 @@ static void NBN_GameServer_HandleEvent(int event_type)
 
 static void NBN_GameServer_HandleClientConnectionEvent(void)
 {
-    last_event_client = game_server.endpoint.events_queue->last_event_data;
+    server_last_event_client = game_server.endpoint.events_queue->last_event_data;
 }
 
 static void NBN_GameServer_HandleClientDisconnectedEvent(void)
 {
-    last_event_client = game_server.endpoint.events_queue->last_event_data;
+    server_last_event_client = game_server.endpoint.events_queue->last_event_data;
 }
 
 static void NBN_GameServer_HandleMessageReceivedEvent(void)
 {
     NBN_Message *message = game_server.endpoint.events_queue->last_event_data;
 
-    last_event_client = message->sender;
-    last_received_message_type = message->header.type;
-    last_received_message_data = message->data;
+    server_last_event_client = message->sender;
+    server_last_received_message_type = message->header.type;
+    server_last_received_message_data = message->data;
 
     NBN_Message_Destroy(message, false);
 }
 
 static void NBN_GameServer_ReleaseLastEvent(void)
 {
-    switch (last_event_type)
+    switch (server_last_event_type)
     {
         case NBN_CLIENT_DISCONNECTED:
             NBN_GameServer_ReleaseClientDisconnectedEvent();
@@ -4352,33 +4320,29 @@ static void NBN_GameServer_ReleaseLastEvent(void)
             break;
     }
 
-    last_event_client = NULL;
-    last_received_message_data = NULL;
+    server_last_event_client = NULL;
+    server_last_received_message_data = NULL;
 }
 
 static void NBN_GameServer_ReleaseClientDisconnectedEvent(void)
 {
-    NBN_Connection_Destroy(last_event_client);
+    NBN_Connection_Destroy(server_last_event_client);
 }
 
 static void NBN_GameServer_ReleaseMessageReceivedEvent(void)
 {
-    assert(last_received_message_data != NULL);
+    assert(server_last_received_message_data != NULL);
 
-    game_server.endpoint.message_destructors[last_received_message_type](last_received_message_data);
+    game_server.endpoint.message_destructors[server_last_received_message_type](server_last_received_message_data);
 
 #ifdef NBN_DEBUG
     mem_manager.report.destroyed_message_count++;
 #endif
 }
 
-#endif /* NBN_GAME_SERVER */
-
 #pragma endregion /* NBN_GameServer */
 
 #pragma region Game server driver
-
-#ifdef NBN_GAME_SERVER
 
 static void NBN_GServ_Driver_OnClientConnected(NBN_Connection *);
 static void NBN_GServ_Driver_OnClientPacketReceived(NBN_Packet *);
@@ -4415,8 +4379,6 @@ static void NBN_GServ_Driver_OnClientPacketReceived(NBN_Packet *packet)
         NBN_GameServer_CloseClient(packet->sender);
     }
 }
-
-#endif /* NBN_GAME_SERVER */
 
 #pragma endregion /* Game server driver */
 
@@ -4614,20 +4576,17 @@ static int NBN_PacketSimulator_SendPacket(
         return 0;
     }
 
-#ifdef NBN_GAME_CLIENT
-    (void)receiver;
+    if (receiver->endpoint->is_server)
+    {
+        if (receiver->is_stale)
+            return 0;
 
-    return NBN_Driver_GCli_SendPacket(packet);
-#endif
-
-#ifdef NBN_GAME_SERVER
-    if (receiver->is_stale)
-        return 0;
-
-    return NBN_Driver_GServ_SendPacketTo(packet, receiver->id);
-#endif
-
-    return NBN_ERROR;
+        return NBN_Driver_GServ_SendPacketTo(packet, receiver->id);
+    }
+    else
+    {
+        return NBN_Driver_GCli_SendPacket(packet);
+    }
 }
 
 static unsigned int NBN_PacketSimulator_GetRandomDuplicatePacketCount(NBN_PacketSimulator *packet_simulator)

@@ -34,7 +34,7 @@ freely, subject to the following restrictions:
 
 #include <emscripten/emscripten.h>
 
-#ifdef NBN_GAME_SERVER
+#pragma region Game server
 
 /* --- JS API --- */
 
@@ -104,9 +104,9 @@ int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, uint32_t peer_id)
     return __js_game_server_send_packet_to(packet->buffer, packet->size, peer_id);
 }
 
-#endif /* NBN_GAME_SERVER */
+#pragma endregion /* Game server */
 
-#ifdef NBN_GAME_CLIENT
+#pragma region Game client
 
 /* --- JS API --- */
 
@@ -170,6 +170,6 @@ int NBN_Driver_GCli_SendPacket(NBN_Packet *packet)
     return __js_game_client_send_packet(packet->buffer, packet->size);
 }
 
-#endif /* NBN_GAME_CLIENT */
+#pragma endregion /* Game client */
 
 #endif /* NBNET_IMPL */
