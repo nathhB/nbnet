@@ -278,10 +278,10 @@ int main(int argc, char *argv[])
     RegisterMessages();
 
     // Network conditions simulated variables (read from the command line, default is always 0)
-    NBN_Debug_SetPing(GetOptions().ping);
-    NBN_Debug_SetJitter(GetOptions().jitter);
-    NBN_Debug_SetPacketLoss(GetOptions().packet_loss);
-    NBN_Debug_SetPacketDuplication(GetOptions().packet_duplication);
+    NBN_GameServer_SetPing(GetOptions().ping);
+    NBN_GameServer_SetJitter(GetOptions().jitter);
+    NBN_GameServer_SetPacketLoss(GetOptions().packet_loss);
+    NBN_GameServer_SetPacketDuplication(GetOptions().packet_duplication);
 
     // Start the server
     if (NBN_GameServer_Start() < 0)
