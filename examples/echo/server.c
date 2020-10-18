@@ -53,6 +53,9 @@ static int EchoReceivedMessage(void)
     memcpy(echo->data, msg->data, msg->length);
     echo->length = msg->length;
 
+    // Destroy the received message
+    NBN_GameServer_DestroyMessage(ECHO_MESSAGE_TYPE, msg);
+
     // Send the EchoMessage to the client
     // If the send fails the client will be disconnected and a NBN_CLIENT_DISCONNECTED event
     // will be received (see event polling in main)

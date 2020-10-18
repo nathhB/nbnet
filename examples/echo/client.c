@@ -66,6 +66,8 @@ void OnMessageReceived(void)
     EchoMessage *msg = (EchoMessage *)msg_info.data;
 
     Log(LOG_INFO, "Received echo: %s (%d bytes)", msg->data, msg->length);
+
+    NBN_GameClient_DestroyMessage(ECHO_MESSAGE_TYPE, msg);
 }
 
 int SendEchoMessage(const char *msg)
