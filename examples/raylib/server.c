@@ -159,12 +159,16 @@ static void HandleUpdateStateMessage(UpdateStateMessage *msg, Client *sender)
     sender->state.x = msg->x;
     sender->state.y = msg->y;
     sender->state.val = msg->val;
+
+    NBN_GameServer_DestroyMessage(UPDATE_STATE_MESSAGE, msg);
 }
 
 static void HandleChangeColorMessage(ChangeColorMessage *msg, Client *sender)
 {
     // Update the client color
     sender->state.color = msg->color;
+
+    NBN_GameServer_DestroyMessage(CHANGE_COLOR_MESSAGE, msg);
 }
 
 static void HandleReceivedMessage(void)

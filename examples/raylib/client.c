@@ -228,6 +228,8 @@ static void HandleGameStateMessage(GameStateMessage *msg)
 
     // Destroy disconnected clients
     DestroyDisconnectedClients();
+
+    NBN_GameClient_DestroyMessage(GAME_STATE_MESSAGE, msg);
 }
 
 static void HandleReceivedMessage(void)
