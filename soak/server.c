@@ -163,6 +163,7 @@ static int HandleReceivedSoakMessage(SoakMessage *msg, NBN_Connection *sender)
     memcpy(dup_msg, msg, sizeof(SoakMessage));
 
     NBN_List_PushBack(soak_client->echo_queue, dup_msg);
+    NBN_GameServer_DestroyMessage(SOAK_MESSAGE, msg);
 
     return 0;
 }

@@ -114,6 +114,8 @@ static int HandleReceivedSoakMessage(SoakMessage *msg)
     messages_data[msg->id - 1] = NULL;
     last_recved_message_id = msg->id;
 
+    NBN_GameClient_DestroyMessage(SOAK_MESSAGE, msg);
+
     Soak_LogInfo("Received soak message (%d/%d)", msg->id, Soak_GetOptions().messages_count);
 
     if (last_recved_message_id == Soak_GetOptions().messages_count)
