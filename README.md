@@ -77,7 +77,7 @@ From here I suggest you hop into the examples. If you are interested in using th
 
 If you don't want to use the built in nbnet message serialization and use your own, you can work with raw byte arrays.
 
-See the [echo_bytes]() example.
+See the [echo_bytes](https://github.com/nathhB/nbnet/tree/master/examples/echo_bytes) example.
 
 ## WebRTC
 
