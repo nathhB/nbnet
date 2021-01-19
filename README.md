@@ -55,14 +55,6 @@ You also need to provide a driver implementation, if you decide to use the nbnet
 
 after including the nbnet header in the same source file where you defined `NBNET_IMPL`.
 
-
-nbnet uses two slightly different APIs, one for client code and the other one for server code, you have to use a pair of macros to let nbnet know what API to use: `NBN_GAME_CLIENT` and `NBN_GAME_SERVER`.
-What you want to do is define the former when compiling your client code and the later when compiling your server code, with gcc it would look something like:
-
-`gcc -DNBN_GAME_CLIENT client.c -o client`
-
-`gcc -DNBN_GAME_SERVER server.c -o server`
-
 nbnet does not provide any logging capacibilities so you have to provide your own using a bunch of macros:
 
 ```
@@ -80,6 +72,12 @@ Same thing for memory allocation and deallocation:
 ```
 
 From here I suggest you hop into the examples. If you are interested in using the WebRTC driver, read below.
+
+### Byte arrays
+
+If you don't want to use the built in nbnet message serialization and use your own, you can work with raw byte arrays.
+
+See the [echo_bytes]() example.
 
 ## WebRTC
 
