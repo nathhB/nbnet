@@ -123,9 +123,9 @@ int main(int argc, char *argv[])
     // and port
     NBN_GameClient_Init(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT);
 
-    // Register messages, have to be done after NBN_GameClient_Init and before NBN_GameClient_Start
+    // Registering messages, have to be done after NBN_GameClient_Init and before NBN_GameClient_Start
     // Messages need to be registered on both client and server side
-    RegisterMessages();
+    NBN_GameClient_RegisterMessage(ECHO_MESSAGE_TYPE, EchoMessage);
 
     if (NBN_GameClient_Start() < 0)
     {

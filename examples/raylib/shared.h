@@ -181,7 +181,6 @@ typedef struct
     float jitter;
 } Options;
 
-void RegisterMessages(void);
 int ReadCommandLine(int, char *[]);
 Options GetOptions(void);
 

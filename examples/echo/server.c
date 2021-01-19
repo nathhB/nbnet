@@ -71,8 +71,8 @@ int main(void)
     // Init server with a protocol name and a port, must be done first
     NBN_GameServer_Init(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT);
 
-    // Register messages, have to be done after NBN_GameServer_Init and before NBN_GameServer_Start
-    RegisterMessages();
+    // Registering messages, have to be done after NBN_GameServer_Init and before NBN_GameServer_Start
+    NBN_GameServer_RegisterMessage(ECHO_MESSAGE_TYPE, EchoMessage);
 
     // Start the server
     if (NBN_GameServer_Start() < 0)
