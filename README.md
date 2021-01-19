@@ -29,6 +29,8 @@ nbnet comes with two drivers:
 
 You can see it in action [in this video](https://www.youtube.com/watch?v=BJl_XN3QJhQ&ab_channel=NathanBIAGINI).
 
+If you want to discuss the library you can join the [nbnet's discord server](https://discord.gg/esR8FSyPnF).
+
 ## Portability
 
 nbnet is developed with portability in mind. I tested (and will continue to do so) the library on the following systems:
