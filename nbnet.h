@@ -462,6 +462,24 @@ END_MESSAGE
 
 #pragma endregion /* NBN_ClientAcceptedMessage */
 
+#pragma region NBN_ByteArrayMessage
+
+#define NBN_BYTE_ARRAY_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 4) /* Reserved message type */
+#define NBN_BYTE_ARRAY_MAX_SIZE 4096
+
+typedef struct
+{
+    uint8_t bytes[NBN_BYTE_ARRAY_MAX_SIZE];
+    unsigned int length;
+} NBN_ByteArrayMessage;
+
+BEGIN_MESSAGE(NBN_ByteArrayMessage)
+    SERIALIZE_UINT(msg->length, 0, NBN_BYTE_ARRAY_MAX_SIZE);
+    SERIALIZE_BYTES(msg->bytes, msg->length);
+END_MESSAGE
+
+#pragma endregion /* NBN_ByteArrayMessage */
+
 #pragma region NBN_Channel
 
 #define NBN_CHANNEL_BUFFER_SIZE 512
@@ -778,7 +796,7 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 #define NBN_GameClient_RegisterMessage(type, name) \
 { \
     if (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE \
-            || type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE) \
+            || type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || type == NBN_BYTE_ARRAY_MESSAGE_TYPE) \
     { \
         NBN_LogError("Message type %d is reserved by the library", type); \
         NBN_Abort(); \
@@ -806,7 +824,7 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 #define NBN_GameServer_RegisterMessage(type, name) \
 { \
     if (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE \
-            || type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE) \
+            || type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || type == NBN_BYTE_ARRAY_MESSAGE_TYPE) \
     { \
         NBN_LogError("Message type %d is reserved by the library", type); \
         NBN_Abort(); \
@@ -897,6 +915,8 @@ void *NBN_GameClient_CreateMessage(uint8_t, uint8_t);
 void *NBN_GameClient_CreateUnreliableMessage(uint8_t);
 void *NBN_GameClient_CreateReliableMessage(uint8_t);
 int NBN_GameClient_SendMessage(void);
+int NBN_GameClient_SendReliableByteArray(uint8_t *, unsigned int);
+int NBN_GameClient_SendUnreliableByteArray(uint8_t *, unsigned int);
 NBN_Connection *NBN_GameClient_CreateServerConnection(void);
 NBN_MessageInfo NBN_GameClient_GetReceivedMessageInfo(void);
 NBN_ConnectionStats NBN_GameClient_GetStats(void);
@@ -3380,6 +3400,12 @@ void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server
     NBN_Endpoint_RegisterMessageSerializer(
             endpoint, (NBN_MessageSerializer)NBN_ClientAcceptedMessage_Serialize, NBN_CLIENT_ACCEPTED_MESSAGE_TYPE);
 
+    /* Register NBN_ByteArrayMessage library message */
+    NBN_Endpoint_RegisterMessageBuilder(
+            endpoint, (NBN_MessageBuilder)NBN_ByteArrayMessage_Create, NBN_BYTE_ARRAY_MESSAGE_TYPE);
+    NBN_Endpoint_RegisterMessageSerializer(
+            endpoint, (NBN_MessageSerializer)NBN_ByteArrayMessage_Serialize, NBN_BYTE_ARRAY_MESSAGE_TYPE);
+
 #ifdef NBN_DEBUG
     endpoint->OnMessageAddedToRecvQueue = NULL;
 #endif
@@ -3619,6 +3645,42 @@ void *NBN_GameClient_CreateReliableMessage(uint8_t type)
 int NBN_GameClient_SendMessage(void)
 {
     return NBN_Connection_EnqueueOutgoingMessage(game_client.server_connection);
+}
+
+int NBN_GameClient_SendReliableByteArray(uint8_t *bytes, unsigned int length)
+{
+    if (length > NBN_BYTE_ARRAY_MAX_SIZE)
+    {
+        NBN_LogError("Byte array cannot exceed %d bytes", NBN_BYTE_ARRAY_MAX_SIZE);
+
+        return -1;
+    }
+
+    NBN_ByteArrayMessage *msg = NBN_GameClient_CreateReliableMessage(NBN_BYTE_ARRAY_MESSAGE_TYPE);
+
+    memcpy(msg->bytes, bytes, length);
+
+    msg->length = length;
+
+    return NBN_GameClient_SendMessage();
+}
+
+int NBN_GameClient_SendUnreliableByteArray(uint8_t *bytes, unsigned int length)
+{
+    if (length > NBN_BYTE_ARRAY_MAX_SIZE)
+    {
+        NBN_LogError("Byte array cannot exceed %d bytes", NBN_BYTE_ARRAY_MAX_SIZE);
+
+        return -1;
+    }
+
+    NBN_ByteArrayMessage *msg = NBN_GameClient_CreateUnreliableMessage(NBN_BYTE_ARRAY_MESSAGE_TYPE);
+
+    memcpy(msg->bytes, bytes, length);
+
+    msg->length = length;
+
+    return NBN_GameClient_SendMessage();
 }
 
 NBN_Connection *NBN_GameClient_CreateServerConnection(void)
@@ -4039,6 +4101,42 @@ bool NBN_GameServer_SendMessageTo(NBN_Connection *client)
     }
 
     return true;
+}
+
+int NBN_GameServer_SendReliableByteArrayTo(uint8_t *bytes, unsigned int length, NBN_Connection *client)
+{
+    if (length > NBN_BYTE_ARRAY_MAX_SIZE)
+    {
+        NBN_LogError("Byte array cannot exceed %d bytes", NBN_BYTE_ARRAY_MAX_SIZE);
+
+        return -1;
+    }
+
+    NBN_ByteArrayMessage *msg = NBN_GameServer_CreateReliableMessage(NBN_BYTE_ARRAY_MESSAGE_TYPE);
+
+    memcpy(msg->bytes, bytes, length);
+
+    msg->length = length;
+
+    return NBN_GameServer_SendMessageTo(client);
+}
+
+int NBN_GameServer_SendUnreliableByteArrayTo(uint8_t *bytes, unsigned int length, NBN_Connection *client)
+{
+    if (length > NBN_BYTE_ARRAY_MAX_SIZE)
+    {
+        NBN_LogError("Byte array cannot exceed %d bytes", NBN_BYTE_ARRAY_MAX_SIZE);
+
+        return -1;
+    }
+
+    NBN_ByteArrayMessage *msg = NBN_GameServer_CreateUnreliableMessage(NBN_BYTE_ARRAY_MESSAGE_TYPE);
+
+    memcpy(msg->bytes, bytes, length);
+
+    msg->length = length;
+
+    return NBN_GameServer_SendMessageTo(client);
 }
 
 void NBN_GameServer_BroadcastMessage(void)
