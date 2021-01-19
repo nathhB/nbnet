@@ -279,7 +279,9 @@ int main(int argc, char *argv[])
     NBN_GameServer_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT);
 
     // Register messages, have to be done after NBN_GameServer_Init and before NBN_GameServer_Start
-    RegisterMessages();
+    NBN_GameServer_RegisterMessage(CHANGE_COLOR_MESSAGE, ChangeColorMessage);
+    NBN_GameServer_RegisterMessage(UPDATE_STATE_MESSAGE, UpdateStateMessage);
+    NBN_GameServer_RegisterMessage(GAME_STATE_MESSAGE, GameStateMessage);
 
     // Network conditions simulated variables (read from the command line, default is always 0)
     NBN_GameServer_SetPing(GetOptions().ping);

@@ -514,7 +514,9 @@ int main(int argc, char *argv[])
 
     // Register messages, have to be done after NBN_GameClient_Init and before NBN_GameClient_Start
     // Messages need to be registered on both client and server side
-    RegisterMessages();
+    NBN_GameClient_RegisterMessage(CHANGE_COLOR_MESSAGE, ChangeColorMessage);
+    NBN_GameClient_RegisterMessage(UPDATE_STATE_MESSAGE, UpdateStateMessage);
+    NBN_GameClient_RegisterMessage(GAME_STATE_MESSAGE, GameStateMessage);
 
     // Network conditions simulated variables (read from the command line, default is always 0)
     NBN_GameClient_SetPing(GetOptions().ping);

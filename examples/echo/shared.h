@@ -71,7 +71,6 @@ BEGIN_MESSAGE(EchoMessage)
     SERIALIZE_BYTES(msg->data, msg->length);
 END_MESSAGE
 
-void RegisterMessages(void);
 void Sleep(double);
 
 #endif /* ECHO_EXAMPLE_SHARED_H */
