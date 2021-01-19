@@ -10,10 +10,8 @@ target_link_libraries(server pthread m)
 
 add_compile_options(-Wall -Wextra)
 
-target_compile_definitions(client PUBLIC
-    NBN_GAME_CLIENT NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR)
-target_compile_definitions(server PUBLIC
-    NBN_GAME_SERVER NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR)
+target_compile_definitions(client PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR)
+target_compile_definitions(server PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR)
 
 if(WIN32)
     target_link_libraries(client wsock32 ws2_32)
