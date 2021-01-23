@@ -33,6 +33,20 @@
 #include <math.h>
 #include <assert.h>
 
+#ifdef NBN_AUTH
+
+#define ECC_CURVE NIST_K571
+#define CBC 1
+
+#include "ecdh.h"
+#include "aes.h"
+
+#ifndef AES128
+#error "AES128 is not defined"
+#endif
+
+#endif /* NBN_AUTH */
+
 #pragma region Declarations
 
 #define NBN_Abort abort /* TODO: custom abort mechanism */
@@ -386,6 +400,10 @@ typedef struct
     uint16_t ack;
     uint32_t ack_bits;
     uint8_t messages_count;
+
+#ifdef NBN_AUTH
+    uint8_t is_encrypted;
+#endif
 } __attribute__((__packed__))  NBN_PacketHeader;
 
 typedef struct
@@ -401,12 +419,26 @@ typedef struct
     NBN_WriteStream w_stream;
     NBN_ReadStream r_stream;
     NBN_MeasureStream m_stream;
+
+#ifdef NBN_AUTH
+    /* AES IV, different for each packet (computed from packet's sequence number) */
+    uint8_t aes_iv[AES_BLOCKLEN]; 
+#endif
 } NBN_Packet;
 
 void NBN_Packet_InitWrite(NBN_Packet *, uint32_t, uint16_t, uint16_t, uint32_t);
-int NBN_Packet_InitRead(NBN_Packet *, uint8_t[NBN_PACKET_MAX_SIZE], unsigned int);
+int NBN_Packet_InitRead(NBN_Packet *, NBN_Connection *, uint8_t[NBN_PACKET_MAX_SIZE], unsigned int);
+uint32_t NBN_Packet_ReadProtocolId(uint8_t[NBN_PACKET_MAX_SIZE], unsigned int);
 int NBN_Packet_WriteMessage(NBN_Packet *, NBN_Message *);
-int NBN_Packet_Seal(NBN_Packet *);
+int NBN_Packet_Seal(NBN_Packet *, NBN_Connection *);
+
+#ifdef NBN_AUTH
+
+void NBN_Packet_Encrypt(NBN_Packet *, NBN_Connection *);
+void NBN_Packet_Decrypt(NBN_Packet *, NBN_Connection *);
+void NBN_Packet_ComputeIV(NBN_Packet *, NBN_Connection *);
+
+#endif /* NBN_AUTH */
 
 #pragma endregion /* NBN_Packet */
 
@@ -479,6 +511,42 @@ BEGIN_MESSAGE(NBN_ByteArrayMessage)
 END_MESSAGE
 
 #pragma endregion /* NBN_ByteArrayMessage */
+
+#pragma region NBN_PublicCryptoInfoMessage
+
+#ifdef NBN_AUTH
+
+#define NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 5) /* Reserved message type */
+
+typedef struct
+{
+    uint8_t key[ECC_PUB_KEY_SIZE];
+    uint8_t iv[AES_BLOCKLEN];
+} NBN_PublicCryptoInfoMessage;
+
+BEGIN_MESSAGE(NBN_PublicCryptoInfoMessage)
+    SERIALIZE_BYTES(msg->key, ECC_PUB_KEY_SIZE);
+    SERIALIZE_BYTES(msg->key, AES_BLOCKLEN);
+END_MESSAGE
+
+#endif /* NBN_AUTH */
+
+#pragma endregion /* NBN_PublicCryptoInfoMessage */
+
+#pragma region NBN_StartEncryptMessage
+
+#ifdef NBN_AUTH
+
+#define NBN_START_ENCRYPT_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 6) /* Reserved message type */
+
+typedef struct {} NBN_StartEncryptMessage;
+
+BEGIN_MESSAGE(NBN_StartEncryptMessage)
+END_MESSAGE
+
+#endif /* NBN_AUTH */
+
+#pragma endregion /* NBN_StartEncryptMessage */
 
 #pragma region NBN_Channel
 
@@ -615,6 +683,17 @@ typedef enum
 
 #endif /* NBN_DEBUG */
 
+#ifdef NBN_AUTH
+
+typedef struct
+{
+    uint8_t pub_key[ECC_PUB_KEY_SIZE]; /* Public key */
+    uint8_t prv_key[ECC_PRV_KEY_SIZE]; /* Private key */
+    uint8_t shared_key[ECC_PUB_KEY_SIZE]; /* Shared key */
+} NBN_ConnectionKeySet;
+
+#endif /* NBN_AUTH */
+
 struct __NBN_Connection
 {
     uint32_t id;
@@ -650,6 +729,21 @@ struct __NBN_Connection
     NBN_Channel *channels[NBN_MAX_CHANNELS];
     NBN_List *recv_queue;
     NBN_List *send_queue;
+
+#ifdef NBN_AUTH
+    /*
+     * Keys
+     */
+    NBN_ConnectionKeySet keys1; /* Used for message encryption */
+    NBN_ConnectionKeySet keys2; /* Used for packets IV */
+
+    uint8_t aes_iv[AES_BLOCKLEN]; /* AES IV */
+
+    struct AES_ctx aes_ctx; /* AES context */
+
+    bool can_decrypt;
+    bool can_encrypt;
+#endif /* NBN_AUTH */
 };
 
 NBN_Connection *NBN_Connection_Create(uint32_t, uint32_t, NBN_Endpoint *);
@@ -793,10 +887,22 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 
 #pragma region NBN_Endpoint
 
+#ifdef NBN_AUTH
+
+#define NBN_IsReservedMessage(type) (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE \
+|| type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || type == NBN_BYTE_ARRAY_MESSAGE_TYPE \
+|| type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE || type == NBN_START_ENCRYPT_MESSAGE_TYPE)
+
+#else
+
+#define NBN_IsReservedMessage(type) (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE \
+|| type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || type == NBN_BYTE_ARRAY_MESSAGE_TYPE)
+
+#endif /* NBN_AUTH */
+
 #define NBN_GameClient_RegisterMessage(type, name) \
 { \
-    if (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE \
-            || type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || type == NBN_BYTE_ARRAY_MESSAGE_TYPE) \
+    if (NBN_IsReservedMessage(type)) \
     { \
         NBN_LogError("Message type %d is reserved by the library", type); \
         NBN_Abort(); \
@@ -823,8 +929,7 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 
 #define NBN_GameServer_RegisterMessage(type, name) \
 { \
-    if (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE \
-            || type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || type == NBN_BYTE_ARRAY_MESSAGE_TYPE) \
+    if (NBN_IsReservedMessage(type)) \
     { \
         NBN_LogError("Message type %d is reserved by the library", type); \
         NBN_Abort(); \
@@ -1819,9 +1924,140 @@ void NBN_MeasureStream_Reset(NBN_MeasureStream *measure_stream)
 
 #pragma endregion /* Serialization */
 
+#ifdef NBN_AUTH
+
+#pragma region Pseudo random generator
+
+/* I did not write this: https://github.com/Duthomhas/CSPRNG */
+
+/*
+// Source for the OS Cryptographically-Secure Pseudo-Random Number Generator
+// Copyright 2017 Michael Thomas Greer
+// Distributed under the Boost Software License, Version 1.0.
+// (See accompanying file ../LICENSE_1_0.txt or copy at
+//  http://www.boost.org/LICENSE_1_0.txt )
+*/
+
+typedef void* CSPRNG;
+
+/* ///////////////////////////////////////////////////////////////////////////////////////////// */
+#ifdef _WIN32
+/* ///////////////////////////////////////////////////////////////////////////////////////////// */
+
+#include <windows.h>
+#include <wincrypt.h>
+
+#ifdef _MSC_VER
+#pragma comment(lib, "advapi32.lib")
+#endif
+
+/* ------------------------------------------------------------------------------------------- */
+typedef union
+{
+    CSPRNG     object;
+    HCRYPTPROV hCryptProv;
+}
+CSPRNG_TYPE;
+
+/* ------------------------------------------------------------------------------------------- */
+static CSPRNG csprng_create()
+{
+    CSPRNG_TYPE csprng;
+    if (!CryptAcquireContextA( &csprng.hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT ))
+        csprng.hCryptProv = 0;
+    return csprng.object;
+}
+
+/* ------------------------------------------------------------------------------------------- */
+static int csprng_get( CSPRNG object, void* dest, unsigned long long size )
+{
+    // Alas, we have to be pedantic here. csprng_get().size is a 64-bit entity.
+    // However, CryptGenRandom().size is only a 32-bit DWORD. So we have to make sure failure
+    // isn't from providing less random data than requested, even if absurd.
+    unsigned long long n;
+
+    CSPRNG_TYPE csprng;
+    csprng.object = object;
+    if (!csprng.hCryptProv) return 0;
+
+    n = size >> 30;
+    while (n--)
+        if (!CryptGenRandom( csprng.hCryptProv, 1UL << 30, (BYTE*)dest )) return 0;
+
+    return !!CryptGenRandom( csprng.hCryptProv, size & ((1ULL << 30) - 1), (BYTE*)dest );
+}
+
+/* ------------------------------------------------------------------------------------------- */
+static long csprng_get_int( CSPRNG object )
+{
+    long result;
+    return csprng_get( object, &result, sizeof(result) ) ? result : 0;
+}
+
+/* ------------------------------------------------------------------------------------------- */
+static CSPRNG csprng_destroy( CSPRNG object )
+{
+    CSPRNG_TYPE csprng;
+    csprng.object = object;
+    if (csprng.hCryptProv) CryptReleaseContext( csprng.hCryptProv, 0 );
+    return 0;
+}
+
+/* ///////////////////////////////////////////////////////////////////////////////////////////// */
+#else  /* Using /dev/urandom                                                                     */
+/* ///////////////////////////////////////////////////////////////////////////////////////////// */
+
+#include <stdio.h>
+
+/* ------------------------------------------------------------------------------------------- */
+typedef union
+{
+    CSPRNG object;
+    FILE*  urandom;
+}
+CSPRNG_TYPE;
+
+/* ------------------------------------------------------------------------------------------- */
+static CSPRNG csprng_create()
+{
+    CSPRNG_TYPE csprng;
+    csprng.urandom = fopen( "/dev/urandom", "rb" );
+    return csprng.object;
+}
+
+/* ------------------------------------------------------------------------------------------- */
+static int csprng_get( CSPRNG object, void* dest, unsigned long long size )
+{
+    CSPRNG_TYPE csprng;
+    csprng.object = object;
+    return (csprng.urandom) && (fread( (char*)dest, 1, size, csprng.urandom ) == size);
+}
+
+/* ------------------------------------------------------------------------------------------- */
+static long csprng_get_int( CSPRNG object )
+{
+    long result;
+    return csprng_get( object, &result, sizeof(result) ) ? result : 0;
+}
+
+/* ------------------------------------------------------------------------------------------- */
+static CSPRNG csprng_destroy( CSPRNG object )
+{
+    CSPRNG_TYPE csprng;
+    csprng.object = object;
+    if (csprng.urandom) fclose( csprng.urandom );
+    return 0;
+}
+
+#endif /* _WIN32 */
+
+#pragma endregion /* Pseudo random generator */
+
+#endif /* NBN_AUTH */
+
 #pragma region NBN_Packet
 
-static int NBN_Packet_SerializeHeader(NBN_Packet *, NBN_Stream *);
+static int NBN_Packet_SerializeHeader(NBN_PacketHeader *, NBN_Stream *);
 
 void NBN_Packet_InitWrite(
         NBN_Packet *packet, uint32_t protocol_id, uint16_t seq_number, uint16_t ack, uint32_t ack_bits)
@@ -1842,25 +2078,76 @@ void NBN_Packet_InitWrite(
     NBN_MeasureStream_Init(&packet->m_stream);
 }
 
-int NBN_Packet_InitRead(NBN_Packet *packet, uint8_t buffer[NBN_PACKET_MAX_SIZE], unsigned int size)
+int NBN_Packet_InitRead(
+        NBN_Packet *packet, NBN_Connection *sender, uint8_t buffer[NBN_PACKET_MAX_SIZE], unsigned int size)
 {
     packet->mode = NBN_PACKET_MODE_READ;
-    packet->sender = NULL;
+    packet->sender = sender;
     packet->size = size;
     packet->sealed = false;
 
-    memcpy(packet->buffer, buffer, NBN_PACKET_MAX_SIZE);
+    memcpy(packet->buffer, buffer, size);
 
     NBN_ReadStream header_r_stream;
 
-    NBN_ReadStream_Init(&header_r_stream, buffer, NBN_PACKET_HEADER_SIZE);
+    NBN_ReadStream_Init(&header_r_stream, packet->buffer, NBN_PACKET_HEADER_SIZE);
 
-    if (NBN_Packet_SerializeHeader(packet, (NBN_Stream *)&header_r_stream) < 0)
+    if (NBN_Packet_SerializeHeader(&packet->header, (NBN_Stream *)&header_r_stream) < 0)
         return NBN_ERROR;
 
-    NBN_ReadStream_Init(&packet->r_stream, buffer + NBN_PACKET_HEADER_SIZE, NBN_PACKET_MAX_DATA_SIZE);
+#ifdef NBN_AUTH
+    if (packet->header.is_encrypted)
+    {
+        if (!sender->can_decrypt)
+        {
+            NBN_LogError("Discard encrypted packet %d", packet->header.seq_number);
+
+            return NBN_ERROR;
+        }
+
+        NBN_Packet_ComputeIV(packet, packet->sender);
+
+        printf("BEFORE DECRYPT:\n");
+        int i;
+        for (i = 0; i < packet->size; i++)
+        {
+            if (i > 0) printf(":");
+            printf("%02X", packet->buffer[i]);
+        }
+        printf("\n");
+
+        NBN_Packet_Decrypt(packet, packet->sender);
+
+        printf("AFTER DECRYPT:\n");
+        for (i = 0; i < packet->size; i++)
+        {
+            if (i > 0) printf(":");
+            printf("%02X", packet->buffer[i]);
+        }
+        printf("\n");
+    }
+#endif /* NBN_AUTH */
+
+    NBN_ReadStream_Init(&packet->r_stream, packet->buffer + NBN_PACKET_HEADER_SIZE, packet->size);
 
     return 0;
+}
+
+uint32_t NBN_Packet_ReadProtocolId(uint8_t buffer[NBN_PACKET_MAX_SIZE], unsigned int size)
+{
+    if (size < NBN_PACKET_HEADER_SIZE)
+        return 0;
+
+    NBN_ReadStream r_stream;
+
+    NBN_ReadStream_Init(&r_stream, buffer, NBN_PACKET_HEADER_SIZE);
+
+    NBN_PacketHeader header;
+
+    if (NBN_Packet_SerializeHeader(&header, (NBN_Stream *)&r_stream) < 0)
+        return 0;
+
+    return header.protocol_id;
 }
 
 int NBN_Packet_WriteMessage(NBN_Packet *packet, NBN_Message *message)
@@ -1894,7 +2181,7 @@ int NBN_Packet_WriteMessage(NBN_Packet *packet, NBN_Message *message)
     return NBN_PACKET_WRITE_OK;
 }
 
-int NBN_Packet_Seal(NBN_Packet *packet)
+int NBN_Packet_Seal(NBN_Packet *packet, NBN_Connection *connection)
 {
     if (packet->mode != NBN_PACKET_MODE_WRITE)
         return NBN_ERROR;
@@ -1902,32 +2189,128 @@ int NBN_Packet_Seal(NBN_Packet *packet)
     if (NBN_WriteStream_Flush(&packet->w_stream) < 0)
         return NBN_ERROR;
 
+#ifdef NBN_AUTH
+    packet->header.is_encrypted = connection->can_encrypt;
+#endif
+
     NBN_WriteStream header_w_stream;
 
     NBN_WriteStream_Init(&header_w_stream, packet->buffer, NBN_PACKET_HEADER_SIZE);
 
-    if (NBN_Packet_SerializeHeader(packet, (NBN_Stream *)&header_w_stream) < 0)
+    if (NBN_Packet_SerializeHeader(&packet->header, (NBN_Stream *)&header_w_stream) < 0)
         return NBN_ERROR;
 
     if (NBN_WriteStream_Flush(&header_w_stream) < 0)
         return NBN_ERROR;
 
-    packet->sealed = true;
     packet->size += NBN_PACKET_HEADER_SIZE;
 
+#ifdef NBN_AUTH
+    if (packet->header.is_encrypted)
+    {
+        NBN_Packet_ComputeIV(packet, connection);
+        NBN_Packet_Encrypt(packet, connection);
+    }
+#endif
+
+    packet->sealed = true;
+
     return 0;
 }
 
-static int NBN_Packet_SerializeHeader(NBN_Packet *packet, NBN_Stream *stream)
+static int NBN_Packet_SerializeHeader(NBN_PacketHeader *header, NBN_Stream *stream)
 {
-    SERIALIZE_BYTES(&packet->header.protocol_id, sizeof(packet->header.protocol_id));
-    SERIALIZE_BYTES(&packet->header.seq_number, sizeof(packet->header.seq_number));
-    SERIALIZE_BYTES(&packet->header.ack, sizeof(packet->header.ack));
-    SERIALIZE_BYTES(&packet->header.ack_bits, sizeof(packet->header.ack_bits));
-    SERIALIZE_BYTES(&packet->header.messages_count, sizeof(packet->header.messages_count));
+    SERIALIZE_BYTES(&header->protocol_id, sizeof(header->protocol_id));
+    SERIALIZE_BYTES(&header->seq_number, sizeof(header->seq_number));
+    SERIALIZE_BYTES(&header->ack, sizeof(header->ack));
+    SERIALIZE_BYTES(&header->ack_bits, sizeof(header->ack_bits));
+    SERIALIZE_BYTES(&header->messages_count, sizeof(header->messages_count));
+
+#ifdef NBN_AUTH
+    SERIALIZE_BYTES(&header->is_encrypted, sizeof(header->is_encrypted));
+#endif
 
     return 0;
 }
+
+#ifdef NBN_AUTH
+
+void NBN_Packet_Encrypt(NBN_Packet *packet, NBN_Connection *connection)
+{
+    AES_init_ctx_iv(&connection->aes_ctx, connection->keys1.shared_key, packet->aes_iv);
+
+    printf("BEFORE ENCRYPT (%d):\n", packet->size);
+    int i;
+    for (i = 0; i < packet->size; i++)
+    {
+        if (i > 0) printf(":");
+        printf("%02X", packet->buffer[i]);
+    }
+    printf("\n");
+
+    unsigned int bytes_to_encrypt = packet->size - NBN_PACKET_HEADER_SIZE;
+    unsigned int added_bytes = (bytes_to_encrypt % AES_BLOCKLEN == 0) ? 0 : (AES_BLOCKLEN - bytes_to_encrypt % AES_BLOCKLEN);
+
+    bytes_to_encrypt += added_bytes;
+
+    assert(bytes_to_encrypt % AES_BLOCKLEN == 0);
+    assert(bytes_to_encrypt < NBN_PACKET_MAX_DATA_SIZE);
+
+    memset(packet->buffer + packet->size, 0, added_bytes);
+
+    packet->size = NBN_PACKET_HEADER_SIZE + bytes_to_encrypt;
+
+    assert(packet->size < NBN_PACKET_MAX_SIZE); 
+
+    AES_CBC_encrypt_buffer(&connection->aes_ctx, packet->buffer + NBN_PACKET_HEADER_SIZE, bytes_to_encrypt);
+
+    printf("AFTER ENCRYPT (%d):\n", packet->size);
+    for (i = 0; i < packet->size; i++)
+    {
+        if (i > 0) printf(":");
+        printf("%02X", packet->buffer[i]);
+    }
+    printf("\n");
+
+    NBN_LogTrace("Encrypted packet %d (%d bytes)", packet->header.seq_number, packet->size);  
+}
+
+void NBN_Packet_Decrypt(NBN_Packet *packet, NBN_Connection *connection)
+{
+    AES_init_ctx_iv(&connection->aes_ctx, connection->keys1.shared_key, packet->aes_iv);
+
+    NBN_LogTrace("Decrypt packet %d (%d bytes)", packet->header.seq_number, packet->size);
+
+    unsigned int bytes_to_decrypt = packet->size - NBN_PACKET_HEADER_SIZE;
+
+    assert(bytes_to_decrypt % AES_BLOCKLEN == 0);
+    assert(bytes_to_decrypt < NBN_PACKET_MAX_DATA_SIZE);
+
+    AES_CBC_decrypt_buffer(&connection->aes_ctx, packet->buffer + NBN_PACKET_HEADER_SIZE, bytes_to_decrypt);
+}
+
+void NBN_Packet_ComputeIV(NBN_Packet *packet, NBN_Connection *connection)
+{
+    uint8_t iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
+
+    AES_init_ctx_iv(&connection->aes_ctx, connection->keys1.shared_key, iv);
+
+    memset(packet->aes_iv, 0, AES_BLOCKLEN);
+    memcpy(packet->aes_iv, (uint8_t *)&packet->header.seq_number, sizeof(packet->header.seq_number));
+
+    AES_CBC_encrypt_buffer(&connection->aes_ctx, packet->aes_iv, AES_BLOCKLEN);
+
+    printf("GENERATED IV FOR PACKET (%d):\n", packet->header.seq_number);
+    int i;
+    for (i = 0; i < AES_BLOCKLEN; i++)
+    {
+        if (i > 0) printf(":");
+        printf("%02X", packet->aes_iv[i]);
+    }
+    printf("\n");
+}
+
+#endif /* NBN_AUTH */
 
 #pragma endregion /* NBN_Packet */
 
@@ -2124,6 +2507,15 @@ static void NBN_Connection_UpdateAverageUploadBandwidth(NBN_Connection *, float)
 static void NBN_Connection_UpdateAverageDownloadBandwidth(NBN_Connection *);
 static void NBN_Connection_ClearMessageQueue(NBN_List *);
 
+#ifdef NBN_AUTH
+
+static int NBN_Connection_GenerateKeys(NBN_Connection *);
+static int NBN_Connection_GenerateKeySet(NBN_ConnectionKeySet *, CSPRNG *);
+static int NBN_Connection_BuildSharedKey(NBN_ConnectionKeySet *, uint8_t *);
+static void NBN_Connection_StartEncryption(NBN_Connection *);
+
+#endif /* NBN_AUTH */
+
 NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_Endpoint *endpoint)
 {
     NBN_Connection *connection = NBN_MemoryManager_AllocObject(NBN_OBJ_CONNECTION);
@@ -2154,6 +2546,21 @@ NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_End
     }
 
     connection->stats = (NBN_ConnectionStats){0};
+
+#ifdef NBN_AUTH
+
+    if (NBN_Connection_GenerateKeys(connection)  < 0)
+    {
+        NBN_LogError("Failed to generate keys");
+        NBN_MemoryManager_DeallocObject(NBN_OBJ_CONNECTION, connection);
+
+        return NULL;
+    }
+
+    connection->can_decrypt = false;
+    connection->can_encrypt = false;
+
+#endif /* NBN_AUTH */
 
     return connection;
 }
@@ -2639,7 +3046,7 @@ static int NBN_Connection_SendPackets(
 
         assert(packet_entry->messages_count == outgoing_packet->header.messages_count);
 
-        if (NBN_Packet_Seal(outgoing_packet) < 0)
+        if (NBN_Packet_Seal(outgoing_packet, connection) < 0)
         {
             NBN_LogError("Failed to seal packet");
 
@@ -2793,13 +3200,15 @@ static NBN_Message *NBN_Connection_ReadNextMessageFromStream(NBN_Connection *con
 
     if (NBN_Message_SerializeHeader(&msg_header, (NBN_Stream *)r_stream) < 0)
     {
-        NBN_LogError("Failed to read net message header");
+        NBN_LogError("Failed to read message header");
 
         return NULL;
     }
-
+    
     uint8_t msg_type = msg_header.type;
     NBN_MessageBuilder msg_builder = connection->endpoint->message_builders[msg_type];
+
+    NBN_LogDebug("---------------------------------------> %d", msg_type);
 
     if (msg_builder == NULL)
     {
@@ -2839,6 +3248,14 @@ static NBN_Message *NBN_Connection_ReadNextMessageFromStream(NBN_Connection *con
 
 NBN_Message *NBN_Connection_ReadNextMessageFromPacket(NBN_Connection *connection, NBN_Packet *packet)
 {
+    /*int i;
+    for (i = 0; i < packet->r_stream.bit_reader.size; i++)
+    {
+        if (i > 0) printf(":");
+        printf("%02X", packet->r_stream.bit_reader.buffer[i]);
+    }
+    printf("\n");*/
+
     return NBN_Connection_ReadNextMessageFromStream(connection, &packet->r_stream);
 }
 
@@ -2905,6 +3322,70 @@ static void NBN_Connection_ClearMessageQueue(NBN_List *queue)
         current_node = next_node;
     }
 }
+
+#ifdef NBN_AUTH
+
+static int NBN_Connection_GenerateKeys(NBN_Connection *connection)
+{
+    CSPRNG *prng = csprng_create();
+
+    if (!prng)
+    {
+        NBN_LogError("Failed to initialize pseudo random number generator");
+
+        return -1;
+    }
+
+    if (NBN_Connection_GenerateKeySet(&connection->keys1, prng) < 0)
+        return -1;
+
+    if (NBN_Connection_GenerateKeySet(&connection->keys2, prng) < 0)
+        return -1;
+
+    csprng_destroy(prng);
+
+    return 0;
+}
+
+static int NBN_Connection_GenerateKeySet(NBN_ConnectionKeySet *key_set, CSPRNG *prng)
+{
+    /* Generate a random private key */
+    csprng_get(prng, key_set->prv_key, ECC_PRV_KEY_SIZE);
+
+    if (!ecdh_generate_keys(key_set->pub_key, key_set->prv_key))
+    {
+        NBN_LogError("Failed to generate public and private keys");
+
+        return -1;
+    }
+
+    return 0;
+}
+
+static int NBN_Connection_BuildSharedKey(NBN_ConnectionKeySet *key_set, uint8_t *pub_key)
+{
+    if (!ecdh_shared_secret(key_set->prv_key, pub_key, key_set->shared_key))
+        return -1;
+
+    NBN_LogDebug("Generated shared key:");
+    for (int i = 0; i < ECC_PUB_KEY_SIZE; i++)
+    {
+        if (i > 0) printf(":");
+        printf("%02X", key_set->shared_key[i]);
+    }
+    printf("\n");
+
+    return 0;
+}
+
+static void NBN_Connection_StartEncryption(NBN_Connection *connection)
+{
+    connection->can_encrypt = true;
+    
+    NBN_LogDebug("Encryption started for connection %d", connection->id);
+}
+
+#endif /* NBN_AUTH */
 
 #pragma endregion /* NBN_Connection */
 
@@ -3406,6 +3887,20 @@ void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server
     NBN_Endpoint_RegisterMessageSerializer(
             endpoint, (NBN_MessageSerializer)NBN_ByteArrayMessage_Serialize, NBN_BYTE_ARRAY_MESSAGE_TYPE);
 
+#ifdef NBN_AUTH
+    /* Register NBN_PublicCryptoInfoMessage library message */
+    NBN_Endpoint_RegisterMessageBuilder(
+            endpoint, (NBN_MessageBuilder)NBN_PublicCryptoInfoMessage_Create, NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE);
+    NBN_Endpoint_RegisterMessageSerializer(
+            endpoint, (NBN_MessageSerializer)NBN_PublicCryptoInfoMessage_Serialize, NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE);
+
+    /* Register NBN_StartEncryptMessage library message */
+    NBN_Endpoint_RegisterMessageBuilder(
+            endpoint, (NBN_MessageBuilder)NBN_StartEncryptMessage_Create, NBN_START_ENCRYPT_MESSAGE_TYPE);
+    NBN_Endpoint_RegisterMessageSerializer(
+            endpoint, (NBN_MessageSerializer)NBN_StartEncryptMessage_Serialize, NBN_START_ENCRYPT_MESSAGE_TYPE);
+#endif /* NBN_AUTH */
+
 #ifdef NBN_DEBUG
     endpoint->OnMessageAddedToRecvQueue = NULL;
 #endif
@@ -3534,6 +4029,13 @@ static void NBN_GameClient_ProcessReceivedMessage(NBN_Message *, NBN_Connection 
 static int NBN_GameClient_HandleEvent(int);
 static int NBN_GameClient_HandleMessageReceivedEvent(void);
 static void NBN_GameClient_ReleaseLastEvent(void);
+
+#ifdef NBN_AUTH
+
+static int NBN_GameClient_SendCryptoPublicInfo(void);
+static void NBN_GameClient_StartEncryption(void);
+
+#endif
 
 void NBN_GameClient_Init(const char *protocol_name, const char *ip_address, uint16_t port)
 {
@@ -3837,6 +4339,38 @@ static int NBN_GameClient_HandleMessageReceivedEvent(void)
 
         ret = NBN_CONNECTED;
     }
+#ifdef NBN_AUTH
+    else if (message->header.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
+    {
+        ret = NBN_NO_EVENT;
+
+        NBN_LogDebug("Received server's crypto public info");
+
+        if (NBN_GameClient_SendCryptoPublicInfo() < 0)
+        {
+            NBN_LogError("Failed to send public key to server");
+            NBN_Abort();
+        }
+
+        uint8_t *pub_key = ((NBN_PublicCryptoInfoMessage *)message->data)->key;
+
+        if (NBN_Connection_BuildSharedKey(&game_client.server_connection->keys1, pub_key) < 0)
+        {
+            NBN_LogError("Failed to build shared key");
+            NBN_Abort();
+        }
+
+        NBN_LogTrace("Client can now decrypt packets");
+
+        game_client.server_connection->can_decrypt = true;
+    }
+    else if (message->header.type == NBN_START_ENCRYPT_MESSAGE_TYPE)
+    {
+        ret = NBN_NO_EVENT;
+
+        NBN_GameClient_StartEncryption();
+    }
+#endif /* NBN_AUTH */
     else
     {
         ret = NBN_MESSAGE_RECEIVED;
@@ -3851,6 +4385,34 @@ static void NBN_GameClient_ReleaseLastEvent(void)
 {
     client_last_received_message_data = NULL;
 }
+
+#ifdef NBN_AUTH
+
+static int NBN_GameClient_SendCryptoPublicInfo(void)
+{
+    assert(game_client.server_connection);
+
+    NBN_PublicCryptoInfoMessage *msg = NBN_GameClient_CreateReliableMessage(NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE);
+
+    if (msg == NULL)
+        return -1;
+
+    memcpy(msg->key, game_client.server_connection->keys1.pub_key, ECC_PUB_KEY_SIZE);
+
+    if (NBN_Connection_EnqueueOutgoingMessage(game_client.server_connection) < 0)
+        return -1;
+
+    NBN_LogDebug("Sent client's public key to the server");
+
+    return 0;
+}
+
+static void NBN_GameClient_StartEncryption(void)
+{
+    NBN_Connection_StartEncryption(game_client.server_connection);
+}
+
+#endif /* NBN_AUTH */
 
 #pragma endregion /* NBN_GameClient */
 
@@ -3900,12 +4462,19 @@ static uint8_t server_last_received_message_type;
 static void NBN_GameServer_ProcessReceivedMessage(NBN_Message *, NBN_Connection *);
 static void NBN_GameServer_CloseStaleClientConnections(void);
 static void NBN_GameServer_RemoveClosedClientConnections(void);
-static void NBN_GameServer_HandleEvent(int);
+static int NBN_GameServer_HandleEvent(int);
 static void NBN_GameServer_HandleClientConnectionEvent(void);
 static void NBN_GameServer_HandleClientDisconnectedEvent(void);
-static void NBN_GameServer_HandleMessageReceivedEvent(void);
+static int NBN_GameServer_HandleMessageReceivedEvent(void);
 static void NBN_GameServer_ReleaseLastEvent(void);
 static void NBN_GameServer_ReleaseClientDisconnectedEvent(void);
+
+#ifdef NBN_AUTH
+
+static int NBN_GameServer_SendCryptoPublicInfoTo(NBN_Connection *);
+static int NBN_GameServer_StartEncryption(NBN_Connection *);
+
+#endif /* NBN_AUTH */
 
 void NBN_GameServer_Init(const char *protocol_name, uint16_t port)
 {
@@ -4002,9 +4571,7 @@ int NBN_GameServer_Poll(void)
     int ev_type = NBN_EventQueue_Dequeue(game_server.endpoint.events_queue);
     server_last_event_type = ev_type;
 
-    NBN_GameServer_HandleEvent(ev_type);
-
-    return ev_type;
+    return NBN_GameServer_HandleEvent(ev_type);
 }
 
 int NBN_GameServer_SendPackets(void)
@@ -4369,7 +4936,7 @@ static void NBN_GameServer_RemoveClosedClientConnections(void)
     }
 }
 
-static void NBN_GameServer_HandleEvent(int event_type)
+static int NBN_GameServer_HandleEvent(int event_type)
 {
     switch (event_type)
     {
@@ -4382,12 +4949,13 @@ static void NBN_GameServer_HandleEvent(int event_type)
             break;
 
         case NBN_CLIENT_MESSAGE_RECEIVED:
-            NBN_GameServer_HandleMessageReceivedEvent();
-            break;
+            return NBN_GameServer_HandleMessageReceivedEvent();
 
         default:
             break;
     }
+
+    return event_type;
 }
 
 static void NBN_GameServer_HandleClientConnectionEvent(void)
@@ -4400,7 +4968,7 @@ static void NBN_GameServer_HandleClientDisconnectedEvent(void)
     server_last_event_client = game_server.endpoint.events_queue->last_event_data;
 }
 
-static void NBN_GameServer_HandleMessageReceivedEvent(void)
+static int NBN_GameServer_HandleMessageReceivedEvent(void)
 {
     NBN_Message *message = game_server.endpoint.events_queue->last_event_data;
 
@@ -4408,7 +4976,38 @@ static void NBN_GameServer_HandleMessageReceivedEvent(void)
     server_last_received_message_type = message->header.type;
     server_last_received_message_data = message->data;
 
+    int ret = NBN_CLIENT_MESSAGE_RECEIVED;
+
+#ifdef NBN_AUTH
+    if (message->header.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
+    {
+        ret = NBN_NO_EVENT;
+
+        uint8_t *pub_key = ((NBN_PublicCryptoInfoMessage *)message->data)->key;
+
+        if (NBN_Connection_BuildSharedKey(&message->sender->keys1, pub_key) < 0)
+        {
+            NBN_LogError("Failed to build shared key");
+            NBN_Abort();
+        }
+
+        NBN_LogDebug("Received public crypto info of client %d", message->sender->id);
+
+        if (NBN_GameServer_StartEncryption(message->sender))
+        {
+            NBN_LogError("Failed to start encryption of client %d", message->sender->id);
+            NBN_Abort();
+        }
+
+        message->sender->can_decrypt = true;
+
+        NBN_EventQueue_Enqueue(game_server.endpoint.events_queue, NBN_NEW_CONNECTION, message->sender);
+    }
+#endif /* NBN_AUTH */
+
     NBN_Message_Destroy(message, false);
+
+    return ret;
 }
 
 static void NBN_GameServer_ReleaseLastEvent(void)
@@ -4458,7 +5057,16 @@ static void NBN_GServ_Driver_OnClientConnected(NBN_Connection *client)
     assert(!NBN_List_Includes(game_server.clients, client));
 
     NBN_List_PushBack(game_server.clients, client);
+
+#ifdef NBN_AUTH
+    if (NBN_GameServer_SendCryptoPublicInfoTo(client) < 0)
+    {
+        NBN_LogError("Failed to send public key to client %d", client->id);
+        NBN_Abort();
+    }
+#else
     NBN_EventQueue_Enqueue(game_server.endpoint.events_queue, NBN_NEW_CONNECTION, client);
+#endif /* NBN_AUTH */
 }
 
 static void NBN_GServ_Driver_OnClientPacketReceived(NBN_Packet *packet)
@@ -4471,6 +5079,43 @@ static void NBN_GServ_Driver_OnClientPacketReceived(NBN_Packet *packet)
         NBN_GameServer_CloseClient(packet->sender);
     }
 }
+
+#ifdef NBN_AUTH
+
+static int NBN_GameServer_SendCryptoPublicInfoTo(NBN_Connection *client)
+{
+    NBN_PublicCryptoInfoMessage *msg = NBN_GameServer_CreateReliableMessage(NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE);
+
+    if (msg == NULL)
+        return -1;
+
+    memcpy(msg->key, client->keys1.pub_key, ECC_PUB_KEY_SIZE);
+    // memcpy(msg->aes_iv, client->aes_iv, ECC_PUB_KEY_SIZE);
+
+    if (NBN_Connection_EnqueueOutgoingMessage(client) < 0)
+        return -1;
+
+    NBN_LogDebug("Sent server's public key to the client %d", client->id);
+
+    return 0;
+}
+
+static int NBN_GameServer_StartEncryption(NBN_Connection *client)
+{
+    NBN_Connection_StartEncryption(client);
+
+    NBN_StartEncryptMessage *msg = NBN_GameServer_CreateReliableMessage(NBN_START_ENCRYPT_MESSAGE_TYPE);
+
+    if (msg == NULL)
+        return -1;
+
+    if (NBN_Connection_EnqueueOutgoingMessage(client) < 0)
+        return -1;
+
+    return 0;
+}
+
+#endif /* NBN_AUTH */
 
 #pragma endregion /* Game server driver */
 
@@ -4692,6 +5337,6 @@ static unsigned int NBN_PacketSimulator_GetRandomDuplicatePacketCount(NBN_Packet
 
 #pragma endregion /* Packet simulator */
 
-#endif /* NBNET_IMPL */
+#endif /* NBN_AUTH */
 
 #pragma endregion /* Implementations */
