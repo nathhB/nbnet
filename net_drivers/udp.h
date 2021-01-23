@@ -216,7 +216,7 @@ static char *GetLastErrorMessage(void)
 static NBN_List *connections = NULL;
 static uint32_t next_conn_id = 0;
 
-static void ProcessClientPacket(NBN_Packet *, NBN_IPAddress);
+static NBN_UDPConnection *GetUDPConnection(NBN_IPAddress);
 static NBN_UDPConnection *FindClientConnectionByAddress(NBN_IPAddress);
 static NBN_UDPConnection *FindClientConnectionById(uint32_t);
 
@@ -258,15 +258,16 @@ int NBN_Driver_GServ_RecvPackets(void)
         ip_address.host = ntohl(src_addr.sin_addr.s_addr);
         ip_address.port = ntohs(src_addr.sin_port);
 
+        if (NBN_Packet_ReadProtocolId(buffer, bytes) != protocol_id)
+            continue; /* not matching the protocol of the receiver */ 
+
+        NBN_UDPConnection *udp_conn = GetUDPConnection(ip_address);
         NBN_Packet packet;
 
-        if (NBN_Packet_InitRead(&packet, buffer, bytes) < 0)
+        if (NBN_Packet_InitRead(&packet, udp_conn->conn, buffer, bytes) < 0)
             continue; /* not a valid packet */
 
-        if (packet.header.protocol_id != protocol_id)
-            continue; /* valid packet but not matching the protocol of the receiver */
-
-        ProcessClientPacket(&packet, ip_address);
+        NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_PACKET_RECEIVED, &packet);
     }
 
     return 0;
@@ -304,9 +305,9 @@ int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, uint32_t conn_id)
     return 0;
 }
 
-static void ProcessClientPacket(NBN_Packet *packet, NBN_IPAddress client_address)
+static NBN_UDPConnection *GetUDPConnection(NBN_IPAddress address)
 {
-    NBN_UDPConnection *udp_conn = FindClientConnectionByAddress(client_address);
+    NBN_UDPConnection *udp_conn = FindClientConnectionByAddress(address);
 
     if (udp_conn == NULL) /* this is a new connection */
     {
@@ -314,7 +315,7 @@ static void ProcessClientPacket(NBN_Packet *packet, NBN_IPAddress client_address
         uint32_t conn_id = next_conn_id++;
 
         udp_conn->id = conn_id;
-        udp_conn->address = client_address;
+        udp_conn->address = address;
         udp_conn->conn = NBN_GameServer_CreateClientConnection(conn_id);
 
         NBN_LogDebug("New UDP connection (id: %d)", conn_id);
@@ -323,9 +324,7 @@ static void ProcessClientPacket(NBN_Packet *packet, NBN_IPAddress client_address
         NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_CONNECTED, udp_conn->conn);
     }
 
-    packet->sender = udp_conn->conn;
-
-    NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_PACKET_RECEIVED, packet);
+    return udp_conn;
 }
 
 static NBN_UDPConnection *FindClientConnectionByAddress(NBN_IPAddress address)
@@ -420,13 +419,13 @@ int NBN_Driver_GCli_RecvPackets(void)
         if (ip_address.host != server_connection.address.host || ip_address.port != server_connection.address.port)
             continue;
 
+        if (NBN_Packet_ReadProtocolId(buffer, bytes) != protocol_id)
+            continue; /* not matching the protocol of the receiver */
+
         NBN_Packet packet;
 
-        if (NBN_Packet_InitRead(&packet, buffer, bytes) < 0)
-            continue; /* not a valid packet */
-
-        if (packet.header.protocol_id != protocol_id)
-            continue; /* valid packet but not matching the protocol of the receiver */
+        if (NBN_Packet_InitRead(&packet, server_connection.conn, buffer, bytes) < 0)
+            continue; /* not a valid packet */ 
 
         /* First received packet from server triggers the client connected event */
         if (!is_connected_to_server)

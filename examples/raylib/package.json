@@ -1,6 +1,6 @@
 {
     "scripts": {
-        "server": "node --experimental-wasm-threads --experimental-wasm-bulk-memory build/server.js"
+        "server": "node --experimental-wasm-threads --experimental-wasm-bulk-memory server.js"
     },
     "dependencies": {
         "nbnet": "file:../../net_drivers/webrtc"
