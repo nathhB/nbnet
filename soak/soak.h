@@ -57,7 +57,7 @@
 #define SOAK_MESSAGE 0
 #define SOAK_SEED time(NULL)
 #define SOAK_DONE 1
-#define SOAK_MAX_CLIENTS 4
+#define SOAK_MAX_CLIENTS 32
 #define SOAK_SERVER_FULL_CODE 42
 
 typedef struct
