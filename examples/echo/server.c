@@ -71,6 +71,10 @@ int main(void)
     // Init server with a protocol name and a port, must be done first
     NBN_GameServer_Init(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT);
 
+#ifdef NBN_ENCRYPTION
+    NBN_GameServer_EnableEncryption();
+#endif
+
     // Registering messages, have to be done after NBN_GameServer_Init and before NBN_GameServer_Start
     NBN_GameServer_RegisterMessage(ECHO_MESSAGE_TYPE, EchoMessage);
 

@@ -81,8 +81,8 @@ int SendEchoMessage(const char *msg)
         return -1;
 
     // Fill EchoMessage with message length and message data
-    echo->length = length;
-    memcpy(echo->data, msg, length);
+    echo->length = length + 1;
+    memcpy(echo->data, msg, length + 1);
 
     // Send it to the server
     if (NBN_GameClient_SendMessage() < 0)
@@ -122,6 +122,10 @@ int main(int argc, char *argv[])
     // Init client with a protocol name (must be the same than the one used by the server), the server ip address
     // and port
     NBN_GameClient_Init(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT);
+
+#ifdef NBN_ENCRYPTION
+    NBN_GameClient_EnableEncryption();
+#endif
 
     // Registering messages, have to be done after NBN_GameClient_Init and before NBN_GameClient_Start
     // Messages need to be registered on both client and server side
