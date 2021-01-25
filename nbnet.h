@@ -33,20 +33,6 @@
 #include <math.h>
 #include <assert.h>
 
-#ifdef NBN_AUTH
-
-#define ECC_CURVE NIST_K571
-#define CBC 1
-
-#include "ecdh.h"
-#include "aes.h"
-
-#ifndef AES128
-#error "AES128 is not defined"
-#endif
-
-#endif /* NBN_AUTH */
-
 #pragma region Declarations
 
 #define NBN_Abort abort /* TODO: custom abort mechanism */
@@ -368,6 +354,95 @@ NBN_OutgoingMessageInfo *NBN_OutgoingMessageInfo_Create(NBN_Endpoint *, uint8_t,
 
 #pragma endregion /* NBN_Message */
 
+#pragma region Encryption
+
+/*
+ * All "low-level" cryptography definitions used for nbnet packet encryption and authentication.
+ *
+ * I did not write any of the code in this section, I only regrouped it in there to keep nbnet contained
+ * into a single header. I used a total of three different open source libraries:
+ *
+ * ECDH:        https://github.com/kokke/tiny-ECDH-c
+ * AES:         https://github.com/kokke/tiny-AES-c
+ * Poly1305:    https://github.com/floodyberry/poly1305-donna
+ */
+
+#pragma region ECDH
+
+#define NIST_B163  1
+#define NIST_K163  2
+#define NIST_B233  3
+#define NIST_K233  4
+#define NIST_B283  5
+#define NIST_K283  6
+#define NIST_B409  7
+#define NIST_K409  8
+#define NIST_B571  9
+#define NIST_K571 10
+
+#define ECC_CURVE NIST_B233
+
+#if defined(ECC_CURVE) && (ECC_CURVE != 0)
+#if   (ECC_CURVE == NIST_K163) || (ECC_CURVE == NIST_B163)
+#define CURVE_DEGREE       163
+#define ECC_PRV_KEY_SIZE   24
+#elif (ECC_CURVE == NIST_K233) || (ECC_CURVE == NIST_B233)
+#define CURVE_DEGREE       233
+#define ECC_PRV_KEY_SIZE   32
+#elif (ECC_CURVE == NIST_K283) || (ECC_CURVE == NIST_B283)
+#define CURVE_DEGREE       283
+#define ECC_PRV_KEY_SIZE   36
+#elif (ECC_CURVE == NIST_K409) || (ECC_CURVE == NIST_B409)
+#define CURVE_DEGREE       409
+#define ECC_PRV_KEY_SIZE   52
+#elif (ECC_CURVE == NIST_K571) || (ECC_CURVE == NIST_B571)
+#define CURVE_DEGREE       571
+#define ECC_PRV_KEY_SIZE   72
+#endif
+#else
+#error Must define a curve to use
+#endif
+
+#define ECC_PUB_KEY_SIZE     (2 * ECC_PRV_KEY_SIZE)
+
+#pragma endregion /* ECDH */
+
+#pragma region AES
+
+#define AES128 1
+//#define AES192 1
+//#define AES256 1
+
+#define AES_BLOCKLEN 16 //Block length in bytes AES is 128b block only
+
+#if defined(AES256) && (AES256 == 1)
+    #define AES_KEYLEN 32
+    #define AES_keyExpSize 240
+#elif defined(AES192) && (AES192 == 1)
+    #define AES_KEYLEN 24
+    #define AES_keyExpSize 208
+#else
+    #define AES_KEYLEN 16   // Key length in bytes
+    #define AES_keyExpSize 176
+#endif
+
+struct AES_ctx
+{
+  uint8_t RoundKey[AES_keyExpSize];
+  uint8_t Iv[AES_BLOCKLEN];
+};
+
+#pragma endregion /* AES */
+
+#pragma region Poly1305
+
+#define POLY1305_KEYLEN 32
+#define POLY1305_TAGLEN 16
+
+#pragma endregion /* Poly1305 */
+
+#pragma endregion /* Encryption */
+
 #pragma region NBN_Packet
 
 /*  
@@ -378,7 +453,15 @@ NBN_OutgoingMessageInfo *NBN_OutgoingMessageInfo_Create(NBN_Endpoint *, uint8_t,
 #define NBN_MAX_MESSAGES_PER_PACKET 255 /* Maximum value of uint8_t, see packet header */
 
 #define NBN_PACKET_HEADER_SIZE sizeof(NBN_PacketHeader)
+
+/* Maximum size of packet's data (NBN_PACKET_MAX_DATA_SIZE + NBN_PACKET_HEADER_SIZE = NBN_PACKET_MAX_SIZE) */
 #define NBN_PACKET_MAX_DATA_SIZE (NBN_PACKET_MAX_SIZE - NBN_PACKET_HEADER_SIZE)
+
+/*
+ * Maximum size of user's data. This is the NBN_PACKET_MAX_DATA_SIZE minus the size of an AES block so we don't
+ * exceed the maximum packet size after AES encryption
+ */
+#define NBN_PACKET_MAX_USER_DATA_SIZE (NBN_PACKET_MAX_DATA_SIZE - AES_BLOCKLEN)
 
 enum
 {
@@ -401,9 +484,14 @@ typedef struct
     uint32_t ack_bits;
     uint8_t messages_count;
 
-#ifdef NBN_AUTH
+    /*
+     * Encryption part
+     *
+     * 17 bytes overhead (not used when encryption is disabled)
+     */
+
     uint8_t is_encrypted;
-#endif
+    uint8_t auth_tag[POLY1305_TAGLEN]; /* Poly1305 auth tag */
 } __attribute__((__packed__))  NBN_PacketHeader;
 
 typedef struct
@@ -412,7 +500,7 @@ typedef struct
     NBN_PacketMode mode;
     struct __NBN_Connection *sender; /* not serialized, fill by the network driver upon reception */
     uint8_t buffer[NBN_PACKET_MAX_SIZE];
-    unsigned int size; // in bytes
+    unsigned int size; /* in bytes */
     bool sealed;
 
     // streams
@@ -420,10 +508,8 @@ typedef struct
     NBN_ReadStream r_stream;
     NBN_MeasureStream m_stream;
 
-#ifdef NBN_AUTH
     /* AES IV, different for each packet (computed from packet's sequence number) */
-    uint8_t aes_iv[AES_BLOCKLEN]; 
-#endif
+    uint8_t aes_iv[AES_BLOCKLEN];  
 } NBN_Packet;
 
 void NBN_Packet_InitWrite(NBN_Packet *, uint32_t, uint16_t, uint16_t, uint32_t);
@@ -432,13 +518,14 @@ uint32_t NBN_Packet_ReadProtocolId(uint8_t[NBN_PACKET_MAX_SIZE], unsigned int);
 int NBN_Packet_WriteMessage(NBN_Packet *, NBN_Message *);
 int NBN_Packet_Seal(NBN_Packet *, NBN_Connection *);
 
-#ifdef NBN_AUTH
+/* Encryption related functions */
 
 void NBN_Packet_Encrypt(NBN_Packet *, NBN_Connection *);
 void NBN_Packet_Decrypt(NBN_Packet *, NBN_Connection *);
 void NBN_Packet_ComputeIV(NBN_Packet *, NBN_Connection *);
-
-#endif /* NBN_AUTH */
+void NBN_Packet_Authenticate(NBN_Packet *, NBN_Connection *);
+bool NBN_Packet_CheckAuthentication(NBN_Packet *, NBN_Connection *);
+void NBN_Packet_ComputePoly1305Key(NBN_Packet *, NBN_Connection *, uint8_t *);
 
 #pragma endregion /* NBN_Packet */
 
@@ -447,7 +534,7 @@ void NBN_Packet_ComputeIV(NBN_Packet *, NBN_Connection *);
 /* Chunk max size is the number of bytes of data a packet can hold minus the size of a message header minus 2 bytes
  * to hold the chunk id and total number of chunks.
  */
-#define NBN_MESSAGE_CHUNK_SIZE (NBN_PACKET_MAX_DATA_SIZE - sizeof(NBN_MessageHeader) - 2)
+#define NBN_MESSAGE_CHUNK_SIZE (NBN_PACKET_MAX_USER_DATA_SIZE - sizeof(NBN_MessageHeader) - 2)
 #define NBN_MESSAGE_CHUNK_TYPE (NBN_MAX_MESSAGE_TYPES - 1) /* Reserved message type for chunks */
 
 typedef struct
@@ -514,28 +601,26 @@ END_MESSAGE
 
 #pragma region NBN_PublicCryptoInfoMessage
 
-#ifdef NBN_AUTH
-
 #define NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 5) /* Reserved message type */
 
 typedef struct
 {
-    uint8_t key[ECC_PUB_KEY_SIZE];
-    uint8_t iv[AES_BLOCKLEN];
+    uint8_t pub_key1[ECC_PUB_KEY_SIZE];
+    uint8_t pub_key2[ECC_PUB_KEY_SIZE];
+    uint8_t pub_key3[ECC_PUB_KEY_SIZE];
+    uint8_t aes_iv[AES_BLOCKLEN];
 } NBN_PublicCryptoInfoMessage;
 
 BEGIN_MESSAGE(NBN_PublicCryptoInfoMessage)
-    SERIALIZE_BYTES(msg->key, ECC_PUB_KEY_SIZE);
-    SERIALIZE_BYTES(msg->key, AES_BLOCKLEN);
+    SERIALIZE_BYTES(msg->pub_key1, ECC_PUB_KEY_SIZE);
+    SERIALIZE_BYTES(msg->pub_key2, ECC_PUB_KEY_SIZE);
+    SERIALIZE_BYTES(msg->pub_key3, ECC_PUB_KEY_SIZE);
+    SERIALIZE_BYTES(msg->aes_iv, AES_BLOCKLEN);
 END_MESSAGE
-
-#endif /* NBN_AUTH */
 
 #pragma endregion /* NBN_PublicCryptoInfoMessage */
 
 #pragma region NBN_StartEncryptMessage
-
-#ifdef NBN_AUTH
 
 #define NBN_START_ENCRYPT_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 6) /* Reserved message type */
 
@@ -543,8 +628,6 @@ typedef struct {} NBN_StartEncryptMessage;
 
 BEGIN_MESSAGE(NBN_StartEncryptMessage)
 END_MESSAGE
-
-#endif /* NBN_AUTH */
 
 #pragma endregion /* NBN_StartEncryptMessage */
 
@@ -644,6 +727,7 @@ typedef struct
     const char *protocol_name;
     const char *ip_address;
     uint16_t port;
+    bool is_encryption_enabled;
 } NBN_Config;
 
 #pragma endregion
@@ -683,16 +767,12 @@ typedef enum
 
 #endif /* NBN_DEBUG */
 
-#ifdef NBN_AUTH
-
 typedef struct
 {
     uint8_t pub_key[ECC_PUB_KEY_SIZE]; /* Public key */
     uint8_t prv_key[ECC_PRV_KEY_SIZE]; /* Private key */
     uint8_t shared_key[ECC_PUB_KEY_SIZE]; /* Shared key */
 } NBN_ConnectionKeySet;
-
-#endif /* NBN_AUTH */
 
 struct __NBN_Connection
 {
@@ -730,20 +810,16 @@ struct __NBN_Connection
     NBN_List *recv_queue;
     NBN_List *send_queue;
 
-#ifdef NBN_AUTH
     /*
-     * Keys
+     * Encryption related fields
      */
     NBN_ConnectionKeySet keys1; /* Used for message encryption */
     NBN_ConnectionKeySet keys2; /* Used for packets IV */
-
+    NBN_ConnectionKeySet keys3; /* Used for poly1305 keys generation */
     uint8_t aes_iv[AES_BLOCKLEN]; /* AES IV */
-
-    struct AES_ctx aes_ctx; /* AES context */
 
     bool can_decrypt;
     bool can_encrypt;
-#endif /* NBN_AUTH */
 };
 
 NBN_Connection *NBN_Connection_Create(uint32_t, uint32_t, NBN_Endpoint *);
@@ -887,18 +963,9 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 
 #pragma region NBN_Endpoint
 
-#ifdef NBN_AUTH
-
 #define NBN_IsReservedMessage(type) (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE \
 || type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || type == NBN_BYTE_ARRAY_MESSAGE_TYPE \
 || type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE || type == NBN_START_ENCRYPT_MESSAGE_TYPE)
-
-#else
-
-#define NBN_IsReservedMessage(type) (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE \
-|| type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || type == NBN_BYTE_ARRAY_MESSAGE_TYPE)
-
-#endif /* NBN_AUTH */
 
 #define NBN_GameClient_RegisterMessage(type, name) \
 { \
@@ -1028,6 +1095,8 @@ NBN_ConnectionStats NBN_GameClient_GetStats(void);
 int NBN_GameClient_GetServerCloseCode(void);
 NBN_AcceptData *NBN_GameClient_GetAcceptData(void);
 void NBN_GameClient_DestroyMessage(uint8_t, void *);
+bool NBN_GameClient_IsEncryptionEnabled(void);
+void NBN_GameClient_EnableEncryption(void);
 
 #ifdef NBN_DEBUG
 
@@ -1091,6 +1160,8 @@ NBN_Connection *NBN_GameServer_FindClientById(uint32_t);
 NBN_MessageInfo NBN_GameServer_GetReceivedMessageInfo(void);
 NBN_GameServerStats NBN_GameServer_GetStats(void);
 void NBN_GameServer_DestroyMessage(uint8_t, void *);
+void NBN_GameServer_EnableEncryption(void);
+bool NBN_GameServer_IsEncryptionEnabled(void);
 
 #ifdef NBN_DEBUG
 
@@ -1924,8 +1995,6 @@ void NBN_MeasureStream_Reset(NBN_MeasureStream *measure_stream)
 
 #pragma endregion /* Serialization */
 
-#ifdef NBN_AUTH
-
 #pragma region Pseudo random generator
 
 /* I did not write this: https://github.com/Duthomhas/CSPRNG */
@@ -2053,11 +2122,19 @@ static CSPRNG csprng_destroy( CSPRNG object )
 
 #pragma endregion /* Pseudo random generator */
 
-#endif /* NBN_AUTH */
-
 #pragma region NBN_Packet
 
 static int NBN_Packet_SerializeHeader(NBN_PacketHeader *, NBN_Stream *);
+
+static void AES_init_ctx_iv(struct AES_ctx*, const uint8_t*, const uint8_t*);
+static void AES_CBC_encrypt_buffer(struct AES_ctx *,uint8_t*, uint32_t);
+static void AES_CBC_decrypt_buffer(struct AES_ctx*, uint8_t*, uint32_t);
+
+void poly1305_auth(uint8_t out[POLY1305_TAGLEN], const uint8_t *m, size_t inlen,
+                   const uint8_t key[POLY1305_KEYLEN])
+    __attribute__((__bounded__(__minbytes__, 1, POLY1305_TAGLEN)))
+    __attribute__((__bounded__(__buffer__, 2, 3)))
+    __attribute__((__bounded__(__minbytes__, 4, POLY1305_KEYLEN)));
 
 void NBN_Packet_InitWrite(
         NBN_Packet *packet, uint32_t protocol_id, uint16_t seq_number, uint16_t ack, uint32_t ack_bits)
@@ -2074,7 +2151,7 @@ void NBN_Packet_InitWrite(
     packet->sealed = false;
     packet->m_stream.number_of_bits = 0;
 
-    NBN_WriteStream_Init(&packet->w_stream, packet->buffer + NBN_PACKET_HEADER_SIZE, NBN_PACKET_MAX_DATA_SIZE);
+    NBN_WriteStream_Init(&packet->w_stream, packet->buffer + NBN_PACKET_HEADER_SIZE, NBN_PACKET_MAX_USER_DATA_SIZE);
     NBN_MeasureStream_Init(&packet->m_stream);
 }
 
@@ -2095,8 +2172,7 @@ int NBN_Packet_InitRead(
     if (NBN_Packet_SerializeHeader(&packet->header, (NBN_Stream *)&header_r_stream) < 0)
         return NBN_ERROR;
 
-#ifdef NBN_AUTH
-    if (packet->header.is_encrypted)
+    if (sender->endpoint->config.is_encryption_enabled && packet->header.is_encrypted)
     {
         if (!sender->can_decrypt)
         {
@@ -2107,7 +2183,7 @@ int NBN_Packet_InitRead(
 
         NBN_Packet_ComputeIV(packet, packet->sender);
 
-        printf("BEFORE DECRYPT:\n");
+        /*printf("BEFORE DECRYPT:\n");
         int i;
         for (i = 0; i < packet->size; i++)
         {
@@ -2115,18 +2191,25 @@ int NBN_Packet_InitRead(
             printf("%02X", packet->buffer[i]);
         }
         printf("\n");
+        */
+
+        if (!NBN_Packet_CheckAuthentication(packet, packet->sender))
+        {
+            NBN_LogError("Authentication check failed for packet %d", packet->header.seq_number);
+
+            return NBN_ERROR;
+        }
 
         NBN_Packet_Decrypt(packet, packet->sender);
 
-        printf("AFTER DECRYPT:\n");
+        /*printf("AFTER DECRYPT:\n");
         for (i = 0; i < packet->size; i++)
         {
             if (i > 0) printf(":");
             printf("%02X", packet->buffer[i]);
         }
-        printf("\n");
+        printf("\n");*/
     }
-#endif /* NBN_AUTH */
 
     NBN_ReadStream_Init(&packet->r_stream, packet->buffer + NBN_PACKET_HEADER_SIZE, packet->size);
 
@@ -2162,7 +2245,7 @@ int NBN_Packet_WriteMessage(NBN_Packet *packet, NBN_Message *message)
 
     if (
             packet->header.messages_count >= NBN_MAX_MESSAGES_PER_PACKET ||
-            packet->m_stream.number_of_bits > NBN_PACKET_MAX_DATA_SIZE * 8)
+            packet->m_stream.number_of_bits > NBN_PACKET_MAX_USER_DATA_SIZE * 8)
     {
         packet->m_stream.number_of_bits = current_number_of_bits;
 
@@ -2189,9 +2272,17 @@ int NBN_Packet_Seal(NBN_Packet *packet, NBN_Connection *connection)
     if (NBN_WriteStream_Flush(&packet->w_stream) < 0)
         return NBN_ERROR;
 
-#ifdef NBN_AUTH
-    packet->header.is_encrypted = connection->can_encrypt;
-#endif
+    bool is_encrypted = connection->endpoint->config.is_encryption_enabled && connection->can_encrypt;
+
+    packet->header.is_encrypted = is_encrypted;
+    packet->size += NBN_PACKET_HEADER_SIZE;
+
+    if (is_encrypted)
+    {
+        NBN_Packet_ComputeIV(packet, connection);
+        NBN_Packet_Encrypt(packet, connection);
+        NBN_Packet_Authenticate(packet, connection);
+    }
 
     NBN_WriteStream header_w_stream;
 
@@ -2202,16 +2293,6 @@ int NBN_Packet_Seal(NBN_Packet *packet, NBN_Connection *connection)
 
     if (NBN_WriteStream_Flush(&header_w_stream) < 0)
         return NBN_ERROR;
-
-    packet->size += NBN_PACKET_HEADER_SIZE;
-
-#ifdef NBN_AUTH
-    if (packet->header.is_encrypted)
-    {
-        NBN_Packet_ComputeIV(packet, connection);
-        NBN_Packet_Encrypt(packet, connection);
-    }
-#endif
 
     packet->sealed = true;
 
@@ -2225,28 +2306,29 @@ static int NBN_Packet_SerializeHeader(NBN_PacketHeader *header, NBN_Stream *stre
     SERIALIZE_BYTES(&header->ack, sizeof(header->ack));
     SERIALIZE_BYTES(&header->ack_bits, sizeof(header->ack_bits));
     SERIALIZE_BYTES(&header->messages_count, sizeof(header->messages_count));
-
-#ifdef NBN_AUTH
     SERIALIZE_BYTES(&header->is_encrypted, sizeof(header->is_encrypted));
-#endif
+
+    /* Do not serialize authentication tag when packet is not encrypted to save some bandwith */
+    if (header->is_encrypted)
+        SERIALIZE_BYTES(&header->auth_tag, sizeof(header->auth_tag));
 
     return 0;
 }
 
-#ifdef NBN_AUTH
-
 void NBN_Packet_Encrypt(NBN_Packet *packet, NBN_Connection *connection)
 {
-    AES_init_ctx_iv(&connection->aes_ctx, connection->keys1.shared_key, packet->aes_iv);
+    struct AES_ctx aes_ctx;
 
-    printf("BEFORE ENCRYPT (%d):\n", packet->size);
+    AES_init_ctx_iv(&aes_ctx, connection->keys1.shared_key, packet->aes_iv);
+
+    /*printf("BEFORE ENCRYPT (%d):\n", packet->size);
     int i;
     for (i = 0; i < packet->size; i++)
     {
         if (i > 0) printf(":");
         printf("%02X", packet->buffer[i]);
     }
-    printf("\n");
+    printf("\n");*/
 
     unsigned int bytes_to_encrypt = packet->size - NBN_PACKET_HEADER_SIZE;
     unsigned int added_bytes = (bytes_to_encrypt % AES_BLOCKLEN == 0) ? 0 : (AES_BLOCKLEN - bytes_to_encrypt % AES_BLOCKLEN);
@@ -2256,51 +2338,53 @@ void NBN_Packet_Encrypt(NBN_Packet *packet, NBN_Connection *connection)
     assert(bytes_to_encrypt % AES_BLOCKLEN == 0);
     assert(bytes_to_encrypt < NBN_PACKET_MAX_DATA_SIZE);
 
-    memset(packet->buffer + packet->size, 0, added_bytes);
-
     packet->size = NBN_PACKET_HEADER_SIZE + bytes_to_encrypt;
 
     assert(packet->size < NBN_PACKET_MAX_SIZE); 
 
-    AES_CBC_encrypt_buffer(&connection->aes_ctx, packet->buffer + NBN_PACKET_HEADER_SIZE, bytes_to_encrypt);
+    memset((packet->buffer + packet->size) - added_bytes, 0, added_bytes);
 
-    printf("AFTER ENCRYPT (%d):\n", packet->size);
+    AES_CBC_encrypt_buffer(&aes_ctx, packet->buffer + NBN_PACKET_HEADER_SIZE, bytes_to_encrypt);
+
+    /*printf("AFTER ENCRYPT (%d):\n", packet->size);
     for (i = 0; i < packet->size; i++)
     {
         if (i > 0) printf(":");
         printf("%02X", packet->buffer[i]);
     }
-    printf("\n");
+    printf("\n");*/
 
     NBN_LogTrace("Encrypted packet %d (%d bytes)", packet->header.seq_number, packet->size);  
 }
 
 void NBN_Packet_Decrypt(NBN_Packet *packet, NBN_Connection *connection)
 {
-    AES_init_ctx_iv(&connection->aes_ctx, connection->keys1.shared_key, packet->aes_iv);
+    struct AES_ctx aes_ctx;
 
-    NBN_LogTrace("Decrypt packet %d (%d bytes)", packet->header.seq_number, packet->size);
+    AES_init_ctx_iv(&aes_ctx, connection->keys1.shared_key, packet->aes_iv);
 
     unsigned int bytes_to_decrypt = packet->size - NBN_PACKET_HEADER_SIZE;
 
     assert(bytes_to_decrypt % AES_BLOCKLEN == 0);
     assert(bytes_to_decrypt < NBN_PACKET_MAX_DATA_SIZE);
 
-    AES_CBC_decrypt_buffer(&connection->aes_ctx, packet->buffer + NBN_PACKET_HEADER_SIZE, bytes_to_decrypt);
+    AES_CBC_decrypt_buffer(&aes_ctx, packet->buffer + NBN_PACKET_HEADER_SIZE, bytes_to_decrypt);
+
+    NBN_LogTrace("Decrypted packet %d (%d bytes)", packet->header.seq_number, packet->size);
 }
 
 void NBN_Packet_ComputeIV(NBN_Packet *packet, NBN_Connection *connection)
 {
-    uint8_t iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
+    struct AES_ctx aes_ctx;
 
-    AES_init_ctx_iv(&connection->aes_ctx, connection->keys1.shared_key, iv);
+    AES_init_ctx_iv(&aes_ctx, connection->keys2.shared_key, connection->aes_iv);
 
     memset(packet->aes_iv, 0, AES_BLOCKLEN);
     memcpy(packet->aes_iv, (uint8_t *)&packet->header.seq_number, sizeof(packet->header.seq_number));
 
-    AES_CBC_encrypt_buffer(&connection->aes_ctx, packet->aes_iv, AES_BLOCKLEN);
+    AES_CBC_encrypt_buffer(&aes_ctx, packet->aes_iv, AES_BLOCKLEN);
 
-    printf("GENERATED IV FOR PACKET (%d):\n", packet->header.seq_number);
+    /*printf("GENERATED IV FOR PACKET (%d):\n", packet->header.seq_number);
     int i;
     for (i = 0; i < AES_BLOCKLEN; i++)
     {
@@ -2308,9 +2392,49 @@ void NBN_Packet_ComputeIV(NBN_Packet *packet, NBN_Connection *connection)
         printf("%02X", packet->aes_iv[i]);
     }
     printf("\n");
+    */
 }
 
-#endif /* NBN_AUTH */
+void NBN_Packet_Authenticate(NBN_Packet *packet, NBN_Connection *connection)
+{ 
+    uint8_t poly1305_key[POLY1305_KEYLEN] = {0};
+
+    NBN_Packet_ComputePoly1305Key(packet, connection, poly1305_key);
+
+    memset(packet->header.auth_tag, 0, POLY1305_TAGLEN);
+
+    poly1305_auth(
+            packet->header.auth_tag,
+            packet->buffer + NBN_PACKET_HEADER_SIZE,
+            packet->size - NBN_PACKET_HEADER_SIZE,
+            poly1305_key);
+}
+
+bool NBN_Packet_CheckAuthentication(NBN_Packet *packet, NBN_Connection *connection)
+{
+    uint8_t poly1305_key[POLY1305_KEYLEN] = {0};
+    uint8_t auth_tag[POLY1305_TAGLEN] = {0};
+
+    NBN_Packet_ComputePoly1305Key(packet, connection, poly1305_key);
+
+    poly1305_auth(
+            auth_tag,
+            packet->buffer + NBN_PACKET_HEADER_SIZE,
+            packet->size - NBN_PACKET_HEADER_SIZE,
+            poly1305_key);
+
+    return memcmp(packet->header.auth_tag, auth_tag, POLY1305_TAGLEN) == 0;
+}
+
+void NBN_Packet_ComputePoly1305Key(NBN_Packet *packet, NBN_Connection *connection, uint8_t *poly1305_key)
+{
+    struct AES_ctx aes_ctx;
+
+    memcpy(poly1305_key, (uint8_t *)&packet->header.seq_number, sizeof(packet->header.seq_number));
+
+    AES_init_ctx_iv(&aes_ctx, connection->keys3.shared_key, connection->aes_iv);
+    AES_CBC_encrypt_buffer(&aes_ctx, poly1305_key, POLY1305_KEYLEN);
+}
 
 #pragma endregion /* NBN_Packet */
 
@@ -2507,14 +2631,15 @@ static void NBN_Connection_UpdateAverageUploadBandwidth(NBN_Connection *, float)
 static void NBN_Connection_UpdateAverageDownloadBandwidth(NBN_Connection *);
 static void NBN_Connection_ClearMessageQueue(NBN_List *);
 
-#ifdef NBN_AUTH
+/* Encryption related functions */
 
 static int NBN_Connection_GenerateKeys(NBN_Connection *);
 static int NBN_Connection_GenerateKeySet(NBN_ConnectionKeySet *, CSPRNG *);
 static int NBN_Connection_BuildSharedKey(NBN_ConnectionKeySet *, uint8_t *);
 static void NBN_Connection_StartEncryption(NBN_Connection *);
 
-#endif /* NBN_AUTH */
+static int ecdh_generate_keys(uint8_t*, uint8_t*);
+static int ecdh_shared_secret(const uint8_t*, const uint8_t*, uint8_t*);
 
 NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_Endpoint *endpoint)
 {
@@ -2546,21 +2671,19 @@ NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_End
     }
 
     connection->stats = (NBN_ConnectionStats){0};
-
-#ifdef NBN_AUTH
-
-    if (NBN_Connection_GenerateKeys(connection)  < 0)
-    {
-        NBN_LogError("Failed to generate keys");
-        NBN_MemoryManager_DeallocObject(NBN_OBJ_CONNECTION, connection);
-
-        return NULL;
-    }
-
     connection->can_decrypt = false;
     connection->can_encrypt = false;
 
-#endif /* NBN_AUTH */
+    if (endpoint->config.is_encryption_enabled)
+    {
+        if (NBN_Connection_GenerateKeys(connection)  < 0)
+        {
+            NBN_LogError("Failed to generate keys");
+            NBN_MemoryManager_DeallocObject(NBN_OBJ_CONNECTION, connection);
+
+            return NULL;
+        }
+    } 
 
     return connection;
 }
@@ -2695,7 +2818,7 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
         return NBN_ERROR;
     }
 
-    if (message_size > NBN_PACKET_MAX_DATA_SIZE)
+    if (message_size > NBN_PACKET_MAX_USER_DATA_SIZE)
     {
         uint8_t *message_bytes = NBN_MemoryManager_Alloc(message_size);
         NBN_WriteStream write_stream;
@@ -3038,6 +3161,7 @@ static int NBN_Connection_SendPackets(
         unsigned int packet_count)
 {
     unsigned int sent_bytes = 0;
+    bool is_encryption_enabled = connection->endpoint->config.is_encryption_enabled;
 
     for (unsigned int i = 0; i < packet_count; i++)
     {
@@ -3149,7 +3273,7 @@ static bool NBN_Connection_IsPacketReceived(NBN_Connection *connection, uint16_t
 
 static int NBN_Connection_SendPacket(NBN_Connection *connection, NBN_Packet *packet)
 {
-    NBN_LogTrace("Send packet %d to client %d (messages count: %d)",
+    NBN_LogTrace("Send packet %d to connection %d (messages count: %d)",
             packet->header.seq_number, connection->id, packet->header.messages_count);
 
     if (connection->endpoint->is_server)
@@ -3208,8 +3332,6 @@ static NBN_Message *NBN_Connection_ReadNextMessageFromStream(NBN_Connection *con
     uint8_t msg_type = msg_header.type;
     NBN_MessageBuilder msg_builder = connection->endpoint->message_builders[msg_type];
 
-    NBN_LogDebug("---------------------------------------> %d", msg_type);
-
     if (msg_builder == NULL)
     {
         NBN_LogError("No message builder is registered for messages of type %d", msg_type);
@@ -3248,14 +3370,6 @@ static NBN_Message *NBN_Connection_ReadNextMessageFromStream(NBN_Connection *con
 
 NBN_Message *NBN_Connection_ReadNextMessageFromPacket(NBN_Connection *connection, NBN_Packet *packet)
 {
-    /*int i;
-    for (i = 0; i < packet->r_stream.bit_reader.size; i++)
-    {
-        if (i > 0) printf(":");
-        printf("%02X", packet->r_stream.bit_reader.buffer[i]);
-    }
-    printf("\n");*/
-
     return NBN_Connection_ReadNextMessageFromStream(connection, &packet->r_stream);
 }
 
@@ -3323,8 +3437,6 @@ static void NBN_Connection_ClearMessageQueue(NBN_List *queue)
     }
 }
 
-#ifdef NBN_AUTH
-
 static int NBN_Connection_GenerateKeys(NBN_Connection *connection)
 {
     CSPRNG *prng = csprng_create();
@@ -3340,8 +3452,12 @@ static int NBN_Connection_GenerateKeys(NBN_Connection *connection)
         return -1;
 
     if (NBN_Connection_GenerateKeySet(&connection->keys2, prng) < 0)
+        return -1; 
+
+    if (NBN_Connection_GenerateKeySet(&connection->keys3, prng) < 0)
         return -1;
 
+    csprng_get(prng, connection->aes_iv, AES_BLOCKLEN);
     csprng_destroy(prng);
 
     return 0;
@@ -3367,13 +3483,14 @@ static int NBN_Connection_BuildSharedKey(NBN_ConnectionKeySet *key_set, uint8_t 
     if (!ecdh_shared_secret(key_set->prv_key, pub_key, key_set->shared_key))
         return -1;
 
-    NBN_LogDebug("Generated shared key:");
+    /*NBN_LogDebug("Generated shared key:");
     for (int i = 0; i < ECC_PUB_KEY_SIZE; i++)
     {
         if (i > 0) printf(":");
         printf("%02X", key_set->shared_key[i]);
     }
     printf("\n");
+    */
 
     return 0;
 }
@@ -3384,8 +3501,6 @@ static void NBN_Connection_StartEncryption(NBN_Connection *connection)
     
     NBN_LogDebug("Encryption started for connection %d", connection->id);
 }
-
-#endif /* NBN_AUTH */
 
 #pragma endregion /* NBN_Connection */
 
@@ -3738,6 +3853,8 @@ static bool NBN_ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, 
         return true;
     }
 
+    NBN_LogDebug("---------------------------------> HERE");
+
     return false;
 }
 
@@ -3887,7 +4004,6 @@ void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server
     NBN_Endpoint_RegisterMessageSerializer(
             endpoint, (NBN_MessageSerializer)NBN_ByteArrayMessage_Serialize, NBN_BYTE_ARRAY_MESSAGE_TYPE);
 
-#ifdef NBN_AUTH
     /* Register NBN_PublicCryptoInfoMessage library message */
     NBN_Endpoint_RegisterMessageBuilder(
             endpoint, (NBN_MessageBuilder)NBN_PublicCryptoInfoMessage_Create, NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE);
@@ -3899,7 +4015,6 @@ void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server
             endpoint, (NBN_MessageBuilder)NBN_StartEncryptMessage_Create, NBN_START_ENCRYPT_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageSerializer(
             endpoint, (NBN_MessageSerializer)NBN_StartEncryptMessage_Serialize, NBN_START_ENCRYPT_MESSAGE_TYPE);
-#endif /* NBN_AUTH */
 
 #ifdef NBN_DEBUG
     endpoint->OnMessageAddedToRecvQueue = NULL;
@@ -4030,19 +4145,19 @@ static int NBN_GameClient_HandleEvent(int);
 static int NBN_GameClient_HandleMessageReceivedEvent(void);
 static void NBN_GameClient_ReleaseLastEvent(void);
 
-#ifdef NBN_AUTH
-
 static int NBN_GameClient_SendCryptoPublicInfo(void);
 static void NBN_GameClient_StartEncryption(void);
 
-#endif
-
 void NBN_GameClient_Init(const char *protocol_name, const char *ip_address, uint16_t port)
 {
-    NBN_Endpoint_Init(
-            &game_client.endpoint,
-            (NBN_Config){.protocol_name = protocol_name, .ip_address = ip_address, .port = port},
-            false);
+    NBN_Config config = {
+        .protocol_name = protocol_name,
+        .ip_address = ip_address,
+        .port = port,
+        .is_encryption_enabled = false
+    };
+
+    NBN_Endpoint_Init(&game_client.endpoint, config, false);
     game_client.accept_data = NULL;
 }
 
@@ -4236,6 +4351,16 @@ void NBN_GameClient_DestroyMessage(uint8_t msg_type, void *msg)
     mem_manager.report.destroyed_message_count++;
 }
 
+bool NBN_GameClient_IsEncryptionEnabled(void)
+{
+    return game_client.endpoint.config.is_encryption_enabled;
+}
+
+void NBN_GameClient_EnableEncryption(void)
+{
+    game_client.endpoint.config.is_encryption_enabled = true;
+}
+
 #ifdef NBN_DEBUG
 
 void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, void *cb)
@@ -4325,7 +4450,7 @@ static int NBN_GameClient_HandleMessageReceivedEvent(void)
     client_last_received_message_type = message->header.type;
     client_last_received_message_data = message->data;
 
-    int ret;
+    int ret = NBN_NO_EVENT;
 
     if (message->header.type == NBN_CLIENT_CLOSED_MESSAGE_TYPE)
     {
@@ -4339,11 +4464,8 @@ static int NBN_GameClient_HandleMessageReceivedEvent(void)
 
         ret = NBN_CONNECTED;
     }
-#ifdef NBN_AUTH
-    else if (message->header.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
+    else if (NBN_GameClient_IsEncryptionEnabled() && message->header.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
     {
-        ret = NBN_NO_EVENT;
-
         NBN_LogDebug("Received server's crypto public info");
 
         if (NBN_GameClient_SendCryptoPublicInfo() < 0)
@@ -4352,25 +4474,35 @@ static int NBN_GameClient_HandleMessageReceivedEvent(void)
             NBN_Abort();
         }
 
-        uint8_t *pub_key = ((NBN_PublicCryptoInfoMessage *)message->data)->key;
+        NBN_PublicCryptoInfoMessage *pub_crypto_msg = message->data;
 
-        if (NBN_Connection_BuildSharedKey(&game_client.server_connection->keys1, pub_key) < 0)
+        if (NBN_Connection_BuildSharedKey(&game_client.server_connection->keys1, pub_crypto_msg->pub_key1) < 0)
         {
-            NBN_LogError("Failed to build shared key");
+            NBN_LogError("Failed to build shared key (first key)");
+            NBN_Abort();
+        }
+
+        if (NBN_Connection_BuildSharedKey(&game_client.server_connection->keys2, pub_crypto_msg->pub_key2) < 0)
+        {
+            NBN_LogError("Failed to build shared key (second key)");
+            NBN_Abort();
+        }
+
+        if (NBN_Connection_BuildSharedKey(&game_client.server_connection->keys3, pub_crypto_msg->pub_key3) < 0)
+        {
+            NBN_LogError("Failed to build shared key (third key)");
             NBN_Abort();
         }
 
         NBN_LogTrace("Client can now decrypt packets");
 
+        memcpy(game_client.server_connection->aes_iv, pub_crypto_msg->aes_iv, AES_BLOCKLEN);
         game_client.server_connection->can_decrypt = true;
     }
-    else if (message->header.type == NBN_START_ENCRYPT_MESSAGE_TYPE)
+    else if (NBN_GameClient_IsEncryptionEnabled() && message->header.type == NBN_START_ENCRYPT_MESSAGE_TYPE)
     {
-        ret = NBN_NO_EVENT;
-
         NBN_GameClient_StartEncryption();
     }
-#endif /* NBN_AUTH */
     else
     {
         ret = NBN_MESSAGE_RECEIVED;
@@ -4386,8 +4518,6 @@ static void NBN_GameClient_ReleaseLastEvent(void)
     client_last_received_message_data = NULL;
 }
 
-#ifdef NBN_AUTH
-
 static int NBN_GameClient_SendCryptoPublicInfo(void)
 {
     assert(game_client.server_connection);
@@ -4397,7 +4527,14 @@ static int NBN_GameClient_SendCryptoPublicInfo(void)
     if (msg == NULL)
         return -1;
 
-    memcpy(msg->key, game_client.server_connection->keys1.pub_key, ECC_PUB_KEY_SIZE);
+    memcpy(msg->pub_key1, game_client.server_connection->keys1.pub_key, ECC_PUB_KEY_SIZE);
+    memcpy(msg->pub_key2, game_client.server_connection->keys2.pub_key, ECC_PUB_KEY_SIZE);
+    memcpy(msg->pub_key3, game_client.server_connection->keys3.pub_key, ECC_PUB_KEY_SIZE);
+
+    /* Client does not send an AES IV to the server */
+    uint8_t zero_aes_iv[AES_BLOCKLEN] = {0};
+
+    memcpy(msg->aes_iv, zero_aes_iv, AES_BLOCKLEN);
 
     if (NBN_Connection_EnqueueOutgoingMessage(game_client.server_connection) < 0)
         return -1;
@@ -4411,8 +4548,6 @@ static void NBN_GameClient_StartEncryption(void)
 {
     NBN_Connection_StartEncryption(game_client.server_connection);
 }
-
-#endif /* NBN_AUTH */
 
 #pragma endregion /* NBN_GameClient */
 
@@ -4469,19 +4604,14 @@ static int NBN_GameServer_HandleMessageReceivedEvent(void);
 static void NBN_GameServer_ReleaseLastEvent(void);
 static void NBN_GameServer_ReleaseClientDisconnectedEvent(void);
 
-#ifdef NBN_AUTH
-
 static int NBN_GameServer_SendCryptoPublicInfoTo(NBN_Connection *);
 static int NBN_GameServer_StartEncryption(NBN_Connection *);
 
-#endif /* NBN_AUTH */
-
 void NBN_GameServer_Init(const char *protocol_name, uint16_t port)
 {
-    NBN_Endpoint_Init(
-            &game_server.endpoint,
-            (NBN_Config){.protocol_name = protocol_name, .port = port},
-            true);
+    NBN_Config config = { .protocol_name = protocol_name, .port = port, .is_encryption_enabled = false };
+
+    NBN_Endpoint_Init(&game_server.endpoint, config, true);
 
     game_server.clients = NBN_List_Create();
 }
@@ -4824,6 +4954,16 @@ void NBN_GameServer_DestroyMessage(uint8_t msg_type, void *msg)
     mem_manager.report.destroyed_message_count++;
 }
 
+void NBN_GameServer_EnableEncryption(void)
+{
+    game_server.endpoint.config.is_encryption_enabled = true;
+}
+
+bool NBN_GameServer_IsEncryptionEnabled(void)
+{
+    return game_server.endpoint.config.is_encryption_enabled;
+}
+
 #ifdef NBN_DEBUG
 
 void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, void *cb)
@@ -4978,16 +5118,27 @@ static int NBN_GameServer_HandleMessageReceivedEvent(void)
 
     int ret = NBN_CLIENT_MESSAGE_RECEIVED;
 
-#ifdef NBN_AUTH
-    if (message->header.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
+    if (NBN_GameServer_IsEncryptionEnabled() && message->header.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
     {
         ret = NBN_NO_EVENT;
 
-        uint8_t *pub_key = ((NBN_PublicCryptoInfoMessage *)message->data)->key;
+        NBN_PublicCryptoInfoMessage *pub_crypto_msg = message->data;
 
-        if (NBN_Connection_BuildSharedKey(&message->sender->keys1, pub_key) < 0)
+        if (NBN_Connection_BuildSharedKey(&message->sender->keys1, pub_crypto_msg->pub_key1) < 0)
         {
-            NBN_LogError("Failed to build shared key");
+            NBN_LogError("Failed to build shared key (first key)");
+            NBN_Abort();
+        }
+
+        if (NBN_Connection_BuildSharedKey(&message->sender->keys2, pub_crypto_msg->pub_key2) < 0)
+        {
+            NBN_LogError("Failed to build shared key (second key)");
+            NBN_Abort();
+        }
+
+        if (NBN_Connection_BuildSharedKey(&message->sender->keys3, pub_crypto_msg->pub_key3) < 0)
+        {
+            NBN_LogError("Failed to build shared key (third key)");
             NBN_Abort();
         }
 
@@ -5003,7 +5154,6 @@ static int NBN_GameServer_HandleMessageReceivedEvent(void)
 
         NBN_EventQueue_Enqueue(game_server.endpoint.events_queue, NBN_NEW_CONNECTION, message->sender);
     }
-#endif /* NBN_AUTH */
 
     NBN_Message_Destroy(message, false);
 
@@ -5058,15 +5208,18 @@ static void NBN_GServ_Driver_OnClientConnected(NBN_Connection *client)
 
     NBN_List_PushBack(game_server.clients, client);
 
-#ifdef NBN_AUTH
-    if (NBN_GameServer_SendCryptoPublicInfoTo(client) < 0)
+    if (NBN_GameServer_IsEncryptionEnabled())
     {
-        NBN_LogError("Failed to send public key to client %d", client->id);
-        NBN_Abort();
+        if (NBN_GameServer_SendCryptoPublicInfoTo(client) < 0)
+        {
+            NBN_LogError("Failed to send public key to client %d", client->id);
+            NBN_Abort();
+        }
     }
-#else
-    NBN_EventQueue_Enqueue(game_server.endpoint.events_queue, NBN_NEW_CONNECTION, client);
-#endif /* NBN_AUTH */
+    else
+    {
+        NBN_EventQueue_Enqueue(game_server.endpoint.events_queue, NBN_NEW_CONNECTION, client);
+    }
 }
 
 static void NBN_GServ_Driver_OnClientPacketReceived(NBN_Packet *packet)
@@ -5080,8 +5233,6 @@ static void NBN_GServ_Driver_OnClientPacketReceived(NBN_Packet *packet)
     }
 }
 
-#ifdef NBN_AUTH
-
 static int NBN_GameServer_SendCryptoPublicInfoTo(NBN_Connection *client)
 {
     NBN_PublicCryptoInfoMessage *msg = NBN_GameServer_CreateReliableMessage(NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE);
@@ -5089,8 +5240,10 @@ static int NBN_GameServer_SendCryptoPublicInfoTo(NBN_Connection *client)
     if (msg == NULL)
         return -1;
 
-    memcpy(msg->key, client->keys1.pub_key, ECC_PUB_KEY_SIZE);
-    // memcpy(msg->aes_iv, client->aes_iv, ECC_PUB_KEY_SIZE);
+    memcpy(msg->pub_key1, client->keys1.pub_key, ECC_PUB_KEY_SIZE);
+    memcpy(msg->pub_key2, client->keys2.pub_key, ECC_PUB_KEY_SIZE);
+    memcpy(msg->pub_key3, client->keys3.pub_key, ECC_PUB_KEY_SIZE);
+    memcpy(msg->aes_iv, client->aes_iv, AES_BLOCKLEN);
 
     if (NBN_Connection_EnqueueOutgoingMessage(client) < 0)
         return -1;
@@ -5114,8 +5267,6 @@ static int NBN_GameServer_StartEncryption(NBN_Connection *client)
 
     return 0;
 }
-
-#endif /* NBN_AUTH */
 
 #pragma endregion /* Game server driver */
 
@@ -5337,6 +5488,1400 @@ static unsigned int NBN_PacketSimulator_GetRandomDuplicatePacketCount(NBN_Packet
 
 #pragma endregion /* Packet simulator */
 
-#endif /* NBN_AUTH */
+#pragma region Encryption
+
+/*
+ * All "low-level" cryptography implementations used for nbnet packet encryption and authentication.
+ *
+ * I did not write any of the code in this section, I only regrouped it in there to keep nbnet contained
+ * into a single header. I used a total of three different open source libraries:
+ *
+ * ECDH:        https://github.com/kokke/tiny-ECDH-c
+ * AES:         https://github.com/kokke/tiny-AES-c
+ * Poly1305:    https://github.com/floodyberry/poly1305-donna
+ */
+
+#pragma region ECDH
+
+/* margin for overhead needed in intermediate calculations */
+#define BITVEC_MARGIN     3
+#define BITVEC_NBITS      (CURVE_DEGREE + BITVEC_MARGIN)
+#define BITVEC_NWORDS     ((BITVEC_NBITS + 31) / 32)
+#define BITVEC_NBYTES     (sizeof(uint32_t) * BITVEC_NWORDS)
+
+/* Default to a (somewhat) constant-time mode?
+NOTE: The library is _not_ capable of operating in constant-time and leaks information via timing.
+Even if all operations are written const-time-style, it requires the hardware is able to multiply in constant time. 
+Multiplication on ARM Cortex-M processors takes a variable number of cycles depending on the operands...
+*/
+#ifndef CONST_TIME
+#define CONST_TIME 0
+#endif
+
+/* Default to using ECC_CDH (cofactor multiplication-variation) ? */
+#ifndef ECDH_COFACTOR_VARIANT
+#define ECDH_COFACTOR_VARIANT 0
+#endif
+
+/******************************************************************************/
+
+
+/* the following type will represent bit vectors of length (CURVE_DEGREE+MARGIN) */
+typedef uint32_t bitvec_t[BITVEC_NWORDS];
+typedef bitvec_t gf2elem_t;           /* this type will represent field elements */
+typedef bitvec_t scalar_t;
+
+
+/******************************************************************************/
+
+/* Here the curve parameters are defined. */
+
+#if defined (ECC_CURVE) && (ECC_CURVE != 0)
+#if (ECC_CURVE == NIST_K163)
+#define coeff_a  1
+#define cofactor 2
+/* NIST K-163 */
+const gf2elem_t polynomial = { 0x000000c9, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000008 }; 
+const gf2elem_t coeff_b    = { 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000 }; 
+const gf2elem_t base_x     = { 0x5c94eee8, 0xde4e6d5e, 0xaa07d793, 0x7bbc11ac, 0xfe13c053, 0x00000002 }; 
+const gf2elem_t base_y     = { 0xccdaa3d9, 0x0536d538, 0x321f2e80, 0x5d38ff58, 0x89070fb0, 0x00000002 }; 
+const scalar_t  base_order = { 0x99f8a5ef, 0xa2e0cc0d, 0x00020108, 0x00000000, 0x00000000, 0x00000004 }; 
+#endif
+
+#if (ECC_CURVE == NIST_B163)
+#define coeff_a  1
+#define cofactor 2
+/* NIST B-163 */
+const gf2elem_t polynomial = { 0x000000c9, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000008 }; 
+const gf2elem_t coeff_b    = { 0x4a3205fd, 0x512f7874, 0x1481eb10, 0xb8c953ca, 0x0a601907, 0x00000002 }; 
+const gf2elem_t base_x     = { 0xe8343e36, 0xd4994637, 0xa0991168, 0x86a2d57e, 0xf0eba162, 0x00000003 }; 
+const gf2elem_t base_y     = { 0x797324f1, 0xb11c5c0c, 0xa2cdd545, 0x71a0094f, 0xd51fbc6c, 0x00000000 }; 
+const scalar_t  base_order = { 0xa4234c33, 0x77e70c12, 0x000292fe, 0x00000000, 0x00000000, 0x00000004 }; 
+#endif
+
+#if (ECC_CURVE == NIST_K233)
+#define coeff_a  0
+#define cofactor 4
+/* NIST K-233 */
+const gf2elem_t polynomial = { 0x00000001, 0x00000000, 0x00000400, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000200 };
+const gf2elem_t coeff_b    = { 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000 };
+const gf2elem_t base_x     = { 0xefad6126, 0x0a4c9d6e, 0x19c26bf5, 0x149563a4, 0x29f22ff4, 0x7e731af1, 0x32ba853a, 0x00000172 };
+const gf2elem_t base_y     = { 0x56fae6a3, 0x56e0c110, 0xf18aeb9b, 0x27a8cd9b, 0x555a67c4, 0x19b7f70f, 0x537dece8, 0x000001db };
+const scalar_t  base_order = { 0xf173abdf, 0x6efb1ad5, 0xb915bcd4, 0x00069d5b, 0x00000000, 0x00000000, 0x00000000, 0x00000080 };
+#endif
+
+#if (ECC_CURVE == NIST_B233)
+#define coeff_a  1
+#define cofactor 2
+/* NIST B-233 */
+const gf2elem_t polynomial = { 0x00000001, 0x00000000, 0x00000400, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000200 }; 
+const gf2elem_t coeff_b    = { 0x7d8f90ad, 0x81fe115f, 0x20e9ce42, 0x213b333b, 0x0923bb58, 0x332c7f8c, 0x647ede6c, 0x00000066 }; 
+const gf2elem_t base_x     = { 0x71fd558b, 0xf8f8eb73, 0x391f8b36, 0x5fef65bc, 0x39f1bb75, 0x8313bb21, 0xc9dfcbac, 0x000000fa }; 
+const gf2elem_t base_y     = { 0x01f81052, 0x36716f7e, 0xf867a7ca, 0xbf8a0bef, 0xe58528be, 0x03350678, 0x6a08a419, 0x00000100 }; 
+const scalar_t  base_order = { 0x03cfe0d7, 0x22031d26, 0xe72f8a69, 0x0013e974, 0x00000000, 0x00000000, 0x00000000, 0x00000100 };
+#endif
+
+#if (ECC_CURVE == NIST_K283)
+#define coeff_a  0
+#define cofactor 4
+/* NIST K-283 */
+const gf2elem_t polynomial = { 0x000010a1, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x08000000 };
+const gf2elem_t coeff_b    = { 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000 }; 
+const gf2elem_t base_x     = { 0x58492836, 0xb0c2ac24, 0x16876913, 0x23c1567a, 0x53cd265f, 0x62f188e5, 0x3f1a3b81, 0x78ca4488, 0x0503213f }; 
+const gf2elem_t base_y     = { 0x77dd2259, 0x4e341161, 0xe4596236, 0xe8184698, 0xe87e45c0, 0x07e5426f, 0x8d90f95d, 0x0f1c9e31, 0x01ccda38 }; 
+const scalar_t  base_order = { 0x1e163c61, 0x94451e06, 0x265dff7f, 0x2ed07577, 0xffffe9ae, 0xffffffff, 0xffffffff, 0xffffffff, 0x01ffffff }; 
+#endif
+
+#if (ECC_CURVE == NIST_B283)
+#define coeff_a  1
+#define cofactor 2
+/* NIST B-283 */
+const gf2elem_t polynomial = { 0x000010a1, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x08000000 }; 
+const gf2elem_t coeff_b    = { 0x3b79a2f5, 0xf6263e31, 0xa581485a, 0x45309fa2, 0xca97fd76, 0x19a0303f, 0xa5a4af8a, 0xc8b8596d, 0x027b680a }; 
+const gf2elem_t base_x     = { 0x86b12053, 0xf8cdbecd, 0x80e2e198, 0x557eac9c, 0x2eed25b8, 0x70b0dfec, 0xe1934f8c, 0x8db7dd90, 0x05f93925 }; 
+const gf2elem_t base_y     = { 0xbe8112f4, 0x13f0df45, 0x826779c8, 0x350eddb0, 0x516ff702, 0xb20d02b4, 0xb98fe6d4, 0xfe24141c, 0x03676854 }; 
+const scalar_t  base_order = { 0xefadb307, 0x5b042a7c, 0x938a9016, 0x399660fc, 0xffffef90, 0xffffffff, 0xffffffff, 0xffffffff, 0x03ffffff }; 
+#endif
+
+#if (ECC_CURVE == NIST_K409)
+#define coeff_a  0
+#define cofactor 4
+/* NIST K-409 */
+const gf2elem_t polynomial = { 0x00000001, 0x00000000, 0x00800000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x02000000 }; 
+const gf2elem_t coeff_b    = { 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000 }; 
+const gf2elem_t base_x     = { 0xe9023746, 0xb35540cf, 0xee222eb1, 0xb5aaaa62, 0xc460189e, 0xf9f67cc2, 0x27accfb8, 0xe307c84c, 0x0efd0987, 0x0f718421, 0xad3ab189, 0x658f49c1, 0x0060f05f }; 
+const gf2elem_t base_y     = { 0xd8e0286b, 0x5863ec48, 0xaa9ca27a, 0xe9c55215, 0xda5f6c42, 0xe9ea10e3, 0xe6325165, 0x918ea427, 0x3460782f, 0xbf04299c, 0xacba1dac, 0x0b7c4e42, 0x01e36905 }; 
+const scalar_t  base_order = { 0xe01e5fcf, 0x4b5c83b8, 0xe3e7ca5b, 0x557d5ed3, 0x20400ec4, 0x83b2d4ea, 0xfffffe5f, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0x007fffff }; 
+#endif
+
+#if (ECC_CURVE == NIST_B409)
+#define coeff_a  1
+#define cofactor 2
+/* NIST B-409 */
+const gf2elem_t polynomial = { 0x00000001, 0x00000000, 0x00800000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x02000000 }; 
+const gf2elem_t coeff_b    = { 0x7b13545f, 0x4f50ae31, 0xd57a55aa, 0x72822f6c, 0xa9a197b2, 0xd6ac27c8, 0x4761fa99, 0xf1f3dd67, 0x7fd6422e, 0x3b7b476b, 0x5c4b9a75, 0xc8ee9feb, 0x0021a5c2 }; 
+const gf2elem_t base_x     = { 0xbb7996a7, 0x60794e54, 0x5603aeab, 0x8a118051, 0xdc255a86, 0x34e59703, 0xb01ffe5b, 0xf1771d4d, 0x441cde4a, 0x64756260, 0x496b0c60, 0xd088ddb3, 0x015d4860 }; 
+const gf2elem_t base_y     = { 0x0273c706, 0x81c364ba, 0xd2181b36, 0xdf4b4f40, 0x38514f1f, 0x5488d08f, 0x0158aa4f, 0xa7bd198d, 0x7636b9c5, 0x24ed106a, 0x2bbfa783, 0xab6be5f3, 0x0061b1cf }; 
+const scalar_t  base_order = { 0xd9a21173, 0x8164cd37, 0x9e052f83, 0x5fa47c3c, 0xf33307be, 0xaad6a612, 0x000001e2, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x01000000 }; 
+#endif
+
+#if (ECC_CURVE == NIST_K571)
+#define coeff_a  0
+#define cofactor 4
+/* NIST K-571 */
+const gf2elem_t polynomial = { 0x00000425, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x08000000 }; 
+const gf2elem_t coeff_b    = { 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000 }; 
+const gf2elem_t base_x     = { 0xa01c8972, 0xe2945283, 0x4dca88c7, 0x988b4717, 0x494776fb, 0xbbd1ba39, 0xb4ceb08c, 0x47da304d, 0x93b205e6, 0x43709584, 0x01841ca4, 0x60248048, 0x0012d5d4, 0xac9ca297, 0xf8103fe4, 0x82189631, 0x59923fbc, 0x026eb7a8 }; 
+const gf2elem_t base_y     = { 0x3ef1c7a3, 0x01cd4c14, 0x591984f6, 0x320430c8, 0x7ba7af1b, 0xb620b01a, 0xf772aedc, 0x4fbebbb9, 0xac44aea7, 0x9d4979c0, 0x006d8a2c, 0xffc61efc, 0x9f307a54, 0x4dd58cec, 0x3bca9531, 0x4f4aeade, 0x7f4fbf37, 0x0349dc80 }; 
+const scalar_t  base_order = { 0x637c1001, 0x5cfe778f, 0x1e91deb4, 0xe5d63938, 0xb630d84b, 0x917f4138, 0xb391a8db, 0xf19a63e4, 0x131850e1, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x02000000 }; 
+#endif
+
+#if (ECC_CURVE == NIST_B571)
+#define coeff_a  1
+#define cofactor 2
+/* NIST B-571 */
+const gf2elem_t polynomial = { 0x00000425, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x08000000 }; 
+const gf2elem_t coeff_b    = { 0x2955727a, 0x7ffeff7f, 0x39baca0c, 0x520e4de7, 0x78ff12aa, 0x4afd185a, 0x56a66e29, 0x2be7ad67, 0x8efa5933, 0x84ffabbd, 0x4a9a18ad, 0xcd6ba8ce, 0xcb8ceff1, 0x5c6a97ff, 0xb7f3d62f, 0xde297117, 0x2221f295, 0x02f40e7e }; 
+const gf2elem_t base_x     = { 0x8eec2d19, 0xe1e7769c, 0xc850d927, 0x4abfa3b4, 0x8614f139, 0x99ae6003, 0x5b67fb14, 0xcdd711a3, 0xf4c0d293, 0xbde53950, 0xdb7b2abd, 0xa5f40fc8, 0x955fa80a, 0x0a93d1d2, 0x0d3cd775, 0x6c16c0d4, 0x34b85629, 0x0303001d }; 
+const gf2elem_t base_y     = { 0x1b8ac15b, 0x1a4827af, 0x6e23dd3c, 0x16e2f151, 0x0485c19b, 0xb3531d2f, 0x461bb2a8, 0x6291af8f, 0xbab08a57, 0x84423e43, 0x3921e8a6, 0x1980f853, 0x009cbbca, 0x8c6c27a6, 0xb73d69d7, 0x6dccfffe, 0x42da639b, 0x037bf273 }; 
+const scalar_t  base_order = { 0x2fe84e47, 0x8382e9bb, 0x5174d66e, 0x161de93d, 0xc7dd9ca1, 0x6823851e, 0x08059b18, 0xff559873, 0xe661ce18, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0x03ffffff }; 
+#endif
+#endif
+
+/*************************************************************************************************/
+/* Private / static functions: */
+/*************************************************************************************************/
+
+/* some basic bit-manipulation routines that act on bit-vectors follow */
+static int bitvec_get_bit(const bitvec_t x, const uint32_t idx)
+{
+    return ((x[idx / 32U] >> (idx & 31U) & 1U));
+}
+
+static void bitvec_clr_bit(bitvec_t x, const uint32_t idx)
+{
+    x[idx / 32U] &= ~(1U << (idx & 31U));
+}
+
+static void bitvec_copy(bitvec_t x, const bitvec_t y)
+{
+    int i;
+    for (i = 0; i < BITVEC_NWORDS; ++i)
+    {
+        x[i] = y[i];
+    }
+}
+
+static void bitvec_swap(bitvec_t x, bitvec_t y)
+{
+    bitvec_t tmp;
+    bitvec_copy(tmp, x);
+    bitvec_copy(x, y);
+    bitvec_copy(y, tmp);
+}
+
+#if defined(CONST_TIME) && (CONST_TIME == 0)
+/* fast version of equality test */
+static int bitvec_equal(const bitvec_t x, const bitvec_t y)
+{
+    int i;
+    for (i = 0; i < BITVEC_NWORDS; ++i)
+    {
+        if (x[i] != y[i])
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+#else
+/* constant time version of equality test */
+static int bitvec_equal(const bitvec_t x, const bitvec_t y)
+{
+    int ret = 1;
+    int i;
+    for (i = 0; i < BITVEC_NWORDS; ++i)
+    {
+        ret &= (x[i] == y[i]);
+    }
+    return ret;
+}
+#endif
+
+static void bitvec_set_zero(bitvec_t x)
+{
+    int i;
+    for (i = 0; i < BITVEC_NWORDS; ++i)
+    {
+        x[i] = 0;
+    }
+}
+
+#if defined(CONST_TIME) && (CONST_TIME == 0)
+/* fast implementation */
+static int bitvec_is_zero(const bitvec_t x)
+{
+    uint32_t i = 0;
+    while (i < BITVEC_NWORDS)
+    {
+        if (x[i] != 0)
+        {
+            break;
+        }
+        i += 1;
+    }
+    return (i == BITVEC_NWORDS);
+}
+#else
+/* constant-time implementation */
+static int bitvec_is_zero(const bitvec_t x)
+{
+    int ret = 1;
+    int i = 0;
+    for (i = 0; i < BITVEC_NWORDS; ++i)
+    {
+        ret &= (x[i] == 0);
+    }
+    return ret;
+}
+#endif
+
+/* return the number of the highest one-bit + 1 */
+static int bitvec_degree(const bitvec_t x)
+{
+    int i = BITVEC_NWORDS * 32;
+
+    /* Start at the back of the vector (MSB) */
+    x += BITVEC_NWORDS;
+
+    /* Skip empty / zero words */
+    while (    (i > 0)
+            && (*(--x)) == 0)
+    {
+        i -= 32;
+    }
+    /* Run through rest if count is not multiple of bitsize of DTYPE */
+    if (i != 0)
+    {
+        uint32_t u32mask = ((uint32_t)1 << 31);
+        while (((*x) & u32mask) == 0)
+        {
+            u32mask >>= 1;
+            i -= 1;
+        }
+    }
+    return i;
+}
+
+/* left-shift by 'count' digits */
+static void bitvec_lshift(bitvec_t x, const bitvec_t y, int nbits)
+{
+    int nwords = (nbits / 32);
+
+    /* Shift whole words first if nwords > 0 */
+    int i,j;
+    for (i = 0; i < nwords; ++i)
+    {
+        /* Zero-initialize from least-significant word until offset reached */
+        x[i] = 0;
+    }
+    j = 0;
+    /* Copy to x output */
+    while (i < BITVEC_NWORDS)
+    {
+        x[i] = y[j];
+        i += 1;
+        j += 1;
+    }
+
+    /* Shift the rest if count was not multiple of bitsize of DTYPE */
+    nbits &= 31;
+    if (nbits != 0)
+    {
+        /* Left shift rest */
+        int i;
+        for (i = (BITVEC_NWORDS - 1); i > 0; --i)
+        {
+            x[i]  = (x[i] << nbits) | (x[i - 1] >> (32 - nbits));
+        }
+        x[0] <<= nbits;
+    }
+}
+
+
+/*************************************************************************************************/
+/*
+   Code that does arithmetic on bit-vectors in the Galois Field GF(2^CURVE_DEGREE).
+   */
+/*************************************************************************************************/
+
+
+static void gf2field_set_one(gf2elem_t x)
+{
+    /* Set first word to one */
+    x[0] = 1;
+    /* .. and the rest to zero */
+    int i;
+    for (i = 1; i < BITVEC_NWORDS; ++i)
+    {
+        x[i] = 0;
+    }
+}
+
+#if defined(CONST_TIME) && (CONST_TIME == 0)
+/* fastest check if x == 1 */
+static int gf2field_is_one(const gf2elem_t x) 
+{
+    /* Check if first word == 1 */
+    if (x[0] != 1)
+    {
+        return 0;
+    }
+    /* ...and if rest of words == 0 */
+    int i;
+    for (i = 1; i < BITVEC_NWORDS; ++i)
+    {
+        if (x[i] != 0)
+        {
+            break;
+        }
+    }
+    return (i == BITVEC_NWORDS);
+}
+#else
+/* constant-time check */
+static int gf2field_is_one(const gf2elem_t x)
+{
+    int ret = 0;
+    /* Check if first word == 1 */
+    if (x[0] == 1)
+    {
+        ret = 1;
+    }
+    /* ...and if rest of words == 0 */
+    int i;
+    for (i = 1; i < BITVEC_NWORDS; ++i)
+    {
+        ret &= (x[i] == 0);
+    }
+    return ret; //(i == BITVEC_NWORDS);
+}
+#endif
+
+
+/* galois field(2^m) addition is modulo 2, so XOR is used instead - 'z := a + b' */
+static void gf2field_add(gf2elem_t z, const gf2elem_t x, const gf2elem_t y)
+{
+    int i;
+    for (i = 0; i < BITVEC_NWORDS; ++i)
+    {
+        z[i] = (x[i] ^ y[i]);
+    }
+}
+
+/* increment element */
+static void gf2field_inc(gf2elem_t x)
+{
+    x[0] ^= 1;
+}
+
+
+/* field multiplication 'z := (x * y)' */
+static void gf2field_mul(gf2elem_t z, const gf2elem_t x, const gf2elem_t y)
+{
+    int i;
+    gf2elem_t tmp;
+#if defined(CONST_TIME) && (CONST_TIME == 1)
+    gf2elem_t blind;
+    bitvec_set_zero(blind);
+#endif
+    assert(z != y);
+
+    bitvec_copy(tmp, x);
+
+    /* LSB set? Then start with x */
+    if (bitvec_get_bit(y, 0) != 0)
+    {
+        bitvec_copy(z, x);
+    }
+    else /* .. or else start with zero */
+    {
+        bitvec_set_zero(z);
+    }
+
+    /* Then add 2^i * x for the rest */
+    for (i = 1; i < CURVE_DEGREE; ++i)
+    {
+        /* lshift 1 - doubling the value of tmp */
+        bitvec_lshift(tmp, tmp, 1);
+
+        /* Modulo reduction polynomial if degree(tmp) > CURVE_DEGREE */
+        if (bitvec_get_bit(tmp, CURVE_DEGREE))
+        {
+            gf2field_add(tmp, tmp, polynomial);
+        }
+#if defined(CONST_TIME) && (CONST_TIME == 1)
+        else /* blinding operation */
+        {
+            gf2field_add(tmp, tmp, blind);
+        }
+#endif
+
+        /* Add 2^i * tmp if this factor in y is non-zero */
+        if (bitvec_get_bit(y, i))
+        {
+            gf2field_add(z, z, tmp);
+        }
+#if defined(CONST_TIME) && (CONST_TIME == 1)
+        else /* blinding operation */
+        {
+            gf2field_add(z, z, blind);
+        }
+#endif
+    }
+}
+
+/* field inversion 'z := 1/x' */
+static void gf2field_inv(gf2elem_t z, const gf2elem_t x)
+{
+    gf2elem_t u, v, g, h;
+    int i;
+
+    bitvec_copy(u, x);
+    bitvec_copy(v, polynomial);
+    bitvec_set_zero(g);
+    gf2field_set_one(z);
+
+    while (!gf2field_is_one(u))
+    {
+        i = (bitvec_degree(u) - bitvec_degree(v));
+
+        if (i < 0)
+        {
+            bitvec_swap(u, v);
+            bitvec_swap(g, z);
+            i = -i;
+        }
+#if defined(CONST_TIME) && (CONST_TIME == 1)
+        else
+        {
+            bitvec_swap(u, v);
+            bitvec_swap(v, u);
+        }
+#endif
+        bitvec_lshift(h, v, i);
+        gf2field_add(u, u, h);
+        bitvec_lshift(h, g, i);
+        gf2field_add(z, z, h);
+    }
+}
+
+/*************************************************************************************************/
+/*
+   The following code takes care of Galois-Field arithmetic. 
+   Elliptic curve points are represented  by pairs (x,y) of bitvec_t. 
+   It is assumed that curve coefficient 'a' is {0,1}
+   This is the case for all NIST binary curves.
+   Coefficient 'b' is given in 'coeff_b'.
+   '(base_x, base_y)' is a point that generates a large prime order group.
+   */
+/*************************************************************************************************/
+
+
+static void gf2point_copy(gf2elem_t x1, gf2elem_t y1, const gf2elem_t x2, const gf2elem_t y2)
+{
+    bitvec_copy(x1, x2);
+    bitvec_copy(y1, y2);
+}
+
+static void gf2point_set_zero(gf2elem_t x, gf2elem_t y)
+{
+    bitvec_set_zero(x);
+    bitvec_set_zero(y);
+}
+
+static int gf2point_is_zero(const gf2elem_t x, const gf2elem_t y)
+{
+    return (    bitvec_is_zero(x)
+            && bitvec_is_zero(y));
+}
+
+/* double the point (x,y) */
+static void gf2point_double(gf2elem_t x, gf2elem_t y)
+{
+    /* iff P = O (zero or infinity): 2 * P = P */
+    if (bitvec_is_zero(x))
+    {
+        bitvec_set_zero(y);
+    }
+    else
+    {
+        gf2elem_t l;
+
+        gf2field_inv(l, x);
+        gf2field_mul(l, l, y);
+        gf2field_add(l, l, x);
+        gf2field_mul(y, x, x);
+        gf2field_mul(x, l, l);
+#if (coeff_a == 1)
+        gf2field_inc(l);
+#endif
+        gf2field_add(x, x, l);
+        gf2field_mul(l, l, x);
+        gf2field_add(y, y, l);
+    }
+}
+
+
+/* add two points together (x1, y1) := (x1, y1) + (x2, y2) */
+static void gf2point_add(gf2elem_t x1, gf2elem_t y1, const gf2elem_t x2, const gf2elem_t y2)
+{
+    if (!gf2point_is_zero(x2, y2))
+    {
+        if (gf2point_is_zero(x1, y1))
+        {
+            gf2point_copy(x1, y1, x2, y2);
+        }
+        else
+        {
+            if (bitvec_equal(x1, x2))
+            {
+                if (bitvec_equal(y1, y2))
+                {
+                    gf2point_double(x1, y1);
+                }
+                else
+                {
+                    gf2point_set_zero(x1, y1);
+                }
+            }
+            else
+            {
+                /* Arithmetic with temporary variables */
+                gf2elem_t a, b, c, d;
+
+                gf2field_add(a, y1, y2);
+                gf2field_add(b, x1, x2);
+                gf2field_inv(c, b);
+                gf2field_mul(c, c, a);
+                gf2field_mul(d, c, c);
+                gf2field_add(d, d, c);
+                gf2field_add(d, d, b);
+#if (coeff_a == 1)
+                gf2field_inc(d);
+#endif
+                gf2field_add(x1, x1, d);
+                gf2field_mul(a, x1, c);
+                gf2field_add(a, a, d);
+                gf2field_add(y1, y1, a);
+                bitvec_copy(x1, d);
+            }
+        }
+    }
+}
+
+
+
+#if defined(CONST_TIME) && (CONST_TIME == 0)
+/* point multiplication via double-and-add algorithm */
+static void gf2point_mul(gf2elem_t x, gf2elem_t y, const scalar_t exp)
+{
+    gf2elem_t tmpx, tmpy;
+    int i;
+    int nbits = bitvec_degree(exp);
+
+    gf2point_set_zero(tmpx, tmpy);
+
+    for (i = (nbits - 1); i >= 0; --i)
+    {
+        gf2point_double(tmpx, tmpy);
+        if (bitvec_get_bit(exp, i))
+        {
+            gf2point_add(tmpx, tmpy, x, y);
+        }
+    }
+    gf2point_copy(x, y, tmpx, tmpy);
+}
+#else
+/* point multiplication via double-and-add-always algorithm using scalar blinding */
+static void gf2point_mul(gf2elem_t x, gf2elem_t y, const scalar_t exp)
+{
+    gf2elem_t tmpx, tmpy;
+    gf2elem_t dummyx, dummyy;
+    int i;
+    int nbits = bitvec_degree(exp);
+
+    gf2point_set_zero(tmpx, tmpy);
+    gf2point_set_zero(dummyx, dummyy);
+
+    for (i = (nbits - 1); i >= 0; --i)
+    {
+        gf2point_double(tmpx, tmpy);
+
+        /* Add point if bit(i) is set in exp */
+        if (bitvec_get_bit(exp, i))
+        {
+            gf2point_add(tmpx, tmpy, x, y);
+        }
+        /* .. or add the neutral element to keep operation constant-time */
+        else
+        {
+            gf2point_add(tmpx, tmpy, dummyx, dummyy);
+        }
+    }
+    gf2point_copy(x, y, tmpx, tmpy);
+}
+#endif
+
+
+
+/* check if y^2 + x*y = x^3 + a*x^2 + coeff_b holds */
+static int gf2point_on_curve(const gf2elem_t x, const gf2elem_t y)
+{
+    gf2elem_t a, b;
+
+    if (gf2point_is_zero(x, y))
+    {
+        return 1;
+    }
+    else
+    {
+        gf2field_mul(a, x, x);
+#if (coeff_a == 0)
+        gf2field_mul(a, a, x);
+#else
+        gf2field_mul(b, a, x);
+        gf2field_add(a, a, b);
+#endif
+        gf2field_add(a, a, coeff_b);
+        gf2field_mul(b, y, y);
+        gf2field_add(a, a, b);
+        gf2field_mul(b, x, y);
+
+        return bitvec_equal(a, b);
+    }
+}
+
+/*************************************************************************************************/
+/* Elliptic Curve Diffie-Hellman key exchange protocol. */
+/*************************************************************************************************/
+
+/* NOTE: private should contain random data a-priori! */
+static int ecdh_generate_keys(uint8_t* public_key, uint8_t* private_key)
+{
+    /* Get copy of "base" point 'G' */
+    gf2point_copy((uint32_t*)public_key, (uint32_t*)(public_key + BITVEC_NBYTES), base_x, base_y);
+
+    /* Abort key generation if random number is too small */
+    if (bitvec_degree((uint32_t*)private_key) < (CURVE_DEGREE / 2))
+    {
+        return 0;
+    }
+    else
+    {
+        /* Clear bits > CURVE_DEGREE in highest word to satisfy constraint 1 <= exp < n. */
+        int nbits = bitvec_degree(base_order);
+        int i;
+
+        for (i = (nbits - 1); i < (BITVEC_NWORDS * 32); ++i)
+        {
+            bitvec_clr_bit((uint32_t*)private_key, i);
+        }
+
+        /* Multiply base-point with scalar (private-key) */
+        gf2point_mul((uint32_t*)public_key, (uint32_t*)(public_key + BITVEC_NBYTES), (uint32_t*)private_key);
+
+        return 1;
+    }
+}
+
+static int ecdh_shared_secret(const uint8_t* private_key, const uint8_t* others_pub, uint8_t* output)
+{
+    /* Do some basic validation of other party's public key */
+    if (    !gf2point_is_zero ((uint32_t*)others_pub, (uint32_t*)(others_pub + BITVEC_NBYTES))
+            &&  gf2point_on_curve((uint32_t*)others_pub, (uint32_t*)(others_pub + BITVEC_NBYTES)) )
+    {
+        /* Copy other side's public key to output */
+        unsigned int i;
+        for (i = 0; i < (BITVEC_NBYTES * 2); ++i)
+        {
+            output[i] = others_pub[i];
+        }
+
+        /* Multiply other side's public key with own private key */
+        gf2point_mul((uint32_t*)output,(uint32_t*)(output + BITVEC_NBYTES), (const uint32_t*)private_key);
+
+        /* Multiply outcome by cofactor if using ECC CDH-variant: */
+#if defined(ECDH_COFACTOR_VARIANT) && (ECDH_COFACTOR_VARIANT == 1)
+#if   (cofactor == 2)
+        gf2point_double((uint32_t*)output, (uint32_t*)(output + BITVEC_NBYTES));
+#elif (cofactor == 4)
+        gf2point_double((uint32_t*)output, (uint32_t*)(output + BITVEC_NBYTES));
+        gf2point_double((uint32_t*)output, (uint32_t*)(output + BITVEC_NBYTES));
+#endif
+#endif
+
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+#pragma endregion /* ECDH */
+
+#pragma region /* AES */
+
+/*****************************************************************************/
+/* Defines:                                                                  */
+/*****************************************************************************/
+// The number of columns comprising a state in AES. This is a constant in AES. Value=4
+#define Nb 4
+
+#if defined(AES256) && (AES256 == 1)
+#define Nk 8
+#define Nr 14
+#elif defined(AES192) && (AES192 == 1)
+#define Nk 6
+#define Nr 12
+#else
+#define Nk 4        // The number of 32 bit words in a key.
+#define Nr 10       // The number of rounds in AES Cipher.
+#endif
+
+// jcallan@github points out that declaring Multiply as a function 
+// reduces code size considerably with the Keil ARM compiler.
+// See this link for more information: https://github.com/kokke/tiny-AES-C/pull/3
+#ifndef MULTIPLY_AS_A_FUNCTION
+#define MULTIPLY_AS_A_FUNCTION 0
+#endif
+
+/*****************************************************************************/
+/* Private variables:                                                        */
+/*****************************************************************************/
+// state - array holding the intermediate results during decryption.
+typedef uint8_t state_t[4][4];
+
+// The lookup-tables are marked const so they can be placed in read-only storage instead of RAM
+// The numbers below can be computed dynamically trading ROM for RAM - 
+// This can be useful in (embedded) bootloader applications, where ROM is often limited.
+static const uint8_t sbox[256] = {
+    //0     1    2      3     4    5     6     7      8    9     A      B    C     D     E     F
+    0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
+    0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
+    0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7, 0xcc, 0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15,
+    0x04, 0xc7, 0x23, 0xc3, 0x18, 0x96, 0x05, 0x9a, 0x07, 0x12, 0x80, 0xe2, 0xeb, 0x27, 0xb2, 0x75,
+    0x09, 0x83, 0x2c, 0x1a, 0x1b, 0x6e, 0x5a, 0xa0, 0x52, 0x3b, 0xd6, 0xb3, 0x29, 0xe3, 0x2f, 0x84,
+    0x53, 0xd1, 0x00, 0xed, 0x20, 0xfc, 0xb1, 0x5b, 0x6a, 0xcb, 0xbe, 0x39, 0x4a, 0x4c, 0x58, 0xcf,
+    0xd0, 0xef, 0xaa, 0xfb, 0x43, 0x4d, 0x33, 0x85, 0x45, 0xf9, 0x02, 0x7f, 0x50, 0x3c, 0x9f, 0xa8,
+    0x51, 0xa3, 0x40, 0x8f, 0x92, 0x9d, 0x38, 0xf5, 0xbc, 0xb6, 0xda, 0x21, 0x10, 0xff, 0xf3, 0xd2,
+    0xcd, 0x0c, 0x13, 0xec, 0x5f, 0x97, 0x44, 0x17, 0xc4, 0xa7, 0x7e, 0x3d, 0x64, 0x5d, 0x19, 0x73,
+    0x60, 0x81, 0x4f, 0xdc, 0x22, 0x2a, 0x90, 0x88, 0x46, 0xee, 0xb8, 0x14, 0xde, 0x5e, 0x0b, 0xdb,
+    0xe0, 0x32, 0x3a, 0x0a, 0x49, 0x06, 0x24, 0x5c, 0xc2, 0xd3, 0xac, 0x62, 0x91, 0x95, 0xe4, 0x79,
+    0xe7, 0xc8, 0x37, 0x6d, 0x8d, 0xd5, 0x4e, 0xa9, 0x6c, 0x56, 0xf4, 0xea, 0x65, 0x7a, 0xae, 0x08,
+    0xba, 0x78, 0x25, 0x2e, 0x1c, 0xa6, 0xb4, 0xc6, 0xe8, 0xdd, 0x74, 0x1f, 0x4b, 0xbd, 0x8b, 0x8a,
+    0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e, 0x61, 0x35, 0x57, 0xb9, 0x86, 0xc1, 0x1d, 0x9e,
+    0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
+    0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16 };
+
+static const uint8_t rsbox[256] = {
+    0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb,
+    0x7c, 0xe3, 0x39, 0x82, 0x9b, 0x2f, 0xff, 0x87, 0x34, 0x8e, 0x43, 0x44, 0xc4, 0xde, 0xe9, 0xcb,
+    0x54, 0x7b, 0x94, 0x32, 0xa6, 0xc2, 0x23, 0x3d, 0xee, 0x4c, 0x95, 0x0b, 0x42, 0xfa, 0xc3, 0x4e,
+    0x08, 0x2e, 0xa1, 0x66, 0x28, 0xd9, 0x24, 0xb2, 0x76, 0x5b, 0xa2, 0x49, 0x6d, 0x8b, 0xd1, 0x25,
+    0x72, 0xf8, 0xf6, 0x64, 0x86, 0x68, 0x98, 0x16, 0xd4, 0xa4, 0x5c, 0xcc, 0x5d, 0x65, 0xb6, 0x92,
+    0x6c, 0x70, 0x48, 0x50, 0xfd, 0xed, 0xb9, 0xda, 0x5e, 0x15, 0x46, 0x57, 0xa7, 0x8d, 0x9d, 0x84,
+    0x90, 0xd8, 0xab, 0x00, 0x8c, 0xbc, 0xd3, 0x0a, 0xf7, 0xe4, 0x58, 0x05, 0xb8, 0xb3, 0x45, 0x06,
+    0xd0, 0x2c, 0x1e, 0x8f, 0xca, 0x3f, 0x0f, 0x02, 0xc1, 0xaf, 0xbd, 0x03, 0x01, 0x13, 0x8a, 0x6b,
+    0x3a, 0x91, 0x11, 0x41, 0x4f, 0x67, 0xdc, 0xea, 0x97, 0xf2, 0xcf, 0xce, 0xf0, 0xb4, 0xe6, 0x73,
+    0x96, 0xac, 0x74, 0x22, 0xe7, 0xad, 0x35, 0x85, 0xe2, 0xf9, 0x37, 0xe8, 0x1c, 0x75, 0xdf, 0x6e,
+    0x47, 0xf1, 0x1a, 0x71, 0x1d, 0x29, 0xc5, 0x89, 0x6f, 0xb7, 0x62, 0x0e, 0xaa, 0x18, 0xbe, 0x1b,
+    0xfc, 0x56, 0x3e, 0x4b, 0xc6, 0xd2, 0x79, 0x20, 0x9a, 0xdb, 0xc0, 0xfe, 0x78, 0xcd, 0x5a, 0xf4,
+    0x1f, 0xdd, 0xa8, 0x33, 0x88, 0x07, 0xc7, 0x31, 0xb1, 0x12, 0x10, 0x59, 0x27, 0x80, 0xec, 0x5f,
+    0x60, 0x51, 0x7f, 0xa9, 0x19, 0xb5, 0x4a, 0x0d, 0x2d, 0xe5, 0x7a, 0x9f, 0x93, 0xc9, 0x9c, 0xef,
+    0xa0, 0xe0, 0x3b, 0x4d, 0xae, 0x2a, 0xf5, 0xb0, 0xc8, 0xeb, 0xbb, 0x3c, 0x83, 0x53, 0x99, 0x61,
+    0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d };
+
+// The round constant word array, Rcon[i], contains the values given by 
+// x to the power (i-1) being powers of x (x is denoted as {02}) in the field GF(2^8)
+static const uint8_t Rcon[11] = {
+    0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36 };
+
+/*
+ * Jordan Goulder points out in PR #12 (https://github.com/kokke/tiny-AES-C/pull/12),
+ * that you can remove most of the elements in the Rcon array, because they are unused.
+ *
+ * From Wikipedia's article on the Rijndael key schedule @ https://en.wikipedia.org/wiki/Rijndael_key_schedule#Rcon
+ * 
+ * "Only the first some of these constants are actually used – up to rcon[10] for AES-128 (as 11 round keys are needed), 
+ *  up to rcon[8] for AES-192, up to rcon[7] for AES-256. rcon[0] is not used in AES algorithm."
+ */
+
+
+/*****************************************************************************/
+/* Private functions:                                                        */
+/*****************************************************************************/
+/*
+   static uint8_t getSBoxValue(uint8_t num)
+   {
+   return sbox[num];
+   }
+   */
+#define getSBoxValue(num) (sbox[(num)])
+/*
+   static uint8_t getSBoxInvert(uint8_t num)
+   {
+   return rsbox[num];
+   }
+   */
+#define getSBoxInvert(num) (rsbox[(num)])
+
+// This function produces Nb(Nr+1) round keys. The round keys are used in each round to decrypt the states. 
+static void KeyExpansion(uint8_t* RoundKey, const uint8_t* Key)
+{
+    unsigned i, j, k;
+    uint8_t tempa[4]; // Used for the column/row operations
+
+    // The first round key is the key itself.
+    for (i = 0; i < Nk; ++i)
+    {
+        RoundKey[(i * 4) + 0] = Key[(i * 4) + 0];
+        RoundKey[(i * 4) + 1] = Key[(i * 4) + 1];
+        RoundKey[(i * 4) + 2] = Key[(i * 4) + 2];
+        RoundKey[(i * 4) + 3] = Key[(i * 4) + 3];
+    }
+
+    // All other round keys are found from the previous round keys.
+    for (i = Nk; i < Nb * (Nr + 1); ++i)
+    {
+        {
+            k = (i - 1) * 4;
+            tempa[0]=RoundKey[k + 0];
+            tempa[1]=RoundKey[k + 1];
+            tempa[2]=RoundKey[k + 2];
+            tempa[3]=RoundKey[k + 3];
+
+        }
+
+        if (i % Nk == 0)
+        {
+            // This function shifts the 4 bytes in a word to the left once.
+            // [a0,a1,a2,a3] becomes [a1,a2,a3,a0]
+
+            // Function RotWord()
+            {
+                const uint8_t u8tmp = tempa[0];
+                tempa[0] = tempa[1];
+                tempa[1] = tempa[2];
+                tempa[2] = tempa[3];
+                tempa[3] = u8tmp;
+            }
+
+            // SubWord() is a function that takes a four-byte input word and 
+            // applies the S-box to each of the four bytes to produce an output word.
+
+            // Function Subword()
+            {
+                tempa[0] = getSBoxValue(tempa[0]);
+                tempa[1] = getSBoxValue(tempa[1]);
+                tempa[2] = getSBoxValue(tempa[2]);
+                tempa[3] = getSBoxValue(tempa[3]);
+            }
+
+            tempa[0] = tempa[0] ^ Rcon[i/Nk];
+        }
+#if defined(AES256) && (AES256 == 1)
+        if (i % Nk == 4)
+        {
+            // Function Subword()
+            {
+                tempa[0] = getSBoxValue(tempa[0]);
+                tempa[1] = getSBoxValue(tempa[1]);
+                tempa[2] = getSBoxValue(tempa[2]);
+                tempa[3] = getSBoxValue(tempa[3]);
+            }
+        }
+#endif
+        j = i * 4; k=(i - Nk) * 4;
+        RoundKey[j + 0] = RoundKey[k + 0] ^ tempa[0];
+        RoundKey[j + 1] = RoundKey[k + 1] ^ tempa[1];
+        RoundKey[j + 2] = RoundKey[k + 2] ^ tempa[2];
+        RoundKey[j + 3] = RoundKey[k + 3] ^ tempa[3];
+    }
+}
+
+static void AES_init_ctx_iv(struct AES_ctx* ctx, const uint8_t* key, const uint8_t* iv)
+{
+    KeyExpansion(ctx->RoundKey, key);
+    memcpy (ctx->Iv, iv, AES_BLOCKLEN);
+}
+
+static void AES_ctx_set_iv(struct AES_ctx* ctx, const uint8_t* iv)
+{
+    memcpy (ctx->Iv, iv, AES_BLOCKLEN);
+}
+
+// This function adds the round key to state.
+// The round key is added to the state by an XOR function.
+static void AddRoundKey(uint8_t round,state_t* state,uint8_t* RoundKey)
+{
+    uint8_t i,j;
+    for (i = 0; i < 4; ++i)
+    {
+        for (j = 0; j < 4; ++j)
+        {
+            (*state)[i][j] ^= RoundKey[(round * Nb * 4) + (i * Nb) + j];
+        }
+    }
+}
+
+// The SubBytes Function Substitutes the values in the
+// state matrix with values in an S-box.
+static void SubBytes(state_t* state)
+{
+    uint8_t i, j;
+    for (i = 0; i < 4; ++i)
+    {
+        for (j = 0; j < 4; ++j)
+        {
+            (*state)[j][i] = getSBoxValue((*state)[j][i]);
+        }
+    }
+}
+
+// The ShiftRows() function shifts the rows in the state to the left.
+// Each row is shifted with different offset.
+// Offset = Row number. So the first row is not shifted.
+static void ShiftRows(state_t* state)
+{
+    uint8_t temp;
+
+    // Rotate first row 1 columns to left  
+    temp           = (*state)[0][1];
+    (*state)[0][1] = (*state)[1][1];
+    (*state)[1][1] = (*state)[2][1];
+    (*state)[2][1] = (*state)[3][1];
+    (*state)[3][1] = temp;
+
+    // Rotate second row 2 columns to left  
+    temp           = (*state)[0][2];
+    (*state)[0][2] = (*state)[2][2];
+    (*state)[2][2] = temp;
+
+    temp           = (*state)[1][2];
+    (*state)[1][2] = (*state)[3][2];
+    (*state)[3][2] = temp;
+
+    // Rotate third row 3 columns to left
+    temp           = (*state)[0][3];
+    (*state)[0][3] = (*state)[3][3];
+    (*state)[3][3] = (*state)[2][3];
+    (*state)[2][3] = (*state)[1][3];
+    (*state)[1][3] = temp;
+}
+
+static uint8_t xtime(uint8_t x)
+{
+    return ((x<<1) ^ (((x>>7) & 1) * 0x1b));
+}
+
+// MixColumns function mixes the columns of the state matrix
+static void MixColumns(state_t* state)
+{
+    uint8_t i;
+    uint8_t Tmp, Tm, t;
+    for (i = 0; i < 4; ++i)
+    {  
+        t   = (*state)[i][0];
+        Tmp = (*state)[i][0] ^ (*state)[i][1] ^ (*state)[i][2] ^ (*state)[i][3] ;
+        Tm  = (*state)[i][0] ^ (*state)[i][1] ; Tm = xtime(Tm);  (*state)[i][0] ^= Tm ^ Tmp ;
+        Tm  = (*state)[i][1] ^ (*state)[i][2] ; Tm = xtime(Tm);  (*state)[i][1] ^= Tm ^ Tmp ;
+        Tm  = (*state)[i][2] ^ (*state)[i][3] ; Tm = xtime(Tm);  (*state)[i][2] ^= Tm ^ Tmp ;
+        Tm  = (*state)[i][3] ^ t ;              Tm = xtime(Tm);  (*state)[i][3] ^= Tm ^ Tmp ;
+    }
+}
+
+// Multiply is used to multiply numbers in the field GF(2^8)
+// Note: The last call to xtime() is unneeded, but often ends up generating a smaller binary
+//       The compiler seems to be able to vectorize the operation better this way.
+//       See https://github.com/kokke/tiny-AES-c/pull/34
+#if MULTIPLY_AS_A_FUNCTION
+static uint8_t Multiply(uint8_t x, uint8_t y)
+{
+    return (((y & 1) * x) ^
+            ((y>>1 & 1) * xtime(x)) ^
+            ((y>>2 & 1) * xtime(xtime(x))) ^
+            ((y>>3 & 1) * xtime(xtime(xtime(x)))) ^
+            ((y>>4 & 1) * xtime(xtime(xtime(xtime(x)))))); /* this last call to xtime() can be omitted */
+}
+#else
+#define Multiply(x, y)                                \
+    (  ((y & 1) * x) ^                              \
+       ((y>>1 & 1) * xtime(x)) ^                       \
+       ((y>>2 & 1) * xtime(xtime(x))) ^                \
+       ((y>>3 & 1) * xtime(xtime(xtime(x)))) ^         \
+       ((y>>4 & 1) * xtime(xtime(xtime(xtime(x))))))   \
+
+#endif
+
+// MixColumns function mixes the columns of the state matrix.
+// The method used to multiply may be difficult to understand for the inexperienced.
+// Please use the references to gain more information.
+static void InvMixColumns(state_t* state)
+{
+    int i;
+    uint8_t a, b, c, d;
+    for (i = 0; i < 4; ++i)
+    { 
+        a = (*state)[i][0];
+        b = (*state)[i][1];
+        c = (*state)[i][2];
+        d = (*state)[i][3];
+
+        (*state)[i][0] = Multiply(a, 0x0e) ^ Multiply(b, 0x0b) ^ Multiply(c, 0x0d) ^ Multiply(d, 0x09);
+        (*state)[i][1] = Multiply(a, 0x09) ^ Multiply(b, 0x0e) ^ Multiply(c, 0x0b) ^ Multiply(d, 0x0d);
+        (*state)[i][2] = Multiply(a, 0x0d) ^ Multiply(b, 0x09) ^ Multiply(c, 0x0e) ^ Multiply(d, 0x0b);
+        (*state)[i][3] = Multiply(a, 0x0b) ^ Multiply(b, 0x0d) ^ Multiply(c, 0x09) ^ Multiply(d, 0x0e);
+    }
+}
+
+
+// The SubBytes Function Substitutes the values in the
+// state matrix with values in an S-box.
+static void InvSubBytes(state_t* state)
+{
+    uint8_t i, j;
+    for (i = 0; i < 4; ++i)
+    {
+        for (j = 0; j < 4; ++j)
+        {
+            (*state)[j][i] = getSBoxInvert((*state)[j][i]);
+        }
+    }
+}
+
+static void InvShiftRows(state_t* state)
+{
+    uint8_t temp;
+
+    // Rotate first row 1 columns to right  
+    temp = (*state)[3][1];
+    (*state)[3][1] = (*state)[2][1];
+    (*state)[2][1] = (*state)[1][1];
+    (*state)[1][1] = (*state)[0][1];
+    (*state)[0][1] = temp;
+
+    // Rotate second row 2 columns to right 
+    temp = (*state)[0][2];
+    (*state)[0][2] = (*state)[2][2];
+    (*state)[2][2] = temp;
+
+    temp = (*state)[1][2];
+    (*state)[1][2] = (*state)[3][2];
+    (*state)[3][2] = temp;
+
+    // Rotate third row 3 columns to right
+    temp = (*state)[0][3];
+    (*state)[0][3] = (*state)[1][3];
+    (*state)[1][3] = (*state)[2][3];
+    (*state)[2][3] = (*state)[3][3];
+    (*state)[3][3] = temp;
+}
+
+// Cipher is the main function that encrypts the PlainText.
+static void Cipher(state_t* state, uint8_t* RoundKey)
+{
+    uint8_t round = 0;
+
+    // Add the First round key to the state before starting the rounds.
+    AddRoundKey(0, state, RoundKey); 
+
+    // There will be Nr rounds.
+    // The first Nr-1 rounds are identical.
+    // These Nr-1 rounds are executed in the loop below.
+    for (round = 1; round < Nr; ++round)
+    {
+        SubBytes(state);
+        ShiftRows(state);
+        MixColumns(state);
+        AddRoundKey(round, state, RoundKey);
+    }
+
+    // The last round is given below.
+    // The MixColumns function is not here in the last round.
+    SubBytes(state);
+    ShiftRows(state);
+    AddRoundKey(Nr, state, RoundKey);
+}
+
+static void InvCipher(state_t* state,uint8_t* RoundKey)
+{
+    uint8_t round = 0;
+
+    // Add the First round key to the state before starting the rounds.
+    AddRoundKey(Nr, state, RoundKey); 
+
+    // There will be Nr rounds.
+    // The first Nr-1 rounds are identical.
+    // These Nr-1 rounds are executed in the loop below.
+    for (round = (Nr - 1); round > 0; --round)
+    {
+        InvShiftRows(state);
+        InvSubBytes(state);
+        AddRoundKey(round, state, RoundKey);
+        InvMixColumns(state);
+    }
+
+    // The last round is given below.
+    // The MixColumns function is not here in the last round.
+    InvShiftRows(state);
+    InvSubBytes(state);
+    AddRoundKey(0, state, RoundKey);
+}
+
+/*****************************************************************************/
+/* Public functions:                                                         */
+/*****************************************************************************/
+
+static void XorWithIv(uint8_t* buf, uint8_t* Iv)
+{
+    uint8_t i;
+    for (i = 0; i < AES_BLOCKLEN; ++i) // The block in AES is always 128bit no matter the key size
+    {
+        buf[i] ^= Iv[i];
+    }
+}
+
+static void AES_CBC_encrypt_buffer(struct AES_ctx *ctx,uint8_t* buf, uint32_t length)
+{
+    uintptr_t i;
+    uint8_t *Iv = ctx->Iv;
+    for (i = 0; i < length; i += AES_BLOCKLEN)
+    {
+        XorWithIv(buf, Iv);
+        Cipher((state_t*)buf, ctx->RoundKey);
+        Iv = buf;
+        buf += AES_BLOCKLEN;
+        //printf("Step %d - %d", i/16, i);
+    }
+    /* store Iv in ctx for next call */
+    memcpy(ctx->Iv, Iv, AES_BLOCKLEN);
+}
+
+static void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf,  uint32_t length)
+{
+    uintptr_t i;
+    uint8_t storeNextIv[AES_BLOCKLEN];
+    for (i = 0; i < length; i += AES_BLOCKLEN)
+    {
+        memcpy(storeNextIv, buf, AES_BLOCKLEN);
+        InvCipher((state_t*)buf, ctx->RoundKey);
+        XorWithIv(buf, ctx->Iv);
+        memcpy(ctx->Iv, storeNextIv, AES_BLOCKLEN);
+        buf += AES_BLOCKLEN;
+    }
+
+}
+
+#pragma endregion /* AES */
+
+#pragma region Poly1305
+
+#define mul32x32_64(a, b) ((uint64_t)(a) * (b))
+
+#define U8TO32_LE(p)                                                           \
+  (((uint32_t)((p)[0])) | ((uint32_t)((p)[1]) << 8) |                          \
+   ((uint32_t)((p)[2]) << 16) | ((uint32_t)((p)[3]) << 24))
+
+#define U32TO8_LE(p, v)                                                        \
+  do {                                                                         \
+    (p)[0] = (uint8_t)((v));                                                   \
+    (p)[1] = (uint8_t)((v) >> 8);                                              \
+    (p)[2] = (uint8_t)((v) >> 16);                                             \
+    (p)[3] = (uint8_t)((v) >> 24);                                             \
+  } while (0)
+
+void poly1305_auth(unsigned char out[POLY1305_TAGLEN], const unsigned char *m,
+        size_t inlen, const unsigned char key[POLY1305_KEYLEN]) {
+    uint32_t t0, t1, t2, t3;
+    uint32_t h0, h1, h2, h3, h4;
+    uint32_t r0, r1, r2, r3, r4;
+    uint32_t s1, s2, s3, s4;
+    uint32_t b, nb;
+    size_t j;
+    uint64_t t[5];
+    uint64_t f0, f1, f2, f3;
+    uint32_t g0, g1, g2, g3, g4;
+    uint64_t c;
+    unsigned char mp[16];
+
+    /* clamp key */
+    t0 = U8TO32_LE(key + 0);
+    t1 = U8TO32_LE(key + 4);
+    t2 = U8TO32_LE(key + 8);
+    t3 = U8TO32_LE(key + 12);
+
+    /* precompute multipliers */
+    r0 = t0 & 0x3ffffff;
+    t0 >>= 26;
+    t0 |= t1 << 6;
+    r1 = t0 & 0x3ffff03;
+    t1 >>= 20;
+    t1 |= t2 << 12;
+    r2 = t1 & 0x3ffc0ff;
+    t2 >>= 14;
+    t2 |= t3 << 18;
+    r3 = t2 & 0x3f03fff;
+    t3 >>= 8;
+    r4 = t3 & 0x00fffff;
+
+    s1 = r1 * 5;
+    s2 = r2 * 5;
+    s3 = r3 * 5;
+    s4 = r4 * 5;
+
+    /* init state */
+    h0 = 0;
+    h1 = 0;
+    h2 = 0;
+    h3 = 0;
+    h4 = 0;
+
+    /* full blocks */
+    if (inlen < 16)
+        goto poly1305_donna_atmost15bytes;
+poly1305_donna_16bytes:
+    m += 16;
+    inlen -= 16;
+
+    t0 = U8TO32_LE(m - 16);
+    t1 = U8TO32_LE(m - 12);
+    t2 = U8TO32_LE(m - 8);
+    t3 = U8TO32_LE(m - 4);
+
+    h0 += t0 & 0x3ffffff;
+    h1 += ((((uint64_t)t1 << 32) | t0) >> 26) & 0x3ffffff;
+    h2 += ((((uint64_t)t2 << 32) | t1) >> 20) & 0x3ffffff;
+    h3 += ((((uint64_t)t3 << 32) | t2) >> 14) & 0x3ffffff;
+    h4 += (t3 >> 8) | (1 << 24);
+
+poly1305_donna_mul:
+    t[0] = mul32x32_64(h0, r0) + mul32x32_64(h1, s4) + mul32x32_64(h2, s3) +
+        mul32x32_64(h3, s2) + mul32x32_64(h4, s1);
+    t[1] = mul32x32_64(h0, r1) + mul32x32_64(h1, r0) + mul32x32_64(h2, s4) +
+        mul32x32_64(h3, s3) + mul32x32_64(h4, s2);
+    t[2] = mul32x32_64(h0, r2) + mul32x32_64(h1, r1) + mul32x32_64(h2, r0) +
+        mul32x32_64(h3, s4) + mul32x32_64(h4, s3);
+    t[3] = mul32x32_64(h0, r3) + mul32x32_64(h1, r2) + mul32x32_64(h2, r1) +
+        mul32x32_64(h3, r0) + mul32x32_64(h4, s4);
+    t[4] = mul32x32_64(h0, r4) + mul32x32_64(h1, r3) + mul32x32_64(h2, r2) +
+        mul32x32_64(h3, r1) + mul32x32_64(h4, r0);
+
+    h0 = (uint32_t)t[0] & 0x3ffffff;
+    c = (t[0] >> 26);
+    t[1] += c;
+    h1 = (uint32_t)t[1] & 0x3ffffff;
+    b = (uint32_t)(t[1] >> 26);
+    t[2] += b;
+    h2 = (uint32_t)t[2] & 0x3ffffff;
+    b = (uint32_t)(t[2] >> 26);
+    t[3] += b;
+    h3 = (uint32_t)t[3] & 0x3ffffff;
+    b = (uint32_t)(t[3] >> 26);
+    t[4] += b;
+    h4 = (uint32_t)t[4] & 0x3ffffff;
+    b = (uint32_t)(t[4] >> 26);
+    h0 += b * 5;
+
+    if (inlen >= 16)
+        goto poly1305_donna_16bytes;
+
+    /* final bytes */
+poly1305_donna_atmost15bytes:
+    if (!inlen)
+        goto poly1305_donna_finish;
+
+    for (j = 0; j < inlen; j++)
+        mp[j] = m[j];
+    mp[j++] = 1;
+    for (; j < 16; j++)
+        mp[j] = 0;
+    inlen = 0;
+
+    t0 = U8TO32_LE(mp + 0);
+    t1 = U8TO32_LE(mp + 4);
+    t2 = U8TO32_LE(mp + 8);
+    t3 = U8TO32_LE(mp + 12);
+
+    h0 += t0 & 0x3ffffff;
+    h1 += ((((uint64_t)t1 << 32) | t0) >> 26) & 0x3ffffff;
+    h2 += ((((uint64_t)t2 << 32) | t1) >> 20) & 0x3ffffff;
+    h3 += ((((uint64_t)t3 << 32) | t2) >> 14) & 0x3ffffff;
+    h4 += (t3 >> 8);
+
+    goto poly1305_donna_mul;
+
+poly1305_donna_finish:
+    b = h0 >> 26;
+    h0 = h0 & 0x3ffffff;
+    h1 += b;
+    b = h1 >> 26;
+    h1 = h1 & 0x3ffffff;
+    h2 += b;
+    b = h2 >> 26;
+    h2 = h2 & 0x3ffffff;
+    h3 += b;
+    b = h3 >> 26;
+    h3 = h3 & 0x3ffffff;
+    h4 += b;
+    b = h4 >> 26;
+    h4 = h4 & 0x3ffffff;
+    h0 += b * 5;
+    b = h0 >> 26;
+    h0 = h0 & 0x3ffffff;
+    h1 += b;
+
+    g0 = h0 + 5;
+    b = g0 >> 26;
+    g0 &= 0x3ffffff;
+    g1 = h1 + b;
+    b = g1 >> 26;
+    g1 &= 0x3ffffff;
+    g2 = h2 + b;
+    b = g2 >> 26;
+    g2 &= 0x3ffffff;
+    g3 = h3 + b;
+    b = g3 >> 26;
+    g3 &= 0x3ffffff;
+    g4 = h4 + b - (1 << 26);
+
+    b = (g4 >> 31) - 1;
+    nb = ~b;
+    h0 = (h0 & nb) | (g0 & b);
+    h1 = (h1 & nb) | (g1 & b);
+    h2 = (h2 & nb) | (g2 & b);
+    h3 = (h3 & nb) | (g3 & b);
+    h4 = (h4 & nb) | (g4 & b);
+
+    f0 = ((h0) | (h1 << 26)) + (uint64_t)U8TO32_LE(&key[16]);
+    f1 = ((h1 >> 6) | (h2 << 20)) + (uint64_t)U8TO32_LE(&key[20]);
+    f2 = ((h2 >> 12) | (h3 << 14)) + (uint64_t)U8TO32_LE(&key[24]);
+    f3 = ((h3 >> 18) | (h4 << 8)) + (uint64_t)U8TO32_LE(&key[28]);
+
+    U32TO8_LE(&out[0], f0);
+    f1 += (f0 >> 32);
+    U32TO8_LE(&out[4], f1);
+    f2 += (f1 >> 32);
+    U32TO8_LE(&out[8], f2);
+    f3 += (f2 >> 32);
+    U32TO8_LE(&out[12], f3);
+}
+
+#pragma endregion /* Poly1305 */
+
+#pragma endregion /* Encryption */
+
+#endif /* NBNET_IMPL */
 
 #pragma endregion /* Implementations */
