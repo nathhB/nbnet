@@ -10,8 +10,19 @@ target_link_libraries(server pthread m)
 
 add_compile_options(-Wall -Wextra)
 
-target_compile_definitions(client PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR)
-target_compile_definitions(server PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR)
+target_compile_definitions(client PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR SOAK_CLIENT)
+target_compile_definitions(server PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR SOAK_SERVER)
+
+option(ENCRYPTION_ENABLED OFF)
+
+if (ENCRYPTION_ENABLED)
+  message("Encryption enabled")
+
+  target_compile_definitions(client PUBLIC SOAK_ENCRYPTION)
+  target_compile_definitions(server PUBLIC SOAK_ENCRYPTION)
+endif(ENCRYPTION_ENABLED)
+
+unset(ENCRYPTION_ENABLED)
 
 if(WIN32)
     target_link_libraries(client wsock32 ws2_32)
