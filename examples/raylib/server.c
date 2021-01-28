@@ -278,6 +278,10 @@ int main(int argc, char *argv[])
     // Init server with a protocol name and a port, must be done first
     NBN_GameServer_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT);
 
+#ifdef EXAMPLE_ENCRYPTION
+    NBN_GameServer_EnableEncryption();
+#endif
+
     // Register messages, have to be done after NBN_GameServer_Init and before NBN_GameServer_Start
     NBN_GameServer_RegisterMessage(CHANGE_COLOR_MESSAGE, ChangeColorMessage);
     NBN_GameServer_RegisterMessage(UPDATE_STATE_MESSAGE, UpdateStateMessage);

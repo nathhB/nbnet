@@ -512,6 +512,10 @@ int main(int argc, char *argv[])
     // and port
     NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT);
 
+#ifdef EXAMPLE_ENCRYPTION
+    NBN_GameClient_EnableEncryption();
+#endif
+
     // Register messages, have to be done after NBN_GameClient_Init and before NBN_GameClient_Start
     // Messages need to be registered on both client and server side
     NBN_GameClient_RegisterMessage(CHANGE_COLOR_MESSAGE, ChangeColorMessage);
