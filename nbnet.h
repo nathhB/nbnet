@@ -662,6 +662,8 @@ END_MESSAGE
 typedef struct {} NBN_StartEncryptMessage;
 
 BEGIN_MESSAGE(NBN_StartEncryptMessage)
+    (void)msg;
+    (void)stream;
 END_MESSAGE
 
 #pragma endregion /* NBN_StartEncryptMessage */
@@ -3074,7 +3076,6 @@ static int NBN_Connection_SendPackets(
         unsigned int packet_count)
 {
     unsigned int sent_bytes = 0;
-    bool is_encryption_enabled = connection->endpoint->config.is_encryption_enabled;
 
     for (unsigned int i = 0; i < packet_count; i++)
     {
@@ -6327,11 +6328,6 @@ static void AES_init_ctx_iv(struct AES_ctx* ctx, const uint8_t* key, const uint8
     memcpy (ctx->Iv, iv, AES_BLOCKLEN);
 }
 
-static void AES_ctx_set_iv(struct AES_ctx* ctx, const uint8_t* iv)
-{
-    memcpy (ctx->Iv, iv, AES_BLOCKLEN);
-}
-
 // This function adds the round key to state.
 // The round key is added to the state by an XOR function.
 static void AddRoundKey(uint8_t round,state_t* state,uint8_t* RoundKey)
@@ -6831,13 +6827,6 @@ static int csprng_get( CSPRNG object, void* dest, unsigned long long size )
 }
 
 /* ------------------------------------------------------------------------------------------- */
-static long csprng_get_int( CSPRNG object )
-{
-    long result;
-    return csprng_get( object, &result, sizeof(result) ) ? result : 0;
-}
-
-/* ------------------------------------------------------------------------------------------- */
 static CSPRNG csprng_destroy( CSPRNG object )
 {
     CSPRNG_TYPE csprng;
@@ -6864,13 +6853,6 @@ static int csprng_get( CSPRNG object, void* dest, unsigned long long size )
     CSPRNG_TYPE csprng;
     csprng.object = object;
     return (csprng.urandom) && (fread( (char*)dest, 1, size, csprng.urandom ) == size);
-}
-
-/* ------------------------------------------------------------------------------------------- */
-static long csprng_get_int( CSPRNG object )
-{
-    long result;
-    return csprng_get( object, &result, sizeof(result) ) ? result : 0;
 }
 
 /* ------------------------------------------------------------------------------------------- */
