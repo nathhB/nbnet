@@ -34,7 +34,7 @@
 #include "../net_drivers/udp.h"
 #endif
 
-static unsigned int sent_messages_count = 0;
+static unsigned int sent_message_count = 0;
 static unsigned int next_msg_id = 1;
 static unsigned int last_recved_message_id = 0;
 static bool connected = false;
@@ -52,9 +52,9 @@ static uint8_t *GenerateRandomBytes(unsigned int length)
 
 static int SendSoakMessages(void)
 {
-    if (sent_messages_count < Soak_GetOptions().messages_count)
+    if (sent_message_count < Soak_GetOptions().message_count)
     {
-        unsigned int count = MIN((rand() % 64) + 1, Soak_GetOptions().messages_count - sent_messages_count);
+        unsigned int count = MIN((rand() % 64) + 1, Soak_GetOptions().message_count - sent_message_count);
 
         for (int i = 0; i < count; i++)
         {
@@ -86,7 +86,7 @@ static int SendSoakMessages(void)
             if (NBN_GameClient_SendMessage() < 0)
                 return -1;
 
-            sent_messages_count++;
+            sent_message_count++;
         }
     }
 
@@ -114,11 +114,11 @@ static int HandleReceivedSoakMessage(SoakMessage *msg)
     messages_data[msg->id - 1] = NULL;
     last_recved_message_id = msg->id;
 
-    Soak_LogInfo("Received soak message (%d/%d)", msg->id, Soak_GetOptions().messages_count);
+    Soak_LogInfo("Received soak message (%d/%d)", msg->id, Soak_GetOptions().message_count);
 
     NBN_GameClient_DestroyMessage(SOAK_MESSAGE, msg);
 
-    if (last_recved_message_id == Soak_GetOptions().messages_count)
+    if (last_recved_message_id == Soak_GetOptions().message_count)
     {
         Soak_LogInfo("Received all soak message echoes");
         Soak_Stop();
@@ -208,9 +208,9 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    messages_data = malloc(sizeof(uint8_t *) * Soak_GetOptions().messages_count);
+    messages_data = malloc(sizeof(uint8_t *) * Soak_GetOptions().message_count);
 
-    for (int i = 0; i < Soak_GetOptions().messages_count; i++)
+    for (int i = 0; i < Soak_GetOptions().message_count; i++)
         messages_data[i] = NULL;
 
     NBN_GameClient_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, Soak_Debug_PrintAddedToRecvQueue);
@@ -230,7 +230,7 @@ int main(int argc, char *argv[])
 
     int ret = Soak_MainLoop(Tick); 
 
-    for (int i = 0; i < Soak_GetOptions().messages_count; i++)
+    for (int i = 0; i < Soak_GetOptions().message_count; i++)
     {
         if (messages_data[i])
             free(messages_data[i]);

@@ -62,7 +62,7 @@
 
 typedef struct
 {
-    unsigned int messages_count;
+    unsigned int message_count;
     float packet_loss; /* 0 - 1 */
     float packet_duplication; /* 0 - 1 */
     float ping; /* in seconds */
