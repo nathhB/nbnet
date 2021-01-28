@@ -30,6 +30,13 @@ endif()
 target_compile_definitions(client PUBLIC NBN_DEBUG NBN_USE_PACKET_SIMULATOR)
 target_compile_definitions(server PUBLIC NBN_DEBUG NBN_USE_PACKET_SIMULATOR)
 
+if (ENCRYPTION_ENABLED)
+  message("Encryption enabled")
+
+  target_compile_definitions(client PUBLIC EXAMPLE_ENCRYPTION)
+  target_compile_definitions(server PUBLIC EXAMPLE_ENCRYPTION)
+endif(ENCRYPTION_ENABLED)
+
 if (EMSCRIPTEN)
     set(ASYNCIFY_IMPORTS "[\"__js_game_server_start\", \"__js_game_client_start\", \"__js_game_client_close\"]")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s USE_PTHREADS=1 -s ALLOW_MEMORY_GROWTH=1 -s EXIT_RUNTIME=1 -s ASSERTIONS=1 -s ASYNCIFY -s ASYNCIFY_IMPORTS=\"${ASYNCIFY_IMPORTS}\"")
@@ -42,3 +49,7 @@ if (EMSCRIPTEN)
         POST_BUILD
         COMMAND browserify ${CMAKE_CURRENT_SOURCE_DIR}/../../net_drivers/webrtc/js/nbnet.js -o nbnet_bundle.js)
 endif()
+
+if (APPLE)
+  target_link_libraries(client "-framework OpenGL -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo")
+endif (APPLE)
