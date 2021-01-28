@@ -2991,7 +2991,6 @@ static void NBN_Connection_AckPacket(NBN_Connection *connection, uint16_t ack_pa
 
 static int NBN_Connection_AddReceivedMessage(NBN_Connection *connection, NBN_Message *message, NBN_Channel *channel)
 {
-    NBN_LogDebug("-------------------------------------------> %d %p", connection->id, channel);
     if (channel->AddReceivedMessage(channel, message))
     {
         NBN_LogTrace("Received message %d on channel %d : added to recv queue", message->header.id, channel->id);
@@ -3764,8 +3763,6 @@ static bool NBN_ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, 
 
         return true;
     }
-
-    NBN_LogDebug("---------------------------------> HERE");
 
     return false;
 }
