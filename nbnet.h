@@ -297,7 +297,7 @@ typedef struct
     uint16_t id;
     uint8_t type;
     uint8_t channel_id;
-} __attribute__((__packed__)) NBN_MessageHeader;
+} NBN_MessageHeader;
 
 typedef struct __NBN_Endpoint NBN_Endpoint;
 typedef struct __NBN_Connection NBN_Connection;
@@ -441,6 +441,41 @@ struct AES_ctx
 
 #pragma endregion /* Poly1305 */
 
+#pragma region Pseudo random generator
+
+typedef void* CSPRNG;
+
+#ifdef _WIN32
+
+#include <windows.h>
+#include <wincrypt.h>
+
+#ifdef _MSC_VER
+#pragma comment(lib, "advapi32.lib")
+#endif
+
+typedef union
+{
+    CSPRNG     object;
+    HCRYPTPROV hCryptProv;
+}
+CSPRNG_TYPE;
+
+#else
+
+#include <stdio.h>
+
+typedef union
+{
+    CSPRNG object;
+    FILE*  urandom;
+}
+CSPRNG_TYPE;
+
+#endif /* _WIN32 */
+
+#pragma endregion /* Pseudo random generator */
+
 #pragma endregion /* Encryption */
 
 #pragma region NBN_Packet
@@ -492,7 +527,7 @@ typedef struct
 
     uint8_t is_encrypted;
     uint8_t auth_tag[POLY1305_TAGLEN]; /* Poly1305 auth tag */
-} __attribute__((__packed__))  NBN_PacketHeader;
+} NBN_PacketHeader;
 
 typedef struct
 {
@@ -1995,133 +2030,6 @@ void NBN_MeasureStream_Reset(NBN_MeasureStream *measure_stream)
 
 #pragma endregion /* Serialization */
 
-#pragma region Pseudo random generator
-
-/* I did not write this: https://github.com/Duthomhas/CSPRNG */
-
-/*
-// Source for the OS Cryptographically-Secure Pseudo-Random Number Generator
-// Copyright 2017 Michael Thomas Greer
-// Distributed under the Boost Software License, Version 1.0.
-// (See accompanying file ../LICENSE_1_0.txt or copy at
-//  http://www.boost.org/LICENSE_1_0.txt )
-*/
-
-typedef void* CSPRNG;
-
-/* ///////////////////////////////////////////////////////////////////////////////////////////// */
-#ifdef _WIN32
-/* ///////////////////////////////////////////////////////////////////////////////////////////// */
-
-#include <windows.h>
-#include <wincrypt.h>
-
-#ifdef _MSC_VER
-#pragma comment(lib, "advapi32.lib")
-#endif
-
-/* ------------------------------------------------------------------------------------------- */
-typedef union
-{
-    CSPRNG     object;
-    HCRYPTPROV hCryptProv;
-}
-CSPRNG_TYPE;
-
-/* ------------------------------------------------------------------------------------------- */
-static CSPRNG csprng_create()
-{
-    CSPRNG_TYPE csprng;
-    if (!CryptAcquireContextA( &csprng.hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT ))
-        csprng.hCryptProv = 0;
-    return csprng.object;
-}
-
-/* ------------------------------------------------------------------------------------------- */
-static int csprng_get( CSPRNG object, void* dest, unsigned long long size )
-{
-    // Alas, we have to be pedantic here. csprng_get().size is a 64-bit entity.
-    // However, CryptGenRandom().size is only a 32-bit DWORD. So we have to make sure failure
-    // isn't from providing less random data than requested, even if absurd.
-    unsigned long long n;
-
-    CSPRNG_TYPE csprng;
-    csprng.object = object;
-    if (!csprng.hCryptProv) return 0;
-
-    n = size >> 30;
-    while (n--)
-        if (!CryptGenRandom( csprng.hCryptProv, 1UL << 30, (BYTE*)dest )) return 0;
-
-    return !!CryptGenRandom( csprng.hCryptProv, size & ((1ULL << 30) - 1), (BYTE*)dest );
-}
-
-/* ------------------------------------------------------------------------------------------- */
-static long csprng_get_int( CSPRNG object )
-{
-    long result;
-    return csprng_get( object, &result, sizeof(result) ) ? result : 0;
-}
-
-/* ------------------------------------------------------------------------------------------- */
-static CSPRNG csprng_destroy( CSPRNG object )
-{
-    CSPRNG_TYPE csprng;
-    csprng.object = object;
-    if (csprng.hCryptProv) CryptReleaseContext( csprng.hCryptProv, 0 );
-    return 0;
-}
-
-/* ///////////////////////////////////////////////////////////////////////////////////////////// */
-#else  /* Using /dev/urandom                                                                     */
-/* ///////////////////////////////////////////////////////////////////////////////////////////// */
-
-#include <stdio.h>
-
-/* ------------------------------------------------------------------------------------------- */
-typedef union
-{
-    CSPRNG object;
-    FILE*  urandom;
-}
-CSPRNG_TYPE;
-
-/* ------------------------------------------------------------------------------------------- */
-static CSPRNG csprng_create()
-{
-    CSPRNG_TYPE csprng;
-    csprng.urandom = fopen( "/dev/urandom", "rb" );
-    return csprng.object;
-}
-
-/* ------------------------------------------------------------------------------------------- */
-static int csprng_get( CSPRNG object, void* dest, unsigned long long size )
-{
-    CSPRNG_TYPE csprng;
-    csprng.object = object;
-    return (csprng.urandom) && (fread( (char*)dest, 1, size, csprng.urandom ) == size);
-}
-
-/* ------------------------------------------------------------------------------------------- */
-static long csprng_get_int( CSPRNG object )
-{
-    long result;
-    return csprng_get( object, &result, sizeof(result) ) ? result : 0;
-}
-
-/* ------------------------------------------------------------------------------------------- */
-static CSPRNG csprng_destroy( CSPRNG object )
-{
-    CSPRNG_TYPE csprng;
-    csprng.object = object;
-    if (csprng.urandom) fclose( csprng.urandom );
-    return 0;
-}
-
-#endif /* _WIN32 */
-
-#pragma endregion /* Pseudo random generator */
-
 #pragma region NBN_Packet
 
 static int NBN_Packet_SerializeHeader(NBN_PacketHeader *, NBN_Stream *);
@@ -2641,6 +2549,10 @@ static void NBN_Connection_StartEncryption(NBN_Connection *);
 static int ecdh_generate_keys(uint8_t*, uint8_t*);
 static int ecdh_shared_secret(const uint8_t*, const uint8_t*, uint8_t*);
 
+static CSPRNG csprng_create();
+static CSPRNG csprng_destroy(CSPRNG object);
+static int csprng_get(CSPRNG, void*, unsigned long long);
+
 NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_Endpoint *endpoint)
 {
     NBN_Connection *connection = NBN_MemoryManager_AllocObject(NBN_OBJ_CONNECTION);
@@ -3049,7 +2961,7 @@ static void NBN_Connection_AckPacket(NBN_Connection *connection, uint16_t ack_pa
 
     if (entry && !entry->acked)
     {
-        NBN_LogTrace("Ack packet: %d", ack_packet_seq_number);
+        NBN_LogTrace("Packet %d acked (connection: %d)", ack_packet_seq_number, connection->id);
 
         entry->acked = true;
 
@@ -3070,7 +2982,8 @@ static void NBN_Connection_AckPacket(NBN_Connection *connection, uint16_t ack_pa
 
                 message->acked = true;
 
-                NBN_LogTrace("Message acked: %d", message->header.id);
+                NBN_LogTrace("Message %d acked (connection: %d, packet: %d)",
+                        message->header.id, connection->id, ack_packet_seq_number);
             }
         }
     }
@@ -3078,6 +2991,7 @@ static void NBN_Connection_AckPacket(NBN_Connection *connection, uint16_t ack_pa
 
 static int NBN_Connection_AddReceivedMessage(NBN_Connection *connection, NBN_Message *message, NBN_Channel *channel)
 {
+    NBN_LogDebug("-------------------------------------------> %d %p", connection->id, channel);
     if (channel->AddReceivedMessage(channel, message))
     {
         NBN_LogTrace("Received message %d on channel %d : added to recv queue", message->header.id, channel->id);
@@ -3828,9 +3742,7 @@ static bool NBN_ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, 
 
     if (SEQUENCE_NUMBER_GT(message->header.id, reliable_ordered_channel->most_recent_message_id))
     {
-#ifdef NBN_DEBUG 
         assert(dt < NBN_CHANNEL_BUFFER_SIZE);
-#endif
 
         reliable_ordered_channel->most_recent_message_id = message->header.id;
     }
@@ -5494,11 +5406,12 @@ static unsigned int NBN_PacketSimulator_GetRandomDuplicatePacketCount(NBN_Packet
  * All "low-level" cryptography implementations used for nbnet packet encryption and authentication.
  *
  * I did not write any of the code in this section, I only regrouped it in there to keep nbnet contained
- * into a single header. I used a total of three different open source libraries:
+ * into a single header. I used a total of four different open source libraries:
  *
  * ECDH:        https://github.com/kokke/tiny-ECDH-c
  * AES:         https://github.com/kokke/tiny-AES-c
  * Poly1305:    https://github.com/floodyberry/poly1305-donna
+ * CSPRNG:      https://github.com/Duthomhas/CSPRNG
  */
 
 #pragma region ECDH
@@ -6879,6 +6792,102 @@ poly1305_donna_finish:
 }
 
 #pragma endregion /* Poly1305 */
+
+#pragma region Pseudo random generator
+
+/*
+// Source for the OS Cryptographically-Secure Pseudo-Random Number Generator
+// Copyright 2017 Michael Thomas Greer
+// Distributed under the Boost Software License, Version 1.0.
+// (See accompanying file ../LICENSE_1_0.txt or copy at
+//  http://www.boost.org/LICENSE_1_0.txt )
+*/
+
+#ifdef _WIN32
+
+/* ------------------------------------------------------------------------------------------- */
+static CSPRNG csprng_create()
+{
+    CSPRNG_TYPE csprng;
+    if (!CryptAcquireContextA( &csprng.hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT ))
+        csprng.hCryptProv = 0;
+    return csprng.object;
+}
+
+/* ------------------------------------------------------------------------------------------- */
+static int csprng_get( CSPRNG object, void* dest, unsigned long long size )
+{
+    // Alas, we have to be pedantic here. csprng_get().size is a 64-bit entity.
+    // However, CryptGenRandom().size is only a 32-bit DWORD. So we have to make sure failure
+    // isn't from providing less random data than requested, even if absurd.
+    unsigned long long n;
+
+    CSPRNG_TYPE csprng;
+    csprng.object = object;
+    if (!csprng.hCryptProv) return 0;
+
+    n = size >> 30;
+    while (n--)
+        if (!CryptGenRandom( csprng.hCryptProv, 1UL << 30, (BYTE*)dest )) return 0;
+
+    return !!CryptGenRandom( csprng.hCryptProv, size & ((1ULL << 30) - 1), (BYTE*)dest );
+}
+
+/* ------------------------------------------------------------------------------------------- */
+static long csprng_get_int( CSPRNG object )
+{
+    long result;
+    return csprng_get( object, &result, sizeof(result) ) ? result : 0;
+}
+
+/* ------------------------------------------------------------------------------------------- */
+static CSPRNG csprng_destroy( CSPRNG object )
+{
+    CSPRNG_TYPE csprng;
+    csprng.object = object;
+    if (csprng.hCryptProv) CryptReleaseContext( csprng.hCryptProv, 0 );
+    return 0;
+}
+
+/* ///////////////////////////////////////////////////////////////////////////////////////////// */
+#else  /* Using /dev/urandom                                                                     */
+/* ///////////////////////////////////////////////////////////////////////////////////////////// */
+
+/* ------------------------------------------------------------------------------------------- */
+static CSPRNG csprng_create()
+{
+    CSPRNG_TYPE csprng;
+    csprng.urandom = fopen( "/dev/urandom", "rb" );
+    return csprng.object;
+}
+
+/* ------------------------------------------------------------------------------------------- */
+static int csprng_get( CSPRNG object, void* dest, unsigned long long size )
+{
+    CSPRNG_TYPE csprng;
+    csprng.object = object;
+    return (csprng.urandom) && (fread( (char*)dest, 1, size, csprng.urandom ) == size);
+}
+
+/* ------------------------------------------------------------------------------------------- */
+static long csprng_get_int( CSPRNG object )
+{
+    long result;
+    return csprng_get( object, &result, sizeof(result) ) ? result : 0;
+}
+
+/* ------------------------------------------------------------------------------------------- */
+static CSPRNG csprng_destroy( CSPRNG object )
+{
+    CSPRNG_TYPE csprng;
+    csprng.object = object;
+    if (csprng.urandom) fclose( csprng.urandom );
+    return 0;
+}
+
+#endif /* _WIN32 */
+
+#pragma endregion /* Pseudo random generator */
 
 #pragma endregion /* Encryption */
 
