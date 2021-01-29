@@ -4,7 +4,7 @@ nbnet is a single header C (C99) library to implement client-server network code
 
 nbnet is based on this [great series of articles](https://gafferongames.com/) by Glenn Fiedler.
 
-nbnet aims to be as easy to use as possible. nbnet's API is designed to be as friendly as possible; it does not have any callback mechanisms and relies solely on polling which makes it easy to integrate into a game loop.
+nbnet aims to be as easy to use as possible. nbnet's API is *friendly* and goes *straight to the point*; it relies on event polling which makes it easy to integrate into a game loop.
 
 **Disclaimer**: nbnet is in the early stages of its development and is, first and foremost, a learning project of mine as I explore online game development. If you are looking for a professional production-ready library, this is not the one.
 
