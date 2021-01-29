@@ -37,6 +37,7 @@
 static unsigned int sent_message_count = 0;
 static unsigned int next_msg_id = 1;
 static unsigned int last_recved_message_id = 0;
+static unsigned int last_sent_message_id = 0;
 static bool connected = false;
 static uint8_t **messages_data;
 
@@ -54,7 +55,22 @@ static int SendSoakMessages(void)
 {
     if (sent_message_count < Soak_GetOptions().message_count)
     {
-        unsigned int count = MIN((rand() % 64) + 1, Soak_GetOptions().message_count - sent_message_count);
+        // number of messages yet to send
+        unsigned int remaining_message_count = Soak_GetOptions().message_count - sent_message_count;
+
+        // number of messages sent but not yet acked
+        unsigned int pending_message_count = last_sent_message_id - last_recved_message_id;
+
+        // don't send anything on this tick if we have reached the max number of unacked messages
+        if (pending_message_count >= SOAK_CLIENT_MAX_PENDING_MESSAGES)
+            return 0;
+
+        // max number of messages to send on this tick
+        unsigned int max_send_message_count = MIN(
+                SOAK_CLIENT_MAX_PENDING_MESSAGES - pending_message_count, remaining_message_count);
+
+        // number of messages to send on this tick
+        unsigned int count = (rand() % max_send_message_count) + 1;
 
         for (int i = 0; i < count; i++)
         {
@@ -87,6 +103,7 @@ static int SendSoakMessages(void)
                 return -1;
 
             sent_message_count++;
+            last_sent_message_id = msg->id;
         }
     }
 
