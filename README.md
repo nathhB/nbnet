@@ -1,9 +1,16 @@
 # nbnet
 
 nbnet is a single header C (C99) library to implement client-server network code for games. It is more precisely designed for fast-paced action games.
+
 nbnet is based on this [great series of articles](https://gafferongames.com/) by Glenn Fiedler.
 
+nbnet aims to be as easy to use as possible. nbnet's API is designed to be as friendly as possible; it does not have any callback mechanisms and relies solely on polling which makes it easy to integrate into a game loop.
+
 **Disclaimer**: nbnet is in the early stages of its development and is, first and foremost, a learning project of mine as I explore online game development. If you are looking for a professional production-ready library, this is not the one.
+
+You can see nbnet in action [in this video](https://www.youtube.com/watch?v=BJl_XN3QJhQ&ab_channel=NathanBIAGINI).
+
+If you want to discuss the library, you can join the [nbnet's discord server](https://discord.gg/esR8FSyPnF).
 
 ## Features
 
@@ -18,16 +25,14 @@ nbnet is based on this [great series of articles](https://gafferongames.com/) by
 
 ## Drivers
 
-nbnet does not directly implement any low level "transport" code and rely on *drivers*. A driver is a set of function definitions that live outside the nbnet header and provide a transport layer implementation for nbnet used to send and receive packets.
+nbnet does not directly implement any low level "transport" code and rely on *drivers*.
+
+A driver is a set of function definitions that live outside the nbnet header and provide a transport layer implementation for nbnet used to send and receive packets.
 
 nbnet comes with two ready to use drivers:
 
 - UDP : work with a single UDP socket, designed for desktop games
 - WebRTC : work with a single unreliable/unordered data channel, designed for web browser games
-
-You can see nbnet in action [in this video](https://www.youtube.com/watch?v=BJl_XN3QJhQ&ab_channel=NathanBIAGINI).
-
-If you want to discuss the library, you can join the [nbnet's discord server](https://discord.gg/esR8FSyPnF).
 
 ## Portability
 
