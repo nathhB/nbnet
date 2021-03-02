@@ -23,7 +23,7 @@ If you want to discuss the library, you can join the [nbnet's discord server](ht
 - Web (WebRTC) support (powered by [emscripten](https://emscripten.org/docs/introducing_emscripten/about_emscripten.html))
 - Encrypted and authenticated packets
 
-## Projects
+## Projects using nbnet
 
 ### Vinox
 
