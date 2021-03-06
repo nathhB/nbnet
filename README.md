@@ -31,6 +31,12 @@ An open-source voxel sandbox rpg game.
 
 https://github.com/muevoid/Vinox
 
+### nb_tanks
+
+A little online tank game showcasing the library.
+
+https://github.com/nathhB/nb_tanks
+
 ## Drivers
 
 nbnet does not directly implement any low level "transport" code and rely on *drivers*.
