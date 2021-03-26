@@ -705,14 +705,16 @@ struct __NBN_Channel
 {
     uint8_t id;
     uint16_t next_message_id;
+    uint16_t next_recv_message_id;
     unsigned int outgoing_message_count;
     unsigned int chunk_count;
     int last_received_chunk_id;
     double time;
+    NBN_Message *recv_message_buffer[NBN_CHANNEL_BUFFER_SIZE];
     NBN_MessageChunk *chunks_buffer[NBN_CHANNEL_CHUNKS_BUFFER_SIZE];
     NBN_OutgoingMessagePolicy (*GetOutgoingMessagePolicy)(NBN_Channel *, NBN_Message *);
     bool (*AddReceivedMessage)(NBN_Channel *, NBN_Message *);
-    bool (*CanProcessReceivedMessage)(NBN_Channel *, NBN_Message *);
+    NBN_Message *(*GetNextMessage)(NBN_Channel *);
     void (*OnMessageAcked)(NBN_Channel *, NBN_Message *);
 };
 
@@ -726,7 +728,7 @@ bool NBN_Channel_HasRoomForMessage(NBN_Channel *, unsigned int message_size);
 
    Guarantee that messages will be received in order, does not however guarantee that all message will be received when
    packets get lost. This is meant to be used for time critical messages when it does not matter that much if they
-   end up getting lost. A good example would be game snaphosts when any new newly received snapshot is more up to date
+   end up getting lost. A good example would be game snaphosts when any newly received snapshot is more up to date
    than the previous one.
    */
 typedef struct
@@ -746,10 +748,8 @@ NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(uint8_t);
 typedef struct
 {
     NBN_Channel base;
-    uint16_t last_received_message_id;
     uint16_t oldest_unacked_message_id;
     uint16_t most_recent_message_id;
-    uint32_t recv_message_buffer[NBN_CHANNEL_BUFFER_SIZE];
     bool ack_buffer[NBN_CHANNEL_BUFFER_SIZE];
 } NBN_ReliableOrderedChannel;
 
@@ -844,7 +844,6 @@ struct __NBN_Connection
      *  Messages channeling (sending & receiving)
      */
     NBN_Channel *channels[NBN_MAX_CHANNELS];
-    NBN_List *recv_queue;
     NBN_List *send_queue;
 
     /*
@@ -862,7 +861,7 @@ struct __NBN_Connection
 NBN_Connection *NBN_Connection_Create(uint32_t, uint32_t, NBN_Endpoint *);
 void NBN_Connection_Destroy(NBN_Connection *);
 int NBN_Connection_ProcessReceivedPacket(NBN_Connection *, NBN_Packet *);
-NBN_Message *NBN_Connection_DequeueReceivedMessage(NBN_Connection *);
+// NBN_Message *NBN_Connection_DequeueReceivedMessage(NBN_Connection *);
 int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *);
 int NBN_Connection_FlushSendQueue(NBN_Connection *);
 int NBN_Connection_CreateChannel(NBN_Connection *, NBN_ChannelType, uint8_t);
@@ -1248,9 +1247,17 @@ void NBN_Driver_GServ_RaiseEvent(NBN_Driver_GServ_EventType, void *);
 
 #pragma region Utils
 
+#ifndef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+
+#ifndef MAX
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#endif
+
+#ifndef ABS
 #define ABS(v) (((v) > 0) ? (v) : -(v))
+#endif
 
 #define SEQUENCE_NUMBER_GT(seq1, seq2) \
     ((seq1 > seq2 && (seq1 - seq2) <= 32767) || (seq1 < seq2 && (seq2 - seq1) >= 32767))
@@ -2572,7 +2579,6 @@ NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_End
     connection->is_accepted = false;
     connection->is_stale = false;
     connection->is_closed = false;
-    connection->recv_queue = NBN_List_Create();
     connection->send_queue = NBN_List_Create();
 
     for (int i = 0; i < NBN_MAX_CHANNELS; i++)
@@ -2604,7 +2610,6 @@ NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_End
 
 void NBN_Connection_Destroy(NBN_Connection *connection)
 {
-    NBN_Connection_ClearMessageQueue(connection->recv_queue);
     NBN_Connection_ClearMessageQueue(connection->send_queue);
 
     for (int i = 0; i < NBN_MAX_CHANNELS; i++)
@@ -2652,35 +2657,6 @@ int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet 
     }
 
     return 0;
-}
-
-static NBN_ListNode *dequeue_current_node = NULL;
-
-NBN_Message *NBN_Connection_DequeueReceivedMessage(NBN_Connection *connection)
-{
-    if (dequeue_current_node == NULL)
-        dequeue_current_node = connection->recv_queue->head;
-
-    while (dequeue_current_node)
-    {
-        NBN_Message *message = dequeue_current_node->data;
-        NBN_Channel *channel = connection->channels[message->header.channel_id];
-
-        assert(channel != NULL);
-
-        dequeue_current_node = dequeue_current_node->next;
-
-        if (channel->CanProcessReceivedMessage(channel, message))
-        {
-            NBN_List_Remove(connection->recv_queue, message);
-
-            message->sender = connection;
-
-            return message;
-        }
-    }
-
-    return NULL;
 }
 
 int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
@@ -2996,8 +2972,6 @@ static int NBN_Connection_AddReceivedMessage(NBN_Connection *connection, NBN_Mes
     if (channel->AddReceivedMessage(channel, message))
     {
         NBN_LogTrace("Received message %d on channel %d : added to recv queue", message->header.id, channel->id);
-
-        NBN_List_PushBack(connection->recv_queue, message);
 
 #ifdef NBN_DEBUG
         if (connection->OnMessageAddedToRecvQueue)
@@ -3617,7 +3591,7 @@ bool NBN_Channel_HasRoomForMessage(NBN_Channel *channel, unsigned int message_si
 
 static NBN_OutgoingMessagePolicy NBN_UnreliableOrderedChannel_GetOutgoingMessagePolicy(NBN_Channel *, NBN_Message *);
 static bool NBN_UnreliableOrderedChannel_AddReceivedMessage(NBN_Channel *, NBN_Message *);
-static bool NBN_UnreliableOrderedChannel_CanProcessReceivedMessage(NBN_Channel *, NBN_Message *);
+static NBN_Message *NBN_UnreliableOrderedChannel_GetNextMessage(NBN_Channel *);
 
 NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(uint8_t id)
 {
@@ -3626,9 +3600,13 @@ NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(uint8_t id)
     channel->base.id = id;
     channel->base.GetOutgoingMessagePolicy = NBN_UnreliableOrderedChannel_GetOutgoingMessagePolicy;
     channel->base.AddReceivedMessage = NBN_UnreliableOrderedChannel_AddReceivedMessage;
-    channel->base.CanProcessReceivedMessage = NBN_UnreliableOrderedChannel_CanProcessReceivedMessage;
+    channel->base.GetNextMessage = NBN_UnreliableOrderedChannel_GetNextMessage;
     channel->base.next_message_id = 0;
+    channel->base.next_recv_message_id = 0;
     channel->base.outgoing_message_count = 0;
+
+    for (int i = 0; i < NBN_CHANNEL_BUFFER_SIZE; i++)
+        channel->base.recv_message_buffer[i] = NULL;
 
     channel->last_received_message_id = 0;
 
@@ -3649,6 +3627,8 @@ static bool NBN_UnreliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel
 
     if (SEQUENCE_NUMBER_GT(message->header.id, unreliable_ordered_channel->last_received_message_id))
     {
+        channel->recv_message_buffer[message->header.id % NBN_CHANNEL_BUFFER_SIZE] = message;
+
         unreliable_ordered_channel->last_received_message_id = message->header.id;
 
         return true;
@@ -3657,19 +3637,16 @@ static bool NBN_UnreliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel
     return false;
 }
 
-static bool NBN_UnreliableOrderedChannel_CanProcessReceivedMessage(NBN_Channel *channel, NBN_Message *message)
+static NBN_Message *NBN_UnreliableOrderedChannel_GetNextMessage(NBN_Channel *channel)
 {
-    (void)channel;
-    (void)message;
-
-    return true;
+    return NULL;
 }
 
 /* Reliable ordered */
 
 static NBN_OutgoingMessagePolicy NBN_ReliableOrderedChannel_GetOugoingMessagePolicy(NBN_Channel *, NBN_Message *);
 static bool NBN_ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *, NBN_Message *);
-static bool NBN_ReliableOrderedChannel_CanProcessReceivedMessage(NBN_Channel *, NBN_Message *);
+static NBN_Message *NBN_ReliableOrderedChannel_GetNextMessage(NBN_Channel *);
 static void NBN_ReliableOrderedChannel_OnMessageAcked(NBN_Channel *, NBN_Message *);
 
 NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(uint8_t id)
@@ -3679,20 +3656,20 @@ NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(uint8_t id)
     channel->base.id = id;
     channel->base.GetOutgoingMessagePolicy = NBN_ReliableOrderedChannel_GetOugoingMessagePolicy;
     channel->base.AddReceivedMessage = NBN_ReliableOrderedChannel_AddReceivedMessage;
-    channel->base.CanProcessReceivedMessage = NBN_ReliableOrderedChannel_CanProcessReceivedMessage;
+    channel->base.GetNextMessage = NBN_ReliableOrderedChannel_GetNextMessage;
     channel->base.OnMessageAcked = NBN_ReliableOrderedChannel_OnMessageAcked;
     channel->base.next_message_id = 0;
+    channel->base.next_recv_message_id = 0;
     channel->base.outgoing_message_count = 0;
-
-    channel->last_received_message_id = 0;
-    channel->oldest_unacked_message_id = 0;
-    channel->most_recent_message_id = 0;
 
     for (int i = 0; i < NBN_CHANNEL_BUFFER_SIZE; i++)
     {
-        channel->recv_message_buffer[i] = 0xFFFFFFFF;
+        channel->base.recv_message_buffer[i] = NULL;
         channel->ack_buffer[i] = false;
     }
+
+    channel->oldest_unacked_message_id = 0;
+    channel->most_recent_message_id = 0;
 
     return channel;
 }
@@ -3748,19 +3725,19 @@ static bool NBN_ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, 
     }
     else
     {
-        /*
-           This is an old message that has already been received, probably coming from
-           an out of order late packet.
-           */
+        /* This is an old message that has already been received, probably coming from
+           an out of order late packet. */
         if (dt >= NBN_CHANNEL_BUFFER_SIZE)
             return false;
     }
 
     uint16_t index = message->header.id % NBN_CHANNEL_BUFFER_SIZE;
 
-    if (reliable_ordered_channel->recv_message_buffer[index] != message->header.id)
+    if (
+            channel->recv_message_buffer[index] == NULL ||
+            channel->recv_message_buffer[index]->header.id != message->header.id)
     {
-        reliable_ordered_channel->recv_message_buffer[index] = message->header.id;
+        channel->recv_message_buffer[index] = message;
 
         return true;
     }
@@ -3768,18 +3745,20 @@ static bool NBN_ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, 
     return false;
 }
 
-static bool NBN_ReliableOrderedChannel_CanProcessReceivedMessage(NBN_Channel *channel, NBN_Message *message)
+static NBN_Message *NBN_ReliableOrderedChannel_GetNextMessage(NBN_Channel *channel)
 {
     NBN_ReliableOrderedChannel *reliable_ordered_channel = (NBN_ReliableOrderedChannel *)channel; 
+    NBN_Message *message = channel->recv_message_buffer[channel->next_recv_message_id % NBN_CHANNEL_BUFFER_SIZE];
 
-    if (message->header.id == reliable_ordered_channel->last_received_message_id)
+    if (message && message->header.id == channel->next_recv_message_id)
     {
-        reliable_ordered_channel->last_received_message_id++;
+        channel->recv_message_buffer[message->header.id % NBN_CHANNEL_BUFFER_SIZE] = NULL;
+        channel->next_recv_message_id++;
 
-        return true;
+        return message;
     }
 
-    return false;
+    return NULL;
 }
 
 static void NBN_ReliableOrderedChannel_OnMessageAcked(NBN_Channel *channel, NBN_Message *message)
@@ -4130,12 +4109,18 @@ int NBN_GameClient_Poll(void)
             if (NBN_Driver_GCli_RecvPackets() < 0)
                 return NBN_ERROR;
 
-            NBN_Message *msg;
+            for (unsigned int i = 0; i < NBN_MAX_CHANNELS; i++)
+            {
+                NBN_Channel *channel = __game_client.server_connection->channels[i];
 
-            assert(dequeue_current_node == NULL);
+                if (channel)
+                {
+                    NBN_Message *msg;
 
-            while ((msg = NBN_Connection_DequeueReceivedMessage(__game_client.server_connection)))
-                NBN_GameClient_ProcessReceivedMessage(msg, __game_client.server_connection);
+                    while ((msg = channel->GetNextMessage(channel)) != NULL)
+                        NBN_GameClient_ProcessReceivedMessage(msg, __game_client.server_connection);
+                }
+            }
 
             NBN_Connection_UpdateAverageDownloadBandwidth(__game_client.server_connection);
 
@@ -4337,6 +4322,8 @@ static void NBN_GameClient_ProcessReceivedMessage(NBN_Message *message, NBN_Conn
     }
     else
     {
+        message->sender = server_connection;
+
         NBN_EventQueue_Enqueue(__game_client.endpoint.events_queue, NBN_MESSAGE_RECEIVED, message);
     }
 }
@@ -4592,10 +4579,18 @@ int NBN_GameServer_Poll(void)
             NBN_Connection *client = current_node->data;
             NBN_Message *msg;
 
-            assert(dequeue_current_node == NULL);
+            for (unsigned int i = 0; i < NBN_MAX_CHANNELS; i++)
+            {
+                NBN_Channel *channel = client->channels[i];
 
-            while ((msg = NBN_Connection_DequeueReceivedMessage(client)))
-                NBN_GameServer_ProcessReceivedMessage(msg, client);
+                if (channel)
+                {
+                    NBN_Message *msg;
+
+                    while ((msg = channel->GetNextMessage(channel)) != NULL)
+                        NBN_GameServer_ProcessReceivedMessage(msg, client);
+                }
+            }
 
             if (!client->is_closed)
                 NBN_Connection_UpdateAverageDownloadBandwidth(client);
@@ -4941,6 +4936,8 @@ static void NBN_GameServer_ProcessReceivedMessage(NBN_Message *message, NBN_Conn
     }
     else
     {
+        message->sender = client;
+
         NBN_EventQueue_Enqueue(__game_server.endpoint.events_queue, NBN_CLIENT_MESSAGE_RECEIVED, message);
     }
 }
