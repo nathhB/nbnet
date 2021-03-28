@@ -1248,9 +1248,17 @@ void NBN_Driver_GServ_RaiseEvent(NBN_Driver_GServ_EventType, void *);
 
 #pragma region Utils
 
+#ifndef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+
+#ifndef MAX
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#endif
+
+#ifndef ABS
 #define ABS(v) (((v) > 0) ? (v) : -(v))
+#endif
 
 #define SEQUENCE_NUMBER_GT(seq1, seq2) \
     ((seq1 > seq2 && (seq1 - seq2) <= 32767) || (seq1 < seq2 && (seq2 - seq1) >= 32767))
