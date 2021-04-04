@@ -265,7 +265,7 @@ void NBN_MeasureStream_Reset(NBN_MeasureStream *);
 
 #define NBN_MAX_CHANNELS 8 /* Maximum value of uint8_t, see message header */
 #define NBN_MAX_MESSAGE_TYPES 255 /* Maximum value of uint8_t, see message header */
-#define NBN_MESSAGE_RESEND_DELAY 0.2 /* Number of seconds before a message is resent (reliable messages redundancy) */
+#define NBN_MESSAGE_RESEND_DELAY 0.1 /* Number of seconds before a message is resent (reliable messages redundancy) */
 
 /*
  * Message definition macro, use it like this in an header file shared between your client and server code:
@@ -2822,9 +2822,6 @@ static void NBN_Connection_AckPacket(NBN_Connection *connection, uint16_t ack_pa
 
             if (channel->OnOutgoingMessageAcked)
                 channel->OnOutgoingMessageAcked(channel, msg_entry->id);
-
-            NBN_LogTrace("Message %d acked (connection: %d, packet: %d)",
-                    msg_entry->id, connection->id, ack_packet_seq_number);
         }
     }
 }
@@ -3478,7 +3475,7 @@ static bool NBN_ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, 
 static bool NBN_ReliableOrderedChannel_AddOutgoingMessage(NBN_Channel *channel, NBN_Message *message)
 {
     uint16_t msg_id = channel->next_outgoing_message_id;
-    NBN_MessageSlot *slot = &channel->outgoing_message_buffer[msg_id % NBN_CHANNEL_BUFFER_SIZE];
+    NBN_MessageSlot *slot = &channel->outgoing_message_buffer[msg_id % NBN_CHANNEL_BUFFER_SIZE]; 
 
     if (!slot->free)
         return false;
@@ -3491,7 +3488,7 @@ static bool NBN_ReliableOrderedChannel_AddOutgoingMessage(NBN_Channel *channel, 
 
     channel->next_outgoing_message_id++;
 
-    NBN_LogTrace("Add outgoing message %d of type %d to channel %d",
+    NBN_LogTrace("Added outgoing message %d of type %d to channel %d",
             slot->message.header.id, slot->message.header.type, channel->id);
 
     return true;
@@ -3517,12 +3514,14 @@ static NBN_Message *NBN_ReliableOrderedChannel_GetNextOutgoingMessage(NBN_Channe
 {
     NBN_ReliableOrderedChannel *reliable_ordered_channel = (NBN_ReliableOrderedChannel *)channel;
 
-    uint16_t msg_id = reliable_ordered_channel->oldest_unacked_message_id;
-    int max_message_id = (msg_id + (NBN_CHANNEL_BUFFER_SIZE - 1)) % (0xFFFF + 1);
+    int max_message_id = (reliable_ordered_channel->oldest_unacked_message_id + (NBN_CHANNEL_BUFFER_SIZE - 1)) % (0xFFFF + 1);
 
     if (SEQUENCE_NUMBER_LT(channel->next_outgoing_message_id, max_message_id))
         max_message_id = channel->next_outgoing_message_id;
 
+    uint16_t msg_id = reliable_ordered_channel->oldest_unacked_message_id;
+
+    NBN_LogDebug("OLDEST: %d | MAX: %d | NEXT: %d", msg_id, max_message_id, channel->next_outgoing_message_id);
     while (SEQUENCE_NUMBER_LT(msg_id, max_message_id))
     {
         NBN_MessageSlot *slot = &channel->outgoing_message_buffer[msg_id % NBN_CHANNEL_BUFFER_SIZE];
@@ -3544,28 +3543,39 @@ static NBN_Message *NBN_ReliableOrderedChannel_GetNextOutgoingMessage(NBN_Channe
 static void NBN_ReliableOrderedChannel_OnOutgoingMessageAcked(NBN_Channel *channel, uint16_t msg_id)
 {
     NBN_ReliableOrderedChannel *reliable_ordered_channel = (NBN_ReliableOrderedChannel *)channel;
-    uint16_t index = msg_id % NBN_CHANNEL_BUFFER_SIZE;
-    NBN_MessageSlot *slot = &reliable_ordered_channel->base.outgoing_message_buffer[index];
+    NBN_MessageSlot *slot = &reliable_ordered_channel->base.outgoing_message_buffer[msg_id % NBN_CHANNEL_BUFFER_SIZE];
 
-    reliable_ordered_channel->ack_buffer[index] = true;
+    if (slot->free || slot->message.header.id != msg_id)
+        return;
+
     slot->free = true;
 
-    NBN_LogTrace("Message %d acked on channel %d", msg_id, channel->id);
+    NBN_LogTrace("Message %d acked on channel %d (buffer index: %d, oldest unacked: %d)",
+        msg_id, channel->id, msg_id % NBN_CHANNEL_BUFFER_SIZE, reliable_ordered_channel->oldest_unacked_message_id);
+
+    reliable_ordered_channel->ack_buffer[msg_id % NBN_CHANNEL_BUFFER_SIZE] = true;
 
     if (msg_id == reliable_ordered_channel->oldest_unacked_message_id)
     {
+        NBN_LogDebug("Update oldest unacked message id");
+
         for (int i = 0; i < NBN_CHANNEL_BUFFER_SIZE; i++)
         {
-            int index = (msg_id + i) % NBN_CHANNEL_BUFFER_SIZE;
+            uint16_t ack_msg_id = msg_id + i;
+            int index = ack_msg_id % NBN_CHANNEL_BUFFER_SIZE;
+
+            NBN_LogDebug("Message %d (index: %d):", ack_msg_id, index);
 
             if (reliable_ordered_channel->ack_buffer[index])
             {
-                reliable_ordered_channel->ack_buffer[index] = false;
+                NBN_LogDebug("Is acked");
 
+                reliable_ordered_channel->ack_buffer[index] = false;
                 reliable_ordered_channel->oldest_unacked_message_id++;
             }
             else
             {
+                NBN_LogDebug("Is not acked. Break");
                 break;
             }
         }
