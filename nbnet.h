@@ -3291,9 +3291,13 @@ int NBN_Channel_ReconstructMessageFromChunks(
 
 bool NBN_Channel_HasRoomForMessage(NBN_Channel *channel, unsigned int message_size)
 {
-    unsigned int chunk_count = ((message_size - 1) / NBN_MESSAGE_CHUNK_SIZE) + 1;
+    for (int i = 0; i < message_size; i++)
+    {
+        if (!channel->outgoing_message_buffer[(channel->next_outgoing_message_id + i) % NBN_CHANNEL_BUFFER_SIZE].free)
+            return false;
+    }
 
-    return channel->outgoing_message_count + chunk_count <= NBN_CHANNEL_BUFFER_SIZE;
+    return true;
 }
 
 /* Unreliable ordered */
