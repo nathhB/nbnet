@@ -1128,7 +1128,7 @@ void NBN_GameClient_EnableEncryption(void);
 #ifdef NBN_DEBUG
 
 void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
-bool NBN_GameClient_CanSendMessage(bool);
+bool NBN_GameClient_CanSendMessage(void);
 
 #endif /* NBN_DEBUG */
 
@@ -1193,7 +1193,7 @@ bool NBN_GameServer_IsEncryptionEnabled(void);
 #ifdef NBN_DEBUG
 
 void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
-bool NBN_GameServer_CanSendMessageTo(NBN_Connection *, bool);
+bool NBN_GameServer_CanSendMessageTo(NBN_Connection *);
 
 #endif /* NBN_DEBUG */
 
@@ -3361,6 +3361,7 @@ static bool NBN_UnreliableOrderedChannel_AddOutgoingMessage(NBN_Channel *channel
     slot->free = false;
 
     channel->next_outgoing_message_id++;
+    channel->outgoing_message_count++;
 
     return true;
 }
@@ -3388,6 +3389,7 @@ static NBN_Message *NBN_UnreliableOrderedChannel_GetNextRecvedMessage(NBN_Channe
 
 static NBN_Message *NBN_UnreliableOrderedChannel_GetNextOutgoingMessage(NBN_Channel *channel)
 {
+    // TODO
     return NULL;
 }
 
@@ -3475,10 +3477,16 @@ static bool NBN_ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, 
 static bool NBN_ReliableOrderedChannel_AddOutgoingMessage(NBN_Channel *channel, NBN_Message *message)
 {
     uint16_t msg_id = channel->next_outgoing_message_id;
-    NBN_MessageSlot *slot = &channel->outgoing_message_buffer[msg_id % NBN_CHANNEL_BUFFER_SIZE]; 
+    int index = msg_id % NBN_CHANNEL_BUFFER_SIZE;
+    NBN_MessageSlot *slot = &channel->outgoing_message_buffer[index];
 
     if (!slot->free)
+    {
+        NBN_LogTrace("Slot %d is not free on channel %d (outgoing message count: %d)",
+                index, channel->id, channel->outgoing_message_count);
+
         return false;
+    }
 
     memcpy(&slot->message, message, sizeof(NBN_Message));
 
@@ -3487,9 +3495,10 @@ static bool NBN_ReliableOrderedChannel_AddOutgoingMessage(NBN_Channel *channel, 
     slot->free = false;
 
     channel->next_outgoing_message_id++;
+    channel->outgoing_message_count++;
 
-    NBN_LogTrace("Added outgoing message %d of type %d to channel %d",
-            slot->message.header.id, slot->message.header.type, channel->id);
+    NBN_LogTrace("Added outgoing message %d of type %d to channel %d (index: %d)",
+            slot->message.header.id, slot->message.header.type, channel->id, index);
 
     return true;
 }
@@ -3554,6 +3563,7 @@ static void NBN_ReliableOrderedChannel_OnOutgoingMessageAcked(NBN_Channel *chann
         msg_id, channel->id, msg_id % NBN_CHANNEL_BUFFER_SIZE, reliable_ordered_channel->oldest_unacked_message_id);
 
     reliable_ordered_channel->ack_buffer[msg_id % NBN_CHANNEL_BUFFER_SIZE] = true;
+    channel->outgoing_message_count--;
 
     if (msg_id == reliable_ordered_channel->oldest_unacked_message_id)
     {
@@ -4097,41 +4107,20 @@ void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, 
     }
 }
 
-bool NBN_GameClient_CanSendMessage(bool destroy_message)
+bool NBN_GameClient_CanSendMessage(void)
 {
-    return true; // TODO: remove
-
-    /*uint8_t msg_type = __game_client.endpoint.outgoing_message_info->type;
-    uint8_t channel_id = __game_client.endpoint.outgoing_message_info->channel_id;
-    NBN_Channel *channel = __game_client.server_connection->channels[channel_id];
-    NBN_MessageSerializer msg_serializer = __game_client.endpoint.message_serializers[msg_type];
-    NBN_MessageDestructor msg_destructor = __game_client.endpoint.message_destructors[msg_type];
+    NBN_Message *message = &__game_client.endpoint.outgoing_message;
+    NBN_Channel *channel = __game_client.server_connection->channels[message->header.channel_id];
 
     assert(channel != NULL);
-    assert(msg_serializer != NULL);
 
     NBN_MeasureStream measure_stream;
-    NBN_Message message = {
-        .header = {.type = msg_type, .channel_id = channel_id},
-        .serializer = msg_serializer,
-        .data = __game_client.endpoint.outgoing_message_info->data};
 
     NBN_MeasureStream_Init(&measure_stream);
 
-    unsigned int message_size = (NBN_Message_Measure(&message, &measure_stream) - 1) / 8 + 1;
-    bool ret = NBN_Channel_HasRoomForMessage(channel, message_size);
+    unsigned int message_size = (NBN_Message_Measure(message, &measure_stream) - 1) / 8 + 1;
 
-    if (!ret && destroy_message)
-    {
-        if (msg_destructor)
-            msg_destructor(__game_client.endpoint.outgoing_message_info->data);
-        else
-            NBN_Deallocator(__game_client.endpoint.outgoing_message_info->data);
-
-        NBN_MemoryManager_DeallocObject(NBN_OBJ_OUTGOING_MSG_INFO, __game_client.endpoint.outgoing_message_info);
-    }
-
-    return ret;*/
+    return NBN_Channel_HasRoomForMessage(channel, message_size);
 }
 
 #endif /* NBN_DEBUG */
@@ -4727,42 +4716,20 @@ void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, 
     }
 }
 
-bool NBN_GameServer_CanSendMessageTo(NBN_Connection *client, bool destroy_message)
+bool NBN_GameServer_CanSendMessageTo(NBN_Connection *client)
 {
-    return true; // TODO: remove
-
-    /*uint8_t msg_type = __game_server.endpoint.outgoing_message_info->type;
-    uint8_t channel_id = __game_server.endpoint.outgoing_message_info->channel_id;
-    NBN_Channel *channel = client->channels[channel_id];
-    NBN_MessageSerializer msg_serializer = __game_server.endpoint.message_serializers[msg_type];
-    NBN_MessageDestructor msg_destructor = __game_server.endpoint.message_destructors[msg_type];
+    NBN_Message *message = &__game_server.endpoint.outgoing_message;
+    NBN_Channel *channel = client->channels[message->header.channel_id];
 
     assert(channel != NULL);
-    assert(msg_serializer != NULL);
 
     NBN_MeasureStream measure_stream;
-    NBN_Message message = {
-        .header = {.type = msg_type, .channel_id = channel_id},
-        .serializer = msg_serializer,
-        .outgoing = true,
-        .data = __game_server.endpoint.outgoing_message_info};
 
     NBN_MeasureStream_Init(&measure_stream);
 
-    unsigned int message_size = (NBN_Message_Measure(&message, &measure_stream) - 1) / 8 + 1;
-    bool ret = NBN_Channel_HasRoomForMessage(channel, message_size);
+    unsigned int message_size = (NBN_Message_Measure(message, &measure_stream) - 1) / 8 + 1;
 
-    if (!ret && destroy_message)
-    {
-        if (msg_destructor)
-            msg_destructor(__game_server.endpoint.outgoing_message_info->data);
-        else
-            NBN_Deallocator(__game_server.endpoint.outgoing_message_info->data);
-
-        NBN_MemoryManager_DeallocObject(NBN_OBJ_OUTGOING_MSG_INFO, __game_server.endpoint.outgoing_message_info);
-    }
-
-    return ret;*/
+    return NBN_Channel_HasRoomForMessage(channel, message_size);
 }
 
 #endif /* NBN_DEBUG */
