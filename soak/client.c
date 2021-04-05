@@ -85,7 +85,7 @@ static int SendSoakMessages(void)
 
             msg->data_length = rand() % (SOAK_MESSAGE_MAX_DATA_LENGTH - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
 
-            if (!NBN_GameClient_CanSendMessage(true))
+            if (!NBN_GameClient_CanSendMessage())
                 return 0;
 
             msg->id = next_msg_id++;

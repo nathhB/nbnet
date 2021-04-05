@@ -126,7 +126,7 @@ static void EchoReceivedSoakMessages(void)
 
             memcpy(echo_msg->data, msg->data, msg->data_length);
 
-            if (!NBN_GameServer_CanSendMessageTo(soak_client->connection, true))
+            if (!NBN_GameServer_CanSendMessageTo(soak_client->connection))
                 break;
 
             NBN_GameServer_SendMessageTo(soak_client->connection);
