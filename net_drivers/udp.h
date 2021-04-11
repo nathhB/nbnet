@@ -262,12 +262,25 @@ int NBN_Driver_GServ_RecvPackets(void)
             continue; /* not matching the protocol of the receiver */ 
 
         NBN_UDPConnection *udp_conn = GetUDPConnection(ip_address);
+
+        if (udp_conn == NULL)
+        {
+            NBN_LogError("Failed to retrieve udp connection");
+
+            return -1;
+        }
+
         NBN_Packet packet;
 
         if (NBN_Packet_InitRead(&packet, udp_conn->conn, buffer, bytes) < 0)
             continue; /* not a valid packet */
 
-        NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_PACKET_RECEIVED, &packet);
+        if (NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_PACKET_RECEIVED, &packet) < 0)
+        {
+            NBN_LogError("Failed to raise game server event");
+
+            return -1;
+        }
     }
 
     return 0;
@@ -321,7 +334,13 @@ static NBN_UDPConnection *GetUDPConnection(NBN_IPAddress address)
         NBN_LogDebug("New UDP connection (id: %d)", conn_id);
 
         NBN_List_PushBack(connections, udp_conn);
-        NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_CONNECTED, udp_conn->conn);
+
+        if (NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_CONNECTED, udp_conn->conn) < 0)
+        {
+            NBN_LogError("Failed to raise game server event");
+
+            return NULL;
+        }
     }
 
     return udp_conn;
