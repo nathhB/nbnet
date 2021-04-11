@@ -42,17 +42,6 @@
 
 typedef struct
 {
-    unsigned int alloc_count;
-    unsigned int dealloc_count;
-    unsigned int object_allocs[32];
-    unsigned int object_deallocs[32];
-    unsigned int created_message_count;
-    unsigned int destroyed_message_count;
-} NBN_MemoryReport;
-
-typedef struct
-{
-    NBN_MemoryReport report;
 } NBN_MemoryManager;
 
 typedef enum
@@ -66,10 +55,10 @@ typedef enum
 } NBN_ObjectType;
 
 void *NBN_MemoryManager_Alloc(size_t);
+void *NBN_MemoryManager_Realloc(void *, size_t);
 void *NBN_MemoryManager_AllocObject(NBN_ObjectType);
 void NBN_MemoryManager_Dealloc(void *);
 void NBN_MemoryManager_DeallocObject(NBN_ObjectType, void *);
-NBN_MemoryReport NBN_MemoryManager_GetReport(void);
 
 #pragma endregion
 
@@ -647,27 +636,13 @@ END_MESSAGE
 
 #define NBN_CHANNEL_BUFFER_SIZE 512
 #define NBN_CHANNEL_CHUNKS_BUFFER_SIZE 255
+#define NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE 2048
 
 /* Library reserved unreliable ordered channel */
 #define NBN_CHANNEL_RESERVED_UNRELIABLE (NBN_MAX_CHANNELS - 1)
 
 /* Library reserved reliable ordered channel */
 #define NBN_CHANNEL_RESERVED_RELIABLE (NBN_MAX_CHANNELS - 2)
-
-typedef enum
-{
-    /* Skip the message */
-    NBN_SKIP_MESSAGE,
-
-    /* Skip the message and remove it from the send queue */
-    NBN_DISCARD_MESSAGE,
-
-    /* Add the message to the outgoing packet and remove it from the send queue */
-    NBN_SEND_ONCE,
-
-    /* Add the message to the outgoing packet and leave it in the send queue */
-    NBN_SEND_REPEAT
-} NBN_OutgoingMessagePolicy;
 
 typedef enum
 {
@@ -691,6 +666,10 @@ struct __NBN_Channel
     unsigned int chunk_count;
     int last_received_chunk_id;
     double time;
+    uint8_t *write_chunk_buffer;
+    uint8_t *read_chunk_buffer;
+    unsigned int write_chunk_buffer_size;
+    unsigned int read_chunk_buffer_size;
     NBN_MessageSlot outgoing_message_buffer[NBN_CHANNEL_BUFFER_SIZE];
     NBN_MessageSlot recved_message_buffer[NBN_CHANNEL_BUFFER_SIZE];
     NBN_MessageChunk *chunks_buffer[NBN_CHANNEL_CHUNKS_BUFFER_SIZE];
@@ -705,7 +684,9 @@ struct __NBN_Channel
 void NBN_Channel_AddTime(NBN_Channel *, double);
 bool NBN_Channel_AddChunk(NBN_Channel *, NBN_Message *);
 int NBN_Channel_ReconstructMessageFromChunks(NBN_Channel *, NBN_Connection *, NBN_Message *);
-bool NBN_Channel_HasRoomForMessage(NBN_Channel *, unsigned int message_size);
+bool NBN_Channel_HasRoomForMessage(NBN_Channel *, unsigned int);
+void NBN_Channel_ResizeWriteChunkBuffer(NBN_Channel *, unsigned int);
+void NBN_Channel_ResizeReadChunkBuffer(NBN_Channel *, unsigned int);
 
 /*
    Unreliable ordered
@@ -1269,12 +1250,7 @@ void NBN_Driver_GServ_RaiseEvent(NBN_Driver_GServ_EventType, void *);
 
 #pragma region Memory management
 
-static NBN_MemoryManager mem_manager = {
-    .report = {
-        .alloc_count = 0,
-        .dealloc_count = 0,
-        .object_allocs = {0},
-        .object_deallocs = {0}}};
+static NBN_MemoryManager mem_manager;
 
 void *NBN_MemoryManager_Alloc(size_t size)
 {
@@ -1286,7 +1262,18 @@ void *NBN_MemoryManager_Alloc(size_t size)
         NBN_Abort();
     }
 
-    mem_manager.report.alloc_count++;
+    return ptr;
+}
+
+void *NBN_MemoryManager_Realloc(void *ptr, size_t size)
+{
+    ptr = NBN_Reallocator(ptr, size);
+
+    if (ptr == NULL)
+    {
+        NBN_LogError("Failed to reallocate memory (%ld bytes)", size);
+        NBN_Abort();
+    }
 
     return ptr;
 }
@@ -1327,40 +1314,17 @@ void *NBN_MemoryManager_AllocObject(NBN_ObjectType obj_type)
         NBN_Abort();
     }
 
-#ifdef NBN_DEBUG
-    mem_manager.report.object_allocs[obj_type]++;
-#endif
-
     return obj_ptr;
 }
 
 void NBN_MemoryManager_Dealloc(void *ptr)
 {
-#ifdef NBN_DEBUG
-    mem_manager.report.dealloc_count++;
-#endif
-
     NBN_Deallocator(ptr);
 }
 
 void NBN_MemoryManager_DeallocObject(NBN_ObjectType obj_type, void *obj_ptr)
 {
-#ifdef NBN_DEBUG
-    assert(mem_manager.report.object_allocs[obj_type] > 0);
-#else
-    (void)obj_type;
-#endif
-
     NBN_MemoryManager_Dealloc(obj_ptr);
-
-#ifdef NBN_DEBUG
-    mem_manager.report.object_deallocs[obj_type]++;
-#endif
-}
-
-NBN_MemoryReport NBN_MemoryManager_GetReport(void)
-{
-    return mem_manager.report;
 }
 
 #pragma endregion
@@ -1878,7 +1842,7 @@ int NBN_WriteStream_SerializeBool(NBN_WriteStream *write_stream, unsigned int *v
 
 int NBN_WriteStream_SerializePadding(NBN_WriteStream *write_stream)
 {
-    // if we are at the beginning of a new byte, no need to pad, no need to pad
+    // if we are at the beginning of a new byte, no need to pad
     if (write_stream->bit_writer.scratch_bits_count % 8 == 0) 
         return 0;
 
@@ -1942,7 +1906,7 @@ int NBN_MeasureStream_SerializeUint(
         NBN_MeasureStream *measure_stream, unsigned int *value, unsigned int min, unsigned int max)
 {
     assert(min <= max);
-    assert(*value >= min && *value <= max);
+    // assert(*value >= min && *value <= max);
 
     unsigned int number_of_bits = BITS_REQUIRED(min, max);
 
@@ -2522,6 +2486,8 @@ int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet 
     return 0;
 }
 
+static int NBN_Connection_SplitMessageIntoChunks(NBN_Connection *, NBN_Channel *, unsigned int);
+
 int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
 {
     assert(!connection->is_closed);
@@ -2547,62 +2513,16 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
         return 0;
     }
 
-    NBN_MeasureStream measure_stream;
+    NBN_MeasureStream m_stream;
 
-    NBN_MeasureStream_Init(&measure_stream);
+    NBN_MeasureStream_Init(&m_stream);
 
-    unsigned int message_size = (NBN_Message_Measure(outgoing_message, &measure_stream) - 1) / 8 + 1;
+    unsigned int message_size = (NBN_Message_Measure(outgoing_message, &m_stream) - 1) / 8 + 1;
 
     if (message_size > NBN_PACKET_MAX_USER_DATA_SIZE)
     {
-        uint8_t *message_bytes = NBN_MemoryManager_Alloc(message_size);
-        NBN_WriteStream write_stream;
-
-        NBN_WriteStream_Init(&write_stream, message_bytes, message_size);
-
-        if (NBN_Message_SerializeHeader(&outgoing_message->header, (NBN_Stream *)&write_stream) < 0)
+        if (NBN_Connection_SplitMessageIntoChunks(connection, channel, message_size) < 0)
             return NBN_ERROR;
-
-        if (NBN_Message_SerializeData(outgoing_message, (NBN_Stream *)&write_stream) < 0)
-            return NBN_ERROR;
-
-        unsigned int chunk_count = ((message_size - 1) / NBN_MESSAGE_CHUNK_SIZE) + 1;
-
-        NBN_LogTrace("Split message into %d chunks", chunk_count);
-
-        if (chunk_count > NBN_CHANNEL_CHUNKS_BUFFER_SIZE)
-        {
-            NBN_LogError("The maximum number of chunks is 255");
-
-            return NBN_ERROR;
-        }
-
-        for (unsigned int i = 0; i < chunk_count; i++)
-        {
-            void *chunk_start = message_bytes + (i * NBN_MESSAGE_CHUNK_SIZE);
-            unsigned int chunk_size = MIN(NBN_MESSAGE_CHUNK_SIZE, message_size - (i * NBN_MESSAGE_CHUNK_SIZE));
-
-            NBN_LogTrace("Enqueue chunk %d (size: %d)", i, chunk_size);
-
-            NBN_MessageChunk *chunk = NBN_Endpoint_CreateOutgoingMessage(
-                    connection->endpoint, NBN_MESSAGE_CHUNK_TYPE, outgoing_message->header.channel_id);
-
-            assert(chunk != NULL);
-
-            chunk->id = i;
-            chunk->total = chunk_count;
-
-            memcpy(chunk->data, chunk_start, chunk_size);
-
-            if (NBN_Connection_EnqueueOutgoingMessage(connection) < 0)
-            {
-                NBN_MemoryManager_Dealloc(message_bytes);
-
-                return NBN_ERROR;
-            }
-        }
-
-        NBN_MemoryManager_Dealloc(message_bytes);
     }
     else
     {
@@ -2613,6 +2533,65 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection)
 
             return NBN_ERROR;
         }
+    }
+
+    return 0;
+}
+
+static int NBN_Connection_SplitMessageIntoChunks(
+        NBN_Connection *connection, NBN_Channel *channel, unsigned int message_size)
+{
+    unsigned int chunk_count = ((message_size - 1) / NBN_MESSAGE_CHUNK_SIZE) + 1;
+
+    NBN_LogTrace("Split message into %d chunks (message size: %d)", chunk_count, message_size);
+
+    if (chunk_count > NBN_CHANNEL_CHUNKS_BUFFER_SIZE)
+    {
+        NBN_LogError("The maximum number of chunks is 255");
+
+        return NBN_ERROR;
+    }
+
+    if (message_size > channel->write_chunk_buffer_size)
+        NBN_Channel_ResizeWriteChunkBuffer(channel, message_size);
+
+    NBN_Message *outgoing_message = &connection->endpoint->outgoing_message;
+    NBN_MessageHeader msg_header = connection->endpoint->outgoing_message.header;
+    NBN_WriteStream w_stream;
+
+    NBN_WriteStream_Init(&w_stream, channel->write_chunk_buffer, message_size);
+
+    if (NBN_Message_SerializeHeader(&msg_header, (NBN_Stream *)&w_stream) < 0)
+        return NBN_ERROR;
+
+    if (NBN_Message_SerializeData(outgoing_message, (NBN_Stream *)&w_stream) < 0)
+        return NBN_ERROR;
+
+    for (unsigned int i = 0; i < chunk_count; i++)
+    {
+        NBN_MessageChunk *chunk = NBN_Endpoint_CreateOutgoingMessage(
+                connection->endpoint, NBN_MESSAGE_CHUNK_TYPE, msg_header.channel_id);
+
+        if (chunk == NULL)
+        {
+            NBN_LogError("Failed to create chunk %d", i);
+
+            return NBN_ERROR;
+        }
+
+        chunk->id = i;
+        chunk->total = chunk_count;
+
+        unsigned int offset = i * NBN_MESSAGE_CHUNK_SIZE;
+        unsigned int chunk_size = MIN(NBN_MESSAGE_CHUNK_SIZE, message_size - offset);
+
+        NBN_LogTrace("Enqueue chunk %d (size: %d) for message %d of type %d",
+                i, chunk_size, msg_header.id, msg_header.type);
+
+        memcpy(chunk->data, channel->write_chunk_buffer + offset, chunk_size);
+
+        if (NBN_Connection_EnqueueOutgoingMessage(connection) < 0)
+            return NBN_ERROR;
     }
 
     return 0;
@@ -3253,38 +3232,35 @@ bool NBN_Channel_AddChunk(NBN_Channel *channel, NBN_Message *chunk_msg)
 int NBN_Channel_ReconstructMessageFromChunks(
         NBN_Channel *channel, NBN_Connection *connection, NBN_Message *message)
 {
-    unsigned int size = channel->chunk_count * NBN_MESSAGE_CHUNK_SIZE;
-    uint8_t *data = NBN_MemoryManager_Alloc(size);
+    unsigned int message_size = channel->chunk_count * NBN_MESSAGE_CHUNK_SIZE;
+
+    if (message_size > channel->read_chunk_buffer_size)
+        NBN_Channel_ResizeReadChunkBuffer(channel, message_size);
+
+    NBN_LogTrace("Reconstructing message (chunk count: %d, size: %d) from channel %d",
+            channel->chunk_count, message_size, channel->id);
 
     for (unsigned int i = 0; i < channel->chunk_count; i++)
     {
         NBN_MessageChunk *chunk = channel->chunks_buffer[i];
 
-        memcpy(data + i * NBN_MESSAGE_CHUNK_SIZE, chunk->data, NBN_MESSAGE_CHUNK_SIZE);
+        memcpy(channel->read_chunk_buffer + i * NBN_MESSAGE_CHUNK_SIZE, chunk->data, NBN_MESSAGE_CHUNK_SIZE);
 
         NBN_MessageChunk_Destroy(chunk);
 
         channel->chunks_buffer[i] = NULL;
     }
 
-#ifdef NBN_DEBUG
-    mem_manager.report.destroyed_message_count += channel->chunk_count;
-#endif
-
     channel->chunk_count = 0;
 
     NBN_ReadStream r_stream;
 
-    NBN_ReadStream_Init(&r_stream, data, size);
+    NBN_ReadStream_Init(&r_stream, channel->read_chunk_buffer, message_size);
 
     if (NBN_Connection_ReadNextMessageFromStream(connection, &r_stream, message) < 0)
-    {
-        NBN_LogError("Failed to read message from stream");
+        return NBN_ERROR;
 
-        return -1;
-    }
-
-    NBN_MemoryManager_Dealloc(data);
+    NBN_LogTrace("Reconstructed message %d of type %d", message->header.id, message->header.type);
 
     return 0;
 }
@@ -3298,6 +3274,18 @@ bool NBN_Channel_HasRoomForMessage(NBN_Channel *channel, unsigned int message_si
     }
 
     return true;
+}
+
+void NBN_Channel_ResizeWriteChunkBuffer(NBN_Channel *channel, unsigned int size)
+{
+    channel->write_chunk_buffer = NBN_MemoryManager_Realloc(channel->write_chunk_buffer, size);
+    channel->write_chunk_buffer_size = size;
+}
+
+void NBN_Channel_ResizeReadChunkBuffer(NBN_Channel *channel, unsigned int size)
+{
+    channel->read_chunk_buffer = NBN_MemoryManager_Realloc(channel->read_chunk_buffer, size);
+    channel->read_chunk_buffer_size = size;
 }
 
 /* Unreliable ordered */
@@ -3317,6 +3305,10 @@ NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(uint8_t id)
     channel->base.GetNextRecvedMessage = NBN_UnreliableOrderedChannel_GetNextRecvedMessage;
     channel->base.GetNextOutgoingMessage = NBN_UnreliableOrderedChannel_GetNextOutgoingMessage;
     channel->base.OnOutgoingMessageAcked = NULL;
+    channel->base.read_chunk_buffer = NBN_MemoryManager_Alloc(NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE);
+    channel->base.write_chunk_buffer = NBN_MemoryManager_Alloc(NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE);
+    channel->base.read_chunk_buffer_size = NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE;
+    channel->base.write_chunk_buffer_size = NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE;
     channel->base.next_outgoing_message_id = 0;
     channel->base.next_recv_message_id = 0;
     channel->base.outgoing_message_count = 0;
@@ -3534,7 +3526,6 @@ static NBN_Message *NBN_ReliableOrderedChannel_GetNextOutgoingMessage(NBN_Channe
 
     uint16_t msg_id = reliable_ordered_channel->oldest_unacked_message_id;
 
-    NBN_LogDebug("OLDEST: %d | MAX: %d | NEXT: %d", msg_id, max_message_id, channel->next_outgoing_message_id);
     while (SEQUENCE_NUMBER_LT(msg_id, max_message_id))
     {
         NBN_MessageSlot *slot = &channel->outgoing_message_buffer[msg_id % NBN_CHANNEL_BUFFER_SIZE];
@@ -4085,8 +4076,6 @@ void NBN_GameClient_DestroyMessage(uint8_t msg_type, void *msg)
         msg_destructor(msg);
     else
         NBN_Deallocator(msg);
-
-    mem_manager.report.destroyed_message_count++;
 }
 
 bool NBN_GameClient_IsEncryptionEnabled(void)
@@ -4694,8 +4683,6 @@ void NBN_GameServer_DestroyMessage(uint8_t msg_type, void *msg)
         msg_destructor(msg);
     else
         NBN_Deallocator(msg);
-
-    mem_manager.report.destroyed_message_count++;
 }
 
 void NBN_GameServer_EnableEncryption(void)
