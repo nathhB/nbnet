@@ -322,8 +322,10 @@ static NBN_UDPConnection *GetUDPConnection(NBN_IPAddress address)
 {
     NBN_UDPConnection *udp_conn = FindClientConnectionByAddress(address);
 
-    if (udp_conn == NULL) /* this is a new connection */
+    if (udp_conn == NULL && NBN_GameServer_GetClientCount() < NBN_MAX_CLIENTS)
     {
+        /* this is a new connection */
+
         udp_conn = malloc(sizeof(NBN_UDPConnection));
         uint32_t conn_id = next_conn_id++;
 
