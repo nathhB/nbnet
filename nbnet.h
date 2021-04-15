@@ -60,34 +60,6 @@ void NBN_MemoryManager_DeallocObject(NBN_ObjectType, void *);
 
 #pragma endregion
 
-#pragma region NBN_List
-
-typedef struct NBN_ListNode
-{
-    void *data;
-    struct NBN_ListNode *next;
-    struct NBN_ListNode *prev;
-} NBN_ListNode;
-
-typedef struct NBN_List
-{
-    NBN_ListNode *head;
-    NBN_ListNode *tail;
-    unsigned int count;
-} NBN_List;
-
-typedef void (*NBN_List_FreeItemFunc)(void *);
-
-NBN_List *NBN_List_Create();
-void NBN_List_Destroy(NBN_List *, bool, NBN_List_FreeItemFunc);
-void NBN_List_PushBack(NBN_List *, void *);
-void *NBN_List_GetAt(NBN_List *, int);
-void *NBN_List_Remove(NBN_List *, void *);
-void *NBN_List_RemoveAt(NBN_List *, int);
-bool NBN_List_Includes(NBN_List *, void *);
-
-#pragma endregion /* NBN_List */
-
 #pragma region Serialization
 
 typedef uint32_t Word;
@@ -800,6 +772,7 @@ struct __NBN_Connection
     bool is_closed;
     struct __NBN_Endpoint *endpoint;
     NBN_ConnectionStats stats;
+    void *driver_data; /* Data attached to the connection by the underlying driver */
 
 #ifdef NBN_DEBUG
     /* Debug callbacks */
@@ -832,7 +805,7 @@ struct __NBN_Connection
     bool can_encrypt;
 };
 
-NBN_Connection *NBN_Connection_Create(uint32_t, uint32_t, NBN_Endpoint *);
+NBN_Connection *NBN_Connection_Create(uint32_t, uint32_t, void *, NBN_Endpoint *);
 void NBN_Connection_Destroy(NBN_Connection *);
 int NBN_Connection_ProcessReceivedPacket(NBN_Connection *, NBN_Packet *);
 int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *);
@@ -1056,7 +1029,7 @@ void NBN_Endpoint_Deinit(NBN_Endpoint *);
 void NBN_Endpoint_RegisterMessageBuilder(NBN_Endpoint *, NBN_MessageBuilder, uint8_t);
 void NBN_Endpoint_RegisterMessageSerializer(NBN_Endpoint *, NBN_MessageSerializer, uint8_t);
 void NBN_Endpoint_RegisterChannel(NBN_Endpoint *, NBN_ChannelType, uint8_t);
-NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *, int);
+NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *, uint32_t, void *);
 void* NBN_Endpoint_CreateOutgoingMessage(NBN_Endpoint *, uint8_t, uint8_t);
 
 #pragma endregion /* NBN_Endpoint */
@@ -1100,7 +1073,7 @@ void *NBN_GameClient_CreateReliableMessage(uint8_t);
 int NBN_GameClient_SendMessage(void);
 int NBN_GameClient_SendReliableByteArray(uint8_t *, unsigned int);
 int NBN_GameClient_SendUnreliableByteArray(uint8_t *, unsigned int);
-NBN_Connection *NBN_GameClient_CreateServerConnection(void);
+NBN_Connection *NBN_GameClient_CreateServerConnection(void *);
 NBN_MessageInfo NBN_GameClient_GetMessageInfo(void);
 NBN_ConnectionStats NBN_GameClient_GetStats(void);
 int NBN_GameClient_GetServerCloseCode(void);
@@ -1159,7 +1132,7 @@ void NBN_GameServer_Stop(void);
 void NBN_GameServer_AddTime(double);
 int NBN_GameServer_Poll(void);
 int NBN_GameServer_SendPackets(void);
-NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t);
+NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t, void *);
 int NBN_GameServer_CloseClient(NBN_Connection *);
 int NBN_GameServer_CloseClientWithCode(NBN_Connection *, int);
 void *NBN_GameServer_CreateMessage(uint8_t, uint8_t);
@@ -1218,8 +1191,8 @@ typedef enum
 int NBN_Driver_GServ_Start(uint32_t, uint16_t);
 void NBN_Driver_GServ_Stop(void);
 int NBN_Driver_GServ_RecvPackets(void);
-void NBN_Driver_GServ_DestroyClientConnection(uint32_t);
-int NBN_Driver_GServ_SendPacketTo(NBN_Packet *, uint32_t);
+void NBN_Driver_GServ_DestroyClientConnection(NBN_Connection *);
+int NBN_Driver_GServ_SendPacketTo(NBN_Packet *, NBN_Connection *);
 int NBN_Driver_GServ_RaiseEvent(NBN_Driver_GServ_EventType, void *);
 
 #pragma endregion /* Network driver */
@@ -1327,181 +1300,6 @@ void NBN_MemoryManager_DeallocObject(NBN_ObjectType obj_type, void *obj_ptr)
 }
 
 #pragma endregion
-
-#pragma region NBN_List
-
-static NBN_ListNode *NBN_List_CreateNode(void *);
-static void *NBN_List_RemoveNodeFromList(NBN_List *, NBN_ListNode *);
-
-NBN_List *NBN_List_Create()
-{
-    NBN_List *list = NBN_MemoryManager_Alloc(sizeof(NBN_List));
-
-    if (list == NULL)
-        return NULL;
-
-    list->head = NULL;
-    list->tail = NULL;
-    list->count = 0;
-
-    return list;
-}
-
-void NBN_List_Destroy(NBN_List *list, bool free_items, NBN_List_FreeItemFunc free_item_func)
-{
-    NBN_ListNode *current_node = list->head;
-
-    while (current_node != NULL)
-    {
-        NBN_ListNode *next_node = current_node->next;
-
-        if (free_items)
-        {
-            if (free_item_func)
-                free_item_func(current_node->data);
-            else
-                NBN_MemoryManager_Dealloc(current_node->data);
-        }
-
-        NBN_MemoryManager_Dealloc(current_node);
-
-        current_node = next_node;
-    }
-
-    NBN_MemoryManager_Dealloc(list);
-}
-
-void NBN_List_PushBack(NBN_List *list, void *data)
-{
-    NBN_ListNode *node = NBN_List_CreateNode(data);
-
-    if (list->count == 0)
-    {
-        node->next = NULL;
-        node->prev = NULL;
-
-        list->head = node;
-        list->tail = node;
-    }
-    else
-    {
-        node->next = NULL;
-        node->prev = list->tail;
-
-        list->tail->next = node;
-        list->tail = node;
-    }
-
-    list->count++;
-}
-
-void *NBN_List_GetAt(NBN_List *list, int index)
-{
-    NBN_ListNode *current_node = list->head;
-
-    for (int i = 0; current_node != NULL && i < index; i++)
-        current_node = current_node->next;
-
-    return current_node ? current_node->data : NULL;
-}
-
-void *NBN_List_Remove(NBN_List *list, void *data)
-{
-    NBN_ListNode *current_node = list->head;
-
-    for (int i = 0; current_node != NULL && current_node->data != data; i++)
-        current_node = current_node->next;
-
-    if (current_node != NULL)
-    {
-        return NBN_List_RemoveNodeFromList(list, current_node);
-    }
-
-    return NULL;
-}
-
-void *NBN_List_RemoveAt(NBN_List *list, int index)
-{
-    NBN_ListNode *current_node = list->head;
-
-    for (int i = 0; current_node != NULL && i < index; i++)
-        current_node = current_node->next;
-
-    if (current_node != NULL)
-    {
-        return NBN_List_RemoveNodeFromList(list, current_node);
-    }
-
-    return NULL;
-}
-
-bool NBN_List_Includes(NBN_List *list, void *data)
-{
-    NBN_ListNode *current_node = list->head;
-
-    for (int i = 0; current_node != NULL && current_node->data != data; i++)
-        current_node = current_node->next;
-
-    return current_node != NULL;
-}
-
-static NBN_ListNode *NBN_List_CreateNode(void *data)
-{
-    NBN_ListNode *node = NBN_MemoryManager_Alloc(sizeof(NBN_ListNode));
-
-    node->data = data;
-
-    return node;
-}
-
-static void *NBN_List_RemoveNodeFromList(NBN_List *list, NBN_ListNode *node)
-{
-    if (node == list->head)
-    {
-        NBN_ListNode *new_head = node->next;
-
-        if (new_head != NULL)
-            new_head->prev = NULL;
-        else
-            list->tail = NULL;
-
-        list->head = new_head;
-
-        void *data = node->data;
-
-        NBN_MemoryManager_Dealloc(node);
-        list->count--;
-
-        return data;
-    }
-
-    if (node == list->tail)
-    {
-        NBN_ListNode *new_tail = node->prev;
-
-        new_tail->next = NULL;
-        list->tail = new_tail;
-
-        void *data = node->data;
-
-        NBN_MemoryManager_Dealloc(node);
-        list->count--;
-
-        return data;
-    }
-
-    node->prev->next = node->next;
-    node->next->prev = node->prev;
-
-    void *data = node->data;
-
-    NBN_MemoryManager_Dealloc(node);
-    list->count--;
-
-    return data;
-}
-
-#pragma endregion /* NBN_List */
 
 #pragma region Serialization
 
@@ -2434,12 +2232,13 @@ static CSPRNG csprng_create();
 static CSPRNG csprng_destroy(CSPRNG object);
 static int csprng_get(CSPRNG, void*, unsigned long long);
 
-NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_Endpoint *endpoint)
+NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, void *driver_data, NBN_Endpoint *endpoint)
 {
     NBN_Connection *connection = NBN_MemoryManager_AllocObject(NBN_OBJ_CONNECTION);
 
     connection->id = id;
     connection->protocol_id = protocol_id;
+    connection->driver_data = driver_data;
     connection->endpoint = endpoint;
     connection->last_recv_packet_time = 0;
     connection->next_packet_seq_number = 1;
@@ -2918,7 +2717,7 @@ static int NBN_Connection_SendPacket(NBN_Connection *connection, NBN_Packet *pac
         if (connection->is_stale)
             return 0;
 
-        return NBN_Driver_GServ_SendPacketTo(packet, connection->id);
+        return NBN_Driver_GServ_SendPacketTo(packet, connection);
 #endif
     }
     else
@@ -3791,10 +3590,10 @@ void NBN_Endpoint_RegisterChannel(NBN_Endpoint *endpoint, NBN_ChannelType type, 
     endpoint->channels[id] = type;
 }
 
-NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *endpoint, int id)
+NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_t id, void *driver_data)
 {
     NBN_Connection *connection = NBN_Connection_Create(
-            id, NBN_Endpoint_BuildProtocolId(endpoint->config.protocol_name), endpoint);
+            id, NBN_Endpoint_BuildProtocolId(endpoint->config.protocol_name), driver_data, endpoint);
 
     for (int chan_id = 0; chan_id < NBN_MAX_CHANNELS; chan_id++)
     {
@@ -4055,9 +3854,9 @@ int NBN_GameClient_SendUnreliableByteArray(uint8_t *bytes, unsigned int length)
     return NBN_GameClient_SendMessage();
 }
 
-NBN_Connection *NBN_GameClient_CreateServerConnection(void)
+NBN_Connection *NBN_GameClient_CreateServerConnection(void *driver_data)
 {
-    NBN_Connection *server_connection = NBN_Endpoint_CreateConnection(&__game_client.endpoint, 0);
+    NBN_Connection *server_connection = NBN_Endpoint_CreateConnection(&__game_client.endpoint, 0, driver_data);
 
 #ifdef NBN_DEBUG
     server_connection->OnMessageAddedToRecvQueue = __game_client.endpoint.OnMessageAddedToRecvQueue;
@@ -4465,9 +4264,9 @@ int NBN_GameServer_SendPackets(void)
     return 0;
 }
 
-NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t id)
+NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t id, void *driver_data)
 {
-    NBN_Connection *client = NBN_Endpoint_CreateConnection(&__game_server.endpoint, id);
+    NBN_Connection *client = NBN_Endpoint_CreateConnection(&__game_server.endpoint, id, driver_data);
 
 #ifdef NBN_DEBUG
     client->OnMessageAddedToRecvQueue = __game_server.endpoint.OnMessageAddedToRecvQueue;
@@ -4846,7 +4645,7 @@ static void NBN_GameServer_RemoveClosedClientConnections(void)
                 NBN_LogDebug("Destroy closed client connection (ID: %d)", client->id);
 
                 NBN_GameServer_RemoveClient(client);
-                NBN_Driver_GServ_DestroyClientConnection(client->id);
+                NBN_Driver_GServ_DestroyClientConnection(client);
             }
         }
     }
@@ -5196,7 +4995,7 @@ static int NBN_PacketSimulator_SendPacket(
         if (receiver->is_stale)
             return 0;
 
-        return NBN_Driver_GServ_SendPacketTo(packet, receiver->id);
+        return NBN_Driver_GServ_SendPacketTo(packet, receiver);
     }
     else
     {
