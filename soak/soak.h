@@ -91,6 +91,9 @@ int Soak_MainLoop(int (*)(void));
 void Soak_Stop(void);
 SoakOptions Soak_GetOptions(void);
 void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *, NBN_Message *);
-void SoakMessage_Destroy(void *);
+unsigned int Soak_GetCreatedSoakMessageCount(void);
+unsigned int Soak_GetDestroyedSoakMessageCount(void);
+SoakMessage *SoakMessage_Create(void);
+void SoakMessage_Destroy(SoakMessage *);
 
 #endif // SOAK_H_INCLUDED

@@ -131,7 +131,7 @@ static void EchoReceivedSoakMessages(void)
 
             NBN_GameServer_SendMessageTo(soak_client->connection);
 
-            free(NBN_List_Remove(soak_client->echo_queue, msg));
+            SoakMessage_Destroy(NBN_List_Remove(soak_client->echo_queue, msg));
         }
     }
 }
@@ -158,19 +158,14 @@ static int HandleReceivedSoakMessage(SoakMessage *msg, NBN_Connection *sender)
     soak_client->recved_messages_count++;
     soak_client->last_recved_message_id = msg->id;
 
-    SoakMessage *dup_msg = malloc(sizeof(SoakMessage));
-
-    memcpy(dup_msg, msg, sizeof(SoakMessage));
-
-    NBN_List_PushBack(soak_client->echo_queue, dup_msg);
-    NBN_GameServer_DestroyMessage(SOAK_MESSAGE, msg);
+    NBN_List_PushBack(soak_client->echo_queue, msg);
 
     return 0;
 }
 
 static void HandleReceivedMessage(void)
 {
-    NBN_MessageInfo msg = NBN_GameServer_GetReceivedMessageInfo();
+    NBN_MessageInfo msg = NBN_GameServer_GetMessageInfo();
 
     switch (msg.type)
     {
@@ -211,6 +206,10 @@ static int Tick(void)
             case NBN_CLIENT_MESSAGE_RECEIVED:
                 HandleReceivedMessage();
                 break;
+
+            case NBN_CLIENT_MESSAGE_RECYCLED:
+                SoakMessage_Destroy(NBN_GameServer_GetMessageInfo().data);
+                break;
         }
     }
 
@@ -228,6 +227,9 @@ static int Tick(void)
 
 static void SigintHandler(int dummy)
 {
+    Soak_LogInfo("Soak messages created: %d", Soak_GetCreatedSoakMessageCount());
+    Soak_LogInfo("Soak messages destroyed: %d", Soak_GetDestroyedSoakMessageCount());
+
     Soak_Stop();
 }
 

@@ -41,14 +41,10 @@ static unsigned int last_sent_message_id = 0;
 static bool connected = false;
 static uint8_t **messages_data;
 
-static uint8_t *GenerateRandomBytes(unsigned int length)
+static void GenerateRandomBytes(uint8_t *data, unsigned int length)
 {
-    uint8_t *bytes = malloc(length);
-
     for (int i = 0; i < length; i++)
-        bytes[i] = rand() % 255 + 1;
-
-    return bytes;
+        data[i] = rand() % 255 + 1;
 }
 
 static int SendSoakMessages(void)
@@ -86,16 +82,18 @@ static int SendSoakMessages(void)
             msg->data_length = rand() % (SOAK_MESSAGE_MAX_DATA_LENGTH - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
 
             if (!NBN_GameClient_CanSendMessage())
+            {
+                SoakMessage_Destroy(msg);
+
                 return 0;
+            }
 
             msg->id = next_msg_id++;
 
-            uint8_t *bytes = GenerateRandomBytes(msg->data_length);
+            GenerateRandomBytes(msg->data, msg->data_length);
 
-            messages_data[msg->id - 1] = bytes;
-
-            memcpy(msg->data, bytes, msg->data_length);
-            memcpy(messages_data[msg->id - 1], bytes, msg->data_length);
+            messages_data[msg->id - 1] = malloc(msg->data_length);
+            memcpy(messages_data[msg->id - 1], msg->data, msg->data_length);
 
             Soak_LogInfo("Send soak message (id: %d, data length: %d)", msg->id, msg->data_length);
 
@@ -131,9 +129,9 @@ static int HandleReceivedSoakMessage(SoakMessage *msg)
     messages_data[msg->id - 1] = NULL;
     last_recved_message_id = msg->id;
 
-    Soak_LogInfo("Received soak message (%d/%d)", msg->id, Soak_GetOptions().message_count);
+    SoakMessage_Destroy(msg);
 
-    NBN_GameClient_DestroyMessage(SOAK_MESSAGE, msg);
+    Soak_LogInfo("Received soak message (%d/%d)", msg->id, Soak_GetOptions().message_count);
 
     if (last_recved_message_id == Soak_GetOptions().message_count)
     {
@@ -148,7 +146,7 @@ static int HandleReceivedSoakMessage(SoakMessage *msg)
 
 static int HandleReceivedMessage(void)
 {
-    NBN_MessageInfo msg = NBN_GameClient_GetReceivedMessageInfo();
+    NBN_MessageInfo msg = NBN_GameClient_GetMessageInfo();
 
     switch (msg.type)
     {
@@ -192,6 +190,10 @@ static int Tick(void)
             case NBN_MESSAGE_RECEIVED:
                 if (HandleReceivedMessage() < 0)
                     return -1;
+                break;
+
+            case NBN_MESSAGE_RECYCLED:
+                SoakMessage_Destroy(NBN_GameClient_GetMessageInfo().data);
                 break;
         }
     }
@@ -246,6 +248,9 @@ int main(int argc, char *argv[])
     } 
 
     int ret = Soak_MainLoop(Tick); 
+
+    Soak_LogInfo("Soak messages created: %d", Soak_GetCreatedSoakMessageCount());
+    Soak_LogInfo("Soak messages destroyed: %d", Soak_GetDestroyedSoakMessageCount());
 
     for (int i = 0; i < Soak_GetOptions().message_count; i++)
     {
