@@ -129,9 +129,9 @@ static int HandleReceivedSoakMessage(SoakMessage *msg)
     messages_data[msg->id - 1] = NULL;
     last_recved_message_id = msg->id;
 
-    SoakMessage_Destroy(msg);
-
     Soak_LogInfo("Received soak message (%d/%d)", msg->id, Soak_GetOptions().message_count);
+
+    SoakMessage_Destroy(msg);
 
     if (last_recved_message_id == Soak_GetOptions().message_count)
     {
