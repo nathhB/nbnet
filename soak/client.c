@@ -34,12 +34,19 @@
 #include "../net_drivers/udp.h"
 #endif
 
+typedef struct
+{
+    uint8_t data[SOAK_MESSAGE_MAX_DATA_LENGTH];
+    unsigned int length;
+    bool free;
+} Soak_MessageEntry;
+
 static unsigned int sent_message_count = 0;
 static unsigned int next_msg_id = 1;
 static unsigned int last_recved_message_id = 0;
 static unsigned int last_sent_message_id = 0;
 static bool connected = false;
-static uint8_t **messages_data;
+static Soak_MessageEntry messages[SOAK_CLIENT_MAX_PENDING_MESSAGES];
 
 static void GenerateRandomBytes(uint8_t *data, unsigned int length)
 {
@@ -92,8 +99,13 @@ static int SendSoakMessages(void)
 
             GenerateRandomBytes(msg->data, msg->data_length);
 
-            messages_data[msg->id - 1] = malloc(msg->data_length);
-            memcpy(messages_data[msg->id - 1], msg->data, msg->data_length);
+            Soak_MessageEntry *entry = &messages[(msg->id - 1) % SOAK_CLIENT_MAX_PENDING_MESSAGES];
+
+            assert(entry->free);
+
+            entry->length = msg->data_length;
+            entry->free = false;
+            memcpy(entry->data, msg->data, msg->data_length);
 
             Soak_LogInfo("Send soak message (id: %d, data length: %d)", msg->id, msg->data_length);
 
@@ -117,16 +129,19 @@ static int HandleReceivedSoakMessage(SoakMessage *msg)
         return -1;
     }
 
-    if (memcmp(msg->data, messages_data[msg->id - 1], msg->data_length) != 0)
+    Soak_MessageEntry *entry = &messages[(msg->id - 1) % SOAK_CLIENT_MAX_PENDING_MESSAGES];
+
+    assert(!entry->free);
+
+    if (memcmp(msg->data, entry->data, msg->data_length) != 0)
     {
         Soak_LogError("Received invalid data for message %d (data length: %d)", msg->id, msg->data_length);
 
         return -1;
     }
 
-    free(messages_data[msg->id - 1]);
+    entry->free = true;
 
-    messages_data[msg->id - 1] = NULL;
     last_recved_message_id = msg->id;
 
     Soak_LogInfo("Received soak message (%d/%d)", msg->id, Soak_GetOptions().message_count);
@@ -227,10 +242,8 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    messages_data = malloc(sizeof(uint8_t *) * Soak_GetOptions().message_count);
-
-    for (int i = 0; i < Soak_GetOptions().message_count; i++)
-        messages_data[i] = NULL;
+    for (int i = 0; i < SOAK_CLIENT_MAX_PENDING_MESSAGES; i++)
+        messages[i].free = true;
 
     NBN_GameClient_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, Soak_Debug_PrintAddedToRecvQueue);
 
@@ -251,14 +264,6 @@ int main(int argc, char *argv[])
 
     Soak_LogInfo("Soak messages created: %d", Soak_GetCreatedSoakMessageCount());
     Soak_LogInfo("Soak messages destroyed: %d", Soak_GetDestroyedSoakMessageCount());
-
-    for (int i = 0; i < Soak_GetOptions().message_count; i++)
-    {
-        if (messages_data[i])
-            free(messages_data[i]);
-    }
-
-    free(messages_data);
 
     NBN_GameClient_Stop();
     Soak_Deinit();

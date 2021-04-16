@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.0)
 project(soak C)
 
 add_executable(client client.c soak.c logging.c)
-add_executable(server server.c soak.c logging.c list.c)
+add_executable(server server.c soak.c logging.c)
 
 target_link_libraries(client pthread m)
 target_link_libraries(server pthread m)
