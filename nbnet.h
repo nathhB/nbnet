@@ -38,28 +38,6 @@
 #define NBN_Abort abort /* TODO: custom abort mechanism */
 #define NBN_ERROR -1
 
-#pragma region Memory management
-
-typedef struct
-{
-} NBN_MemoryManager;
-
-typedef enum
-{
-    NBN_OBJ_MESSAGE_CHUNK,
-    NBN_OBJ_CONNECTION,
-    NBN_OBJ_OUTGOING_MSG_INFO,
-    NBN_OBJ_ACCEPT_DATA
-} NBN_ObjectType;
-
-void *NBN_MemoryManager_Alloc(size_t);
-void *NBN_MemoryManager_Realloc(void *, size_t);
-void *NBN_MemoryManager_AllocObject(NBN_ObjectType);
-void NBN_MemoryManager_Dealloc(void *);
-void NBN_MemoryManager_DeallocObject(NBN_ObjectType, void *);
-
-#pragma endregion
-
 #pragma region Serialization
 
 typedef uint32_t Word;
@@ -1228,79 +1206,6 @@ int NBN_Driver_GServ_RaiseEvent(NBN_Driver_GServ_EventType, void *);
 
 #ifdef NBNET_IMPL
 
-#pragma region Memory management
-
-static NBN_MemoryManager mem_manager;
-
-void *NBN_MemoryManager_Alloc(size_t size)
-{
-    void *ptr = NBN_Allocator(size);
-
-    if (ptr == NULL)
-    {
-        NBN_LogError("Failed to allocate memory (%ld bytes)", size);
-        NBN_Abort();
-    }
-
-    return ptr;
-}
-
-void *NBN_MemoryManager_Realloc(void *ptr, size_t size)
-{
-    ptr = NBN_Reallocator(ptr, size);
-
-    if (ptr == NULL)
-    {
-        NBN_LogError("Failed to reallocate memory (%ld bytes)", size);
-        NBN_Abort();
-    }
-
-    return ptr;
-}
-
-void *NBN_MemoryManager_AllocObject(NBN_ObjectType obj_type)
-{
-    void *obj_ptr = NULL;
-
-    switch (obj_type)
-    {
-        case NBN_OBJ_MESSAGE_CHUNK:
-            obj_ptr = NBN_MemoryManager_Alloc(sizeof(NBN_MessageChunk));
-            break;
-
-        case NBN_OBJ_CONNECTION:
-            obj_ptr = NBN_MemoryManager_Alloc(sizeof(NBN_Connection));
-            break;
-
-        case NBN_OBJ_ACCEPT_DATA:
-            obj_ptr = NBN_MemoryManager_Alloc(sizeof(NBN_AcceptData));
-            break;
-
-        default:
-            break;
-    }
-
-    if (obj_ptr == NULL)
-    {
-        NBN_LogError("Tried to allocate an unknown object: %d", obj_type);
-        NBN_Abort();
-    }
-
-    return obj_ptr;
-}
-
-void NBN_MemoryManager_Dealloc(void *ptr)
-{
-    NBN_Deallocator(ptr);
-}
-
-void NBN_MemoryManager_DeallocObject(NBN_ObjectType obj_type, void *obj_ptr)
-{
-    NBN_MemoryManager_Dealloc(obj_ptr);
-}
-
-#pragma endregion
-
 #pragma region Serialization
 
 unsigned int GetRequiredNumberOfBitsFor(unsigned int v)
@@ -2134,12 +2039,12 @@ int NBN_Message_SerializeData(NBN_Message *message, NBN_Stream *stream)
 
 NBN_MessageChunk *NBN_MessageChunk_Create(void)
 {
-    return NBN_MemoryManager_AllocObject(NBN_OBJ_MESSAGE_CHUNK);
+    return NBN_Allocator(sizeof(NBN_MessageChunk));
 }
 
 void NBN_MessageChunk_Destroy(NBN_MessageChunk *chunk)
 {
-    NBN_MemoryManager_DeallocObject(NBN_OBJ_MESSAGE_CHUNK, chunk);
+    NBN_Deallocator(chunk);
 }
 
 int NBN_MessageChunk_Serialize(NBN_MessageChunk *chunk, NBN_Stream *stream)
@@ -2234,7 +2139,7 @@ static int csprng_get(CSPRNG, void*, unsigned long long);
 
 NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, void *driver_data, NBN_Endpoint *endpoint)
 {
-    NBN_Connection *connection = NBN_MemoryManager_AllocObject(NBN_OBJ_CONNECTION);
+    NBN_Connection *connection = NBN_Allocator(sizeof(NBN_Connection));
 
     connection->id = id;
     connection->protocol_id = protocol_id;
@@ -2269,7 +2174,7 @@ NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, void *d
         if (NBN_Connection_GenerateKeys(connection)  < 0)
         {
             NBN_LogError("Failed to generate keys");
-            NBN_MemoryManager_DeallocObject(NBN_OBJ_CONNECTION, connection);
+            NBN_Deallocator(connection);
 
             return NULL;
         }
@@ -2283,10 +2188,10 @@ void NBN_Connection_Destroy(NBN_Connection *connection)
     for (int i = 0; i < NBN_MAX_CHANNELS; i++)
     {
         if (connection->channels[i])
-            NBN_MemoryManager_Dealloc(connection->channels[i]);
+            NBN_Deallocator(connection->channels[i]);
     }
 
-    NBN_MemoryManager_DeallocObject(NBN_OBJ_CONNECTION, connection);
+    NBN_Deallocator(connection);
 }
 
 int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet *packet)
@@ -2504,8 +2409,8 @@ int NBN_Connection_CreateChannel(NBN_Connection *connection, NBN_ChannelType typ
 
     channel->id = id;
     channel->connection = connection;
-    channel->read_chunk_buffer = NBN_MemoryManager_Alloc(NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE);
-    channel->write_chunk_buffer = NBN_MemoryManager_Alloc(NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE);
+    channel->read_chunk_buffer = NBN_Allocator(NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE);
+    channel->write_chunk_buffer = NBN_Allocator(NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE);
     channel->read_chunk_buffer_size = NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE;
     channel->write_chunk_buffer_size = NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE;
     channel->next_outgoing_message_id = 0;
@@ -2976,7 +2881,7 @@ static void NBN_Connection_StartEncryption(NBN_Connection *connection)
 
 NBN_AcceptData *NBN_AcceptData_Create(void)
 {
-    NBN_AcceptData *accept_data = NBN_MemoryManager_AllocObject(NBN_OBJ_ACCEPT_DATA);
+    NBN_AcceptData *accept_data = NBN_Allocator(sizeof(NBN_AcceptData));
 
     memset(accept_data->buffer, 0, NBN_ACCEPT_DATA_MAX_SIZE);
     NBN_WriteStream_Init(&accept_data->write_stream, accept_data->buffer, NBN_ACCEPT_DATA_MAX_SIZE);
@@ -2986,7 +2891,7 @@ NBN_AcceptData *NBN_AcceptData_Create(void)
 
 NBN_AcceptData *NBN_AcceptData_Read(uint8_t *buffer)
 {
-    NBN_AcceptData *accept_data = NBN_MemoryManager_AllocObject(NBN_OBJ_ACCEPT_DATA);
+    NBN_AcceptData *accept_data = NBN_Allocator(sizeof(NBN_AcceptData));
 
     memcpy(accept_data->buffer, buffer, NBN_ACCEPT_DATA_MAX_SIZE);
     NBN_ReadStream_Init(&accept_data->read_stream, accept_data->buffer, NBN_ACCEPT_DATA_MAX_SIZE);
@@ -2996,7 +2901,7 @@ NBN_AcceptData *NBN_AcceptData_Read(uint8_t *buffer)
 
 void NBN_AcceptData_Destroy(NBN_AcceptData *accept_data)
 {
-    NBN_MemoryManager_DeallocObject(NBN_OBJ_ACCEPT_DATA, accept_data);
+    NBN_Deallocator(accept_data);
 }
 
 void NBN_AcceptData_WriteUInt(NBN_AcceptData *accept_data, unsigned int v)
@@ -3168,13 +3073,13 @@ bool NBN_Channel_HasRoomForMessage(NBN_Channel *channel, unsigned int message_si
 
 void NBN_Channel_ResizeWriteChunkBuffer(NBN_Channel *channel, unsigned int size)
 {
-    channel->write_chunk_buffer = NBN_MemoryManager_Realloc(channel->write_chunk_buffer, size);
+    channel->write_chunk_buffer = NBN_Reallocator(channel->write_chunk_buffer, size);
     channel->write_chunk_buffer_size = size;
 }
 
 void NBN_Channel_ResizeReadChunkBuffer(NBN_Channel *channel, unsigned int size)
 {
-    channel->read_chunk_buffer = NBN_MemoryManager_Realloc(channel->read_chunk_buffer, size);
+    channel->read_chunk_buffer = NBN_Reallocator(channel->read_chunk_buffer, size);
     channel->read_chunk_buffer_size = size;
 }
 
@@ -3187,7 +3092,7 @@ static NBN_Message *NBN_UnreliableOrderedChannel_GetNextOutgoingMessage(NBN_Chan
 
 NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(uint8_t id)
 {
-    NBN_UnreliableOrderedChannel *channel = NBN_MemoryManager_Alloc(sizeof(NBN_UnreliableOrderedChannel));
+    NBN_UnreliableOrderedChannel *channel = NBN_Allocator(sizeof(NBN_UnreliableOrderedChannel));
 
     channel->base.AddReceivedMessage = NBN_UnreliableOrderedChannel_AddReceivedMessage;
     channel->base.AddOutgoingMessage = NBN_UnreliableOrderedChannel_AddOutgoingMessage;
@@ -3273,7 +3178,7 @@ static int NBN_ReliableOrderedChannel_OnOutgoingMessageAcked(NBN_Channel *, uint
 
 NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(uint8_t id)
 {
-    NBN_ReliableOrderedChannel *channel = NBN_MemoryManager_Alloc(sizeof(NBN_ReliableOrderedChannel));
+    NBN_ReliableOrderedChannel *channel = NBN_Allocator(sizeof(NBN_ReliableOrderedChannel));
 
     channel->base.AddReceivedMessage = NBN_ReliableOrderedChannel_AddReceivedMessage;
     channel->base.AddOutgoingMessage = NBN_ReliableOrderedChannel_AddOutgoingMessage;
