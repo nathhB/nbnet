@@ -200,7 +200,10 @@ void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *conn, NBN_Message *msg)
 {
     if (msg->header.type == NBN_MESSAGE_CHUNK_TYPE)
     {
-        Soak_LogDebug("Soak message chunk added to recv queue");
+        NBN_MessageChunk *chunk = msg->data;
+
+        Soak_LogDebug("Soak message chunk added to recv queue (chunk id: %d, chunk total: %d)",
+                chunk->id, chunk->total);
     }
     else
     {

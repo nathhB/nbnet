@@ -117,10 +117,6 @@ static void EchoReceivedSoakMessages(void)
 
             assert(msg);
 
-            soak_client->echo_queue.messages[soak_client->echo_queue.head] = NULL;
-            soak_client->echo_queue.head = (soak_client->echo_queue.head + 1) % SOAK_CLIENT_MAX_PENDING_MESSAGES;
-            soak_client->echo_queue.count--;
-
             SoakMessage *echo_msg = NBN_GameServer_CreateReliableMessage(SOAK_MESSAGE);
 
             if (echo_msg == NULL)
@@ -139,9 +135,15 @@ static void EchoReceivedSoakMessages(void)
             if (!NBN_GameServer_CanSendMessageTo(soak_client->connection))
                 break;
 
+            Soak_LogInfo("Send soak message %d's echo to client %d", echo_msg->id, soak_client->connection->id);
+
             NBN_GameServer_SendMessageTo(soak_client->connection);
 
             SoakMessage_Destroy(msg);
+
+            soak_client->echo_queue.messages[soak_client->echo_queue.head] = NULL;
+            soak_client->echo_queue.head = (soak_client->echo_queue.head + 1) % SOAK_CLIENT_MAX_PENDING_MESSAGES;
+            soak_client->echo_queue.count--;
         }
     }
 }
@@ -223,6 +225,8 @@ static int Tick(void)
                 break;
 
             case NBN_CLIENT_MESSAGE_RECYCLED:
+                assert(NBN_GameServer_GetMessageInfo().type == SOAK_MESSAGE);
+
                 SoakMessage_Destroy(NBN_GameServer_GetMessageInfo().data);
                 break;
         }
