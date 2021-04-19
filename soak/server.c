@@ -133,7 +133,11 @@ static void EchoReceivedSoakMessages(void)
             memcpy(echo_msg->data, msg->data, msg->data_length);
 
             if (!NBN_GameServer_CanSendMessageTo(soak_client->connection))
+            {
+                SoakMessage_Destroy(echo_msg);
+
                 break;
+            }
 
             Soak_LogInfo("Send soak message %d's echo to client %d", echo_msg->id, soak_client->connection->id);
 
