@@ -262,14 +262,17 @@ int main(int argc, char *argv[])
 #endif
     } 
 
-    int ret = Soak_MainLoop(Tick); 
-
-    Soak_LogInfo("Soak messages created: %d", Soak_GetCreatedSoakMessageCount());
-    Soak_LogInfo("Soak messages destroyed: %d", Soak_GetDestroyedSoakMessageCount());
+    int ret = Soak_MainLoop(Tick);
 
     NBN_GameClient_Stop();
-    Soak_Deinit();
     NBN_GameClient_Deinit();
+
+    Soak_LogInfo("Outgoing soak messages created: %d", Soak_GetCreatedOutgoingSoakMessageCount());
+    Soak_LogInfo("Outgoing soak messages destroyed: %d", Soak_GetDestroyedOutgoingSoakMessageCount());
+    Soak_LogInfo("Incoming soak messages created: %d", Soak_GetCreatedIncomingSoakMessageCount());
+    Soak_LogInfo("Incoming soak messages destroyed: %d", Soak_GetDestroyedIncomingSoakMessageCount());
+
+    Soak_Deinit();
 
 #ifdef __EMSCRIPTEN__
     emscripten_force_exit(ret);

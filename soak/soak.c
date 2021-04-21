@@ -45,8 +45,10 @@ enum
 
 static bool running = true;
 static SoakOptions soak_options = {0};
-static unsigned int created_soak_message_count = 0;
-static unsigned int destroyed_soak_message_count = 0;
+static unsigned int created_outgoing_soak_message_count = 0;
+static unsigned int created_incoming_soak_message_count = 0;
+static unsigned int destroyed_outgoing_soak_message_count = 0;
+static unsigned int destroyed_incoming_soak_message_count = 0;
 
 int Soak_Init(int argc, char *argv[])
 {
@@ -214,26 +216,61 @@ void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *conn, NBN_Message *msg)
     }
 }
 
-unsigned int Soak_GetCreatedSoakMessageCount(void)
+unsigned int Soak_GetCreatedOutgoingSoakMessageCount(void)
 {
-    return created_soak_message_count;
+    return created_outgoing_soak_message_count;
 }
 
-unsigned int Soak_GetDestroyedSoakMessageCount(void)
+unsigned int Soak_GetDestroyedOutgoingSoakMessageCount(void)
 {
-    return destroyed_soak_message_count;
+    return destroyed_outgoing_soak_message_count;
 }
 
-SoakMessage *SoakMessage_Create(void)
+unsigned int Soak_GetCreatedIncomingSoakMessageCount(void)
 {
-    created_soak_message_count++;
+    return created_incoming_soak_message_count;
+}
 
-    return malloc(sizeof(SoakMessage));
+unsigned int Soak_GetDestroyedIncomingSoakMessageCount(void)
+{
+    return destroyed_incoming_soak_message_count;
+}
+
+SoakMessage *SoakMessage_Create(bool outgoing)
+{
+    SoakMessage *msg = malloc(sizeof(SoakMessage));
+
+    msg->outgoing = outgoing;
+
+    if (msg->outgoing)
+        created_outgoing_soak_message_count++;
+    else
+        created_incoming_soak_message_count++;
+
+    return msg;
 }
 
 void SoakMessage_Destroy(SoakMessage *msg)
 {
-    destroyed_soak_message_count++;
+    if (msg->outgoing)
+        destroyed_outgoing_soak_message_count++;
+    else
+        destroyed_incoming_soak_message_count++;
 
     free(msg);
+}
+
+void *Soak_Alloc(size_t size, unsigned int tag)
+{
+    return malloc(size);
+}
+
+void *Soak_Realloc(void *ptr, size_t size, unsigned int tag)
+{
+    return realloc(ptr, size);
+}
+
+void Soak_Dealloc(void *ptr, unsigned int tag)
+{
+    free(ptr);
 }

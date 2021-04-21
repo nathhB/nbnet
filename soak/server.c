@@ -116,6 +116,7 @@ static void EchoReceivedSoakMessages(void)
             SoakMessage *msg = soak_client->echo_queue.messages[soak_client->echo_queue.head];
 
             assert(msg);
+            assert(!msg->outgoing);
 
             SoakMessage *echo_msg = NBN_GameServer_CreateReliableMessage(SOAK_MESSAGE);
 
@@ -250,8 +251,10 @@ static int Tick(void)
 
 static void SigintHandler(int dummy)
 {
-    Soak_LogInfo("Soak messages created: %d", Soak_GetCreatedSoakMessageCount());
-    Soak_LogInfo("Soak messages destroyed: %d", Soak_GetDestroyedSoakMessageCount());
+    Soak_LogInfo("Outgoing soak messages created: %d", Soak_GetCreatedOutgoingSoakMessageCount());
+    Soak_LogInfo("Outgoing soak messages destroyed: %d", Soak_GetDestroyedOutgoingSoakMessageCount());
+    Soak_LogInfo("Incoming soak messages created: %d", Soak_GetCreatedIncomingSoakMessageCount());
+    Soak_LogInfo("Incoming soak messages destroyed: %d", Soak_GetDestroyedIncomingSoakMessageCount());
 
     Soak_Stop();
 }

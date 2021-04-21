@@ -37,9 +37,13 @@
 
 #include "logging.h"
 
-#define NBN_Allocator malloc
-#define NBN_Reallocator realloc
-#define NBN_Deallocator free
+void *Soak_Alloc(size_t, unsigned int);
+void *Soak_Realloc(void *, size_t, unsigned int);
+void Soak_Dealloc(void *, unsigned int);
+
+#define NBN_Allocator Soak_Alloc
+#define NBN_Reallocator Soak_Realloc
+#define NBN_Deallocator Soak_Dealloc
 
 /* nbnet logging */
 #define NBN_LogInfo Soak_LogInfo
@@ -75,6 +79,7 @@ typedef struct
 {
     uint32_t id;
     unsigned int data_length;
+    bool outgoing;
     uint8_t data[SOAK_MESSAGE_MAX_DATA_LENGTH];
 } SoakMessage;
 
@@ -91,9 +96,11 @@ int Soak_MainLoop(int (*)(void));
 void Soak_Stop(void);
 SoakOptions Soak_GetOptions(void);
 void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *, NBN_Message *);
-unsigned int Soak_GetCreatedSoakMessageCount(void);
-unsigned int Soak_GetDestroyedSoakMessageCount(void);
-SoakMessage *SoakMessage_Create(void);
+unsigned int Soak_GetCreatedOutgoingSoakMessageCount(void);
+unsigned int Soak_GetDestroyedOutgoingSoakMessageCount(void);
+unsigned int Soak_GetCreatedIncomingSoakMessageCount(void);
+unsigned int Soak_GetDestroyedIncomingSoakMessageCount(void);
+SoakMessage *SoakMessage_Create(bool);
 void SoakMessage_Destroy(SoakMessage *);
 
 #endif // SOAK_H_INCLUDED
