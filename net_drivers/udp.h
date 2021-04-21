@@ -286,7 +286,11 @@ void NBN_Driver_GServ_DestroyClientConnection(NBN_Connection *connection)
 
     NBN_LogDebug("Destroy UDP connection %d", connection->id);
 
+#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
+    NBN_Deallocator(connection->driver_data, NBN_MEMORY_UDP_DRIVER);
+#else
     NBN_Deallocator(connection->driver_data);
+#endif
 }
 
 int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, NBN_Connection *connection)
@@ -317,7 +321,11 @@ static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress addre
     {
         /* this is a new connection */
 
+#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
+        NBN_UDPConnection *udp_conn = NBN_Allocator(sizeof(NBN_UDPConnection), NBN_MEMORY_UDP_DRIVER);
+#else
         NBN_UDPConnection *udp_conn = NBN_Allocator(sizeof(NBN_UDPConnection));
+#endif
 
         udp_conn->id = next_conn_id++;
         udp_conn->address = address;
@@ -366,7 +374,11 @@ static int ResolveIpAddress(const char *, uint16_t, NBN_IPAddress *);
 
 int NBN_Driver_GCli_Start(uint32_t proto_id, const char *host, uint16_t port)
 {
+#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
+    NBN_UDPConnection *udp_conn = NBN_Allocator(sizeof(NBN_Connection), NBN_MEMORY_UDP_DRIVER);
+#else
     NBN_UDPConnection *udp_conn = NBN_Allocator(sizeof(NBN_Connection));
+#endif
 
     protocol_id = proto_id;
 
