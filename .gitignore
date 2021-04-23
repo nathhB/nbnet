@@ -3,6 +3,8 @@ tests/build
 examples/raylib/build
 examples/echo/client
 examples/echo/server
+examples/echo_bytes/client
+examples/echo_bytes/server
 examples/echo/*.js
 examples/echo/*.wasm
 .vscode
