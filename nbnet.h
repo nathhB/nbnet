@@ -695,7 +695,7 @@ typedef struct
     unsigned int next_outgoing_message_slot;
 } NBN_UnreliableOrderedChannel;
 
-NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(uint8_t);
+NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(void);
 
 /*
    Reliable ordered
@@ -711,7 +711,7 @@ typedef struct
     bool ack_buffer[NBN_CHANNEL_BUFFER_SIZE];
 } NBN_ReliableOrderedChannel;
 
-NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(uint8_t);
+NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(void);
 
 #pragma endregion /* NBN_Channel */
 
@@ -2472,11 +2472,11 @@ int NBN_Connection_CreateChannel(NBN_Connection *connection, NBN_ChannelType typ
     switch (type)
     {
         case NBN_CHANNEL_UNRELIABLE_ORDERED:
-            channel = (NBN_Channel *)NBN_UnreliableOrderedChannel_Create(id);
+            channel = (NBN_Channel *)NBN_UnreliableOrderedChannel_Create();
             break;
 
         case NBN_CHANNEL_RELIABLE_ORDERED:
-            channel = (NBN_Channel *)NBN_ReliableOrderedChannel_Create(id);
+            channel = (NBN_Channel *)NBN_ReliableOrderedChannel_Create();
             break;
 
         default:
@@ -2607,7 +2607,7 @@ static int NBN_Connection_AckPacket(NBN_Connection *connection, uint16_t ack_pac
 
         NBN_Connection_UpdateAveragePing(connection, connection->time - packet_entry->send_time);
 
-        for (int i = 0; i < packet_entry->messages_count; i++)
+        for (unsigned int i = 0; i < packet_entry->messages_count; i++)
         {
             NBN_MessageEntry *msg_entry = &packet_entry->messages[i];
             NBN_Channel *channel = connection->channels[msg_entry->channel_id];
@@ -3218,7 +3218,7 @@ int NBN_Channel_ReconstructMessageFromChunks(
 
 bool NBN_Channel_HasRoomForMessage(NBN_Channel *channel, unsigned int message_size)
 {
-    for (int i = 0; i < message_size; i++)
+    for (unsigned int i = 0; i < message_size; i++)
     {
         if (!channel->outgoing_message_buffer[(channel->next_outgoing_message_id + i) % NBN_CHANNEL_BUFFER_SIZE].free)
             return false;
@@ -3273,7 +3273,7 @@ static bool NBN_UnreliableOrderedChannel_AddOutgoingMessage(NBN_Channel *, NBN_M
 static NBN_Message *NBN_UnreliableOrderedChannel_GetNextRecvedMessage(NBN_Channel *);
 static NBN_Message *NBN_UnreliableOrderedChannel_GetNextOutgoingMessage(NBN_Channel *);
 
-NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(uint8_t id)
+NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(void)
 {
 #if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
     NBN_UnreliableOrderedChannel *channel = NBN_Allocator(
@@ -3376,7 +3376,7 @@ static NBN_Message *NBN_ReliableOrderedChannel_GetNextRecvedMessage(NBN_Channel 
 static NBN_Message *NBN_ReliableOrderedChannel_GetNextOutgoingMessage(NBN_Channel *);
 static int NBN_ReliableOrderedChannel_OnOutgoingMessageAcked(NBN_Channel *, uint16_t);
 
-NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(uint8_t id)
+NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(void)
 {
 #if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
     NBN_ReliableOrderedChannel *channel = NBN_Allocator(
@@ -3480,7 +3480,6 @@ static bool NBN_ReliableOrderedChannel_AddOutgoingMessage(NBN_Channel *channel, 
 
 static NBN_Message *NBN_ReliableOrderedChannel_GetNextRecvedMessage(NBN_Channel *channel)
 {
-    NBN_ReliableOrderedChannel *reliable_ordered_channel = (NBN_ReliableOrderedChannel *)channel; 
     NBN_MessageSlot *slot = &channel->recved_message_buffer[channel->next_recv_message_id % NBN_CHANNEL_BUFFER_SIZE];
 
     if (!slot->free && slot->message.header.id == channel->next_recv_message_id)
