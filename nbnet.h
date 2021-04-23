@@ -645,6 +645,7 @@ typedef struct
 struct __NBN_Channel
 {
     uint8_t id;
+    NBN_ChannelType type;
     NBN_Connection *connection;
     uint16_t next_outgoing_message_id;
     uint16_t next_recv_message_id;
@@ -691,6 +692,7 @@ typedef struct
 {
     NBN_Channel base;
     uint16_t last_received_message_id;
+    unsigned int next_outgoing_message_slot;
 } NBN_UnreliableOrderedChannel;
 
 NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(uint8_t);
@@ -862,7 +864,7 @@ typedef struct
 
     union
     {
-        NBN_Message message;
+        NBN_MessageInfo message_info;
         NBN_Connection *connection;
     } data;
 } NBN_Event;
@@ -2434,6 +2436,9 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
                 packet_entry->messages[packet_entry->messages_count++] = (NBN_MessageEntry){
                     .id = message->header.id, .channel_id = channel->id
                 };
+
+                if (channel->type == NBN_CHANNEL_UNRELIABLE_ORDERED)
+                    channel->OnMessageRecyclable(connection, message);
             }
         }
     }
@@ -2481,6 +2486,7 @@ int NBN_Connection_CreateChannel(NBN_Connection *connection, NBN_ChannelType typ
     }
 
     channel->id = id;
+    channel->type = type;
     channel->connection = connection;
 
 #if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
@@ -2858,7 +2864,7 @@ static int NBN_Connection_RecycleMessage(NBN_Connection *connection, NBN_Message
 
     NBN_Event ev = {
         connection->endpoint->is_server ? NBN_CLIENT_MESSAGE_RECYCLED : NBN_MESSAGE_RECYCLED,
-        .data = { .message = *message }
+        .data = { .message_info = (NBN_MessageInfo){ message->header.type, message->data, message->sender } }
     };
 
     if (!NBN_EventQueue_Enqueue(&connection->endpoint->event_queue, ev))
@@ -3283,6 +3289,7 @@ NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(uint8_t id)
     channel->base.OnOutgoingMessageAcked = NULL;
 
     channel->last_received_message_id = 0;
+    channel->next_outgoing_message_slot = 0;
 
     return channel;
 }
@@ -3346,8 +3353,19 @@ static NBN_Message *NBN_UnreliableOrderedChannel_GetNextRecvedMessage(NBN_Channe
 
 static NBN_Message *NBN_UnreliableOrderedChannel_GetNextOutgoingMessage(NBN_Channel *channel)
 {
-    // TODO
-    return NULL;
+    NBN_UnreliableOrderedChannel *unreliable_ordered_channel = (NBN_UnreliableOrderedChannel *)channel;
+
+    NBN_MessageSlot *slot = &channel->recved_message_buffer[unreliable_ordered_channel->next_outgoing_message_slot];
+
+    if (slot->free)
+        return NULL;
+
+    slot->free = true;
+
+    unreliable_ordered_channel->next_outgoing_message_slot =
+        (unreliable_ordered_channel->next_outgoing_message_slot + 1) % NBN_CHANNEL_BUFFER_SIZE;
+
+    return &slot->message;
 }
 
 /* Reliable ordered */
@@ -3986,11 +4004,7 @@ NBN_MessageInfo NBN_GameClient_GetMessageInfo(void)
 {
     assert(client_last_event.type == NBN_MESSAGE_RECEIVED || client_last_event.type == NBN_MESSAGE_RECYCLED);
 
-    return (NBN_MessageInfo){
-        client_last_event.data.message.header.type,
-        client_last_event.data.message.data,
-        NULL
-    };
+    return client_last_event.data.message_info;
 }
 
 NBN_ConnectionStats NBN_GameClient_GetStats(void)
@@ -4061,19 +4075,21 @@ static int NBN_GameClient_ProcessReceivedMessage(NBN_Message *message, NBN_Conne
         if (!NBN_Channel_AddChunk(channel, message))
             return 0;
 
-        if (NBN_Channel_ReconstructMessageFromChunks(channel, server_connection, &ev.data.message) < 0)
+        NBN_Message complete_message;
+
+        if (NBN_Channel_ReconstructMessageFromChunks(channel, server_connection, &complete_message) < 0)
         {
             NBN_LogError("Failed to reconstruct message from chunks");
 
             return -1;
         }
+
+        ev.data.message_info = (NBN_MessageInfo){ complete_message.header.type, complete_message.data, NULL };
     }
     else
     {
-        ev.data.message = *message;
+        ev.data.message_info = (NBN_MessageInfo){ message->header.type, message->data, NULL };
     }
-
-    ev.data.message.sender = server_connection;
 
     if (!NBN_EventQueue_Enqueue(&__game_client.endpoint.event_queue, ev))
         return NBN_ERROR;
@@ -4095,23 +4111,23 @@ static int NBN_GameClient_HandleEvent(void)
 
 static int NBN_GameClient_HandleMessageReceivedEvent(void)
 {
-    NBN_Message *message = &client_last_event.data.message;
+    NBN_MessageInfo message_info = client_last_event.data.message_info;
 
     int ret = NBN_NO_EVENT;
 
-    if (message->header.type == NBN_CLIENT_CLOSED_MESSAGE_TYPE)
+    if (message_info.type == NBN_CLIENT_CLOSED_MESSAGE_TYPE)
     {
-        client_closed_code = ((NBN_ClientClosedMessage *)message->data)->code;
+        client_closed_code = ((NBN_ClientClosedMessage *)message_info.data)->code;
 
         ret = NBN_DISCONNECTED;
     }
-    else if (message->header.type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE)
+    else if (message_info.type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE)
     {
-        __game_client.accept_data = NBN_AcceptData_Read(((NBN_ClientAcceptedMessage *)message->data)->data); 
+        __game_client.accept_data = NBN_AcceptData_Read(((NBN_ClientAcceptedMessage *)message_info.data)->data); 
 
         ret = NBN_CONNECTED;
     }
-    else if (NBN_GameClient_IsEncryptionEnabled() && message->header.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
+    else if (NBN_GameClient_IsEncryptionEnabled() && message_info.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
     {
         NBN_LogDebug("Received server's crypto public info");
 
@@ -4121,7 +4137,7 @@ static int NBN_GameClient_HandleMessageReceivedEvent(void)
             NBN_Abort();
         }
 
-        NBN_PublicCryptoInfoMessage *pub_crypto_msg = message->data;
+        NBN_PublicCryptoInfoMessage *pub_crypto_msg = message_info.data;
 
         if (NBN_Connection_BuildSharedKey(&__game_client.server_connection->keys1, pub_crypto_msg->pub_key1) < 0)
         {
@@ -4146,7 +4162,7 @@ static int NBN_GameClient_HandleMessageReceivedEvent(void)
         memcpy(__game_client.server_connection->aes_iv, pub_crypto_msg->aes_iv, AES_BLOCKLEN);
         __game_client.server_connection->can_decrypt = true;
     }
-    else if (NBN_GameClient_IsEncryptionEnabled() && message->header.type == NBN_START_ENCRYPT_MESSAGE_TYPE)
+    else if (NBN_GameClient_IsEncryptionEnabled() && message_info.type == NBN_START_ENCRYPT_MESSAGE_TYPE)
     {
         NBN_GameClient_StartEncryption();
     }
@@ -4238,7 +4254,6 @@ static int NBN_GameServer_CloseStaleClientConnections(void);
 static void NBN_GameServer_RemoveClosedClientConnections(void);
 static int NBN_GameServer_HandleEvent(void);
 static int NBN_GameServer_HandleMessageReceivedEvent(void);
-static void NBN_GameServer_ReleaseLastEvent(void); // TODO: remove?
 
 static int NBN_GameServer_SendCryptoPublicInfoTo(NBN_Connection *);
 static int NBN_GameServer_StartEncryption(NBN_Connection *);
@@ -4595,11 +4610,7 @@ NBN_MessageInfo NBN_GameServer_GetMessageInfo(void)
             server_last_event.type == NBN_CLIENT_MESSAGE_RECYCLED
           );
 
-    return (NBN_MessageInfo){
-        server_last_event.data.message.header.type,
-        server_last_event.data.message.data,
-        server_last_event.data.message.sender
-    };
+    return server_last_event.data.message_info;
 }
 
 NBN_GameServerStats NBN_GameServer_GetStats(void)
@@ -4702,19 +4713,23 @@ static int NBN_GameServer_ProcessReceivedMessage(NBN_Message *message, NBN_Conne
         if (!NBN_Channel_AddChunk(channel, message))
             return 0;
 
-        if (NBN_Channel_ReconstructMessageFromChunks(channel, client, &ev.data.message) < 0)
+        NBN_Message complete_message;
+
+        if (NBN_Channel_ReconstructMessageFromChunks(channel, client, &complete_message) < 0)
         {
             NBN_LogError("Failed to reconstruct message from chunks");
 
             return -1;
         }
+
+        ev.data.message_info = (NBN_MessageInfo){
+            complete_message.header.type, complete_message.data, client
+        };
     }
     else
     {
-        ev.data.message = *message;
+        ev.data.message_info = (NBN_MessageInfo){ message->header.type, message->data, client };
     }
-
-    ev.data.message.sender = client;
 
     if (!NBN_EventQueue_Enqueue(&__game_server.endpoint.event_queue, ev))
         return NBN_ERROR;
@@ -4753,8 +4768,6 @@ static void NBN_GameServer_RemoveClosedClientConnections(void)
         {
             NBN_Connection *client = __game_server.clients[i];
 
-            // TODO: REDO
-            // if (client->is_closed && (client->send_queue->count == 0 || client->is_stale))
             if (client->is_closed && client->is_stale)
             {
                 NBN_LogDebug("Destroy closed client connection (ID: %d)", client->id);
@@ -4782,49 +4795,47 @@ static int NBN_GameServer_HandleEvent(void)
 
 static int NBN_GameServer_HandleMessageReceivedEvent(void)
 {
-    NBN_Message *message = &server_last_event.data.message;
-
-    assert(message);
+    NBN_MessageInfo message_info = server_last_event.data.message_info;
 
     int ret = NBN_CLIENT_MESSAGE_RECEIVED;
 
-    if (NBN_GameServer_IsEncryptionEnabled() && message->header.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
+    if (NBN_GameServer_IsEncryptionEnabled() && message_info.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
     {
         ret = NBN_NO_EVENT;
 
-        NBN_PublicCryptoInfoMessage *pub_crypto_msg = message->data;
+        NBN_PublicCryptoInfoMessage *pub_crypto_msg = message_info.data;
 
-        if (NBN_Connection_BuildSharedKey(&message->sender->keys1, pub_crypto_msg->pub_key1) < 0)
+        if (NBN_Connection_BuildSharedKey(&message_info.sender->keys1, pub_crypto_msg->pub_key1) < 0)
         {
             NBN_LogError("Failed to build shared key (first key)");
             NBN_Abort();
         }
 
-        if (NBN_Connection_BuildSharedKey(&message->sender->keys2, pub_crypto_msg->pub_key2) < 0)
+        if (NBN_Connection_BuildSharedKey(&message_info.sender->keys2, pub_crypto_msg->pub_key2) < 0)
         {
             NBN_LogError("Failed to build shared key (second key)");
             NBN_Abort();
         }
 
-        if (NBN_Connection_BuildSharedKey(&message->sender->keys3, pub_crypto_msg->pub_key3) < 0)
+        if (NBN_Connection_BuildSharedKey(&message_info.sender->keys3, pub_crypto_msg->pub_key3) < 0)
         {
             NBN_LogError("Failed to build shared key (third key)");
             NBN_Abort();
         }
 
-        NBN_LogDebug("Received public crypto info of client %d", message->sender->id);
+        NBN_LogDebug("Received public crypto info of client %d", message_info.sender->id);
 
-        if (NBN_GameServer_StartEncryption(message->sender))
+        if (NBN_GameServer_StartEncryption(message_info.sender))
         {
-            NBN_LogError("Failed to start encryption of client %d", message->sender->id);
+            NBN_LogError("Failed to start encryption of client %d", message_info.sender->id);
             NBN_Abort();
         }
 
-        message->sender->can_decrypt = true;
+        message_info.sender->can_decrypt = true;
 
         if (!NBN_EventQueue_Enqueue(
                 &__game_server.endpoint.event_queue,
-                (NBN_Event){ NBN_NEW_CONNECTION, .data = { .connection = message->sender } }))
+                (NBN_Event){ NBN_NEW_CONNECTION, .data = { .connection = message_info.sender } }))
             return NBN_ERROR;
     }
 
