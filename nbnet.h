@@ -3317,7 +3317,7 @@ static bool NBN_UnreliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel
 static bool NBN_UnreliableOrderedChannel_AddOutgoingMessage(NBN_Channel *channel, NBN_Message *message)
 {
     uint16_t msg_id = channel->next_outgoing_message_id;
-    NBN_MessageSlot *slot = &channel->recved_message_buffer[msg_id % NBN_CHANNEL_BUFFER_SIZE];
+    NBN_MessageSlot *slot = &channel->outgoing_message_buffer[msg_id % NBN_CHANNEL_BUFFER_SIZE];
 
     memcpy(&slot->message, message, sizeof(NBN_Message));
 
@@ -3355,7 +3355,7 @@ static NBN_Message *NBN_UnreliableOrderedChannel_GetNextOutgoingMessage(NBN_Chan
 {
     NBN_UnreliableOrderedChannel *unreliable_ordered_channel = (NBN_UnreliableOrderedChannel *)channel;
 
-    NBN_MessageSlot *slot = &channel->recved_message_buffer[unreliable_ordered_channel->next_outgoing_message_slot];
+    NBN_MessageSlot *slot = &channel->outgoing_message_buffer[unreliable_ordered_channel->next_outgoing_message_slot];
 
     if (slot->free)
         return NULL;
@@ -3486,8 +3486,6 @@ static NBN_Message *NBN_ReliableOrderedChannel_GetNextRecvedMessage(NBN_Channel 
     {
         slot->free = true;
         channel->next_recv_message_id++;
-
-        NBN_LogDebug("Updated next recv message id: %d", channel->next_recv_message_id);
 
         return &slot->message;
     }
