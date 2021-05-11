@@ -228,12 +228,6 @@ static int Tick(void)
             case NBN_CLIENT_MESSAGE_RECEIVED:
                 HandleReceivedMessage();
                 break;
-
-            case NBN_CLIENT_MESSAGE_RECYCLED:
-                assert(NBN_GameServer_GetMessageInfo().type == SOAK_MESSAGE);
-
-                SoakMessage_Destroy(NBN_GameServer_GetMessageInfo().data);
-                break;
         }
     }
 

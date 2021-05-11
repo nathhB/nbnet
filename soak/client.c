@@ -68,14 +68,11 @@ static int SendSoakMessages(void)
         if (pending_message_count >= SOAK_CLIENT_MAX_PENDING_MESSAGES)
             return 0;
 
-        // max number of messages to send on this tick
-        unsigned int max_send_message_count = MIN(
+        // number of messages to send on this tick
+        unsigned int send_message_count = MIN(
                 SOAK_CLIENT_MAX_PENDING_MESSAGES - pending_message_count, remaining_message_count);
 
-        // number of messages to send on this tick
-        unsigned int count = (rand() % max_send_message_count) + 1;
-
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < send_message_count; i++)
         {
             SoakMessage *msg = NBN_GameClient_CreateReliableMessage(SOAK_MESSAGE);
 
@@ -86,7 +83,18 @@ static int SendSoakMessages(void)
                 return -1;
             }
 
-            msg->data_length = rand() % (SOAK_MESSAGE_MAX_DATA_LENGTH - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
+            int percent = rand() % 100 + 1;
+
+            if (percent <= SOAK_BIG_MESSAGE_PERCENTAGE)
+            {
+                // chunked
+                msg->data_length = rand() % (SOAK_MESSAGE_MAX_DATA_LENGTH - 1024) + 1024;
+            }
+            else
+            {
+                // not chuncked
+                msg->data_length = rand() % (200 - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
+            }
 
             if (!NBN_GameClient_CanSendMessage())
             {
@@ -205,12 +213,6 @@ static int Tick(void)
             case NBN_MESSAGE_RECEIVED:
                 if (HandleReceivedMessage() < 0)
                     return -1;
-                break;
-
-            case NBN_MESSAGE_RECYCLED:
-                assert(NBN_GameClient_GetMessageInfo().type == SOAK_MESSAGE);
-
-                SoakMessage_Destroy(NBN_GameClient_GetMessageInfo().data);
                 break;
         }
     }
