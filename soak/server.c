@@ -118,7 +118,7 @@ static void EchoReceivedSoakMessages(void)
             assert(msg);
             assert(!msg->outgoing);
 
-            SoakMessage *echo_msg = NBN_GameServer_CreateReliableMessage(SOAK_MESSAGE);
+            SoakMessage *echo_msg = SoakMessage_Create(true);
 
             if (echo_msg == NULL)
             {
@@ -133,7 +133,7 @@ static void EchoReceivedSoakMessages(void)
 
             memcpy(echo_msg->data, msg->data, msg->data_length);
 
-            if (!NBN_GameServer_CanSendMessageTo(soak_client->connection))
+            if (!NBN_GameServer_CanSendReliableMessageTo(soak_client->connection, SOAK_MESSAGE, echo_msg))
             {
                 SoakMessage_Destroy(echo_msg);
 
@@ -142,7 +142,7 @@ static void EchoReceivedSoakMessages(void)
 
             Soak_LogInfo("Send soak message %d's echo to client %d", echo_msg->id, soak_client->connection->id);
 
-            NBN_GameServer_SendMessageTo(soak_client->connection);
+            NBN_GameServer_SendReliableMessageTo(soak_client->connection, SOAK_MESSAGE, echo_msg);
 
             SoakMessage_Destroy(msg);
 

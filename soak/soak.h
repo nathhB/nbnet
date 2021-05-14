@@ -59,7 +59,7 @@ void Soak_Dealloc(void *, unsigned int);
 #define SOAK_TICK_DT (1.0 / SOAK_TICK_RATE)
 #define SOAK_MESSAGE_MIN_DATA_LENGTH 50
 #define SOAK_MESSAGE_MAX_DATA_LENGTH 4096
-#define SOAK_BIG_MESSAGE_PERCENTAGE 20
+#define SOAK_BIG_MESSAGE_PERCENTAGE 0
 #define SOAK_MESSAGE 0
 #define SOAK_SEED time(NULL)
 #define SOAK_DONE 1

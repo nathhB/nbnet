@@ -1,5 +1,4 @@
 /*
-
    Copyright (C) 2020 BIAGINI Nathan
 
    This software is provided 'as-is', without any express or implied
@@ -74,7 +73,7 @@ static int SendSoakMessages(void)
 
         for (int i = 0; i < send_message_count; i++)
         {
-            SoakMessage *msg = NBN_GameClient_CreateReliableMessage(SOAK_MESSAGE);
+            SoakMessage *msg = SoakMessage_Create(true);
 
             if (msg == NULL)
             {
@@ -93,10 +92,10 @@ static int SendSoakMessages(void)
             else
             {
                 // not chuncked
-                msg->data_length = rand() % (200 - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
+                msg->data_length = rand() % (500 - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
             }
 
-            if (!NBN_GameClient_CanSendMessage())
+            if (!NBN_GameClient_CanSendReliableMessage(SOAK_MESSAGE, msg))
             {
                 SoakMessage_Destroy(msg);
 
@@ -117,7 +116,7 @@ static int SendSoakMessages(void)
 
             Soak_LogInfo("Send soak message (id: %d, data length: %d)", msg->id, msg->data_length);
 
-            if (NBN_GameClient_SendMessage() < 0)
+            if (NBN_GameClient_SendReliableMessage(SOAK_MESSAGE, msg) < 0)
                 return -1;
 
             sent_message_count++;
@@ -152,7 +151,7 @@ static int HandleReceivedSoakMessage(SoakMessage *msg)
 
     last_recved_message_id = msg->id;
 
-    Soak_LogInfo("Received soak message (%d/%d)", msg->id, Soak_GetOptions().message_count);
+    Soak_LogInfo("Received soak message (length: %d, %d/%d)", msg->data_length, msg->id, Soak_GetOptions().message_count);
 
     SoakMessage_Destroy(msg);
 
