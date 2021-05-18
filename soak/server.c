@@ -133,13 +133,6 @@ static void EchoReceivedSoakMessages(void)
 
             memcpy(echo_msg->data, msg->data, msg->data_length);
 
-            if (!NBN_GameServer_CanSendReliableMessageTo(soak_client->connection, SOAK_MESSAGE, echo_msg))
-            {
-                SoakMessage_Destroy(echo_msg);
-
-                break;
-            }
-
             Soak_LogInfo("Send soak message %d's echo to client %d", echo_msg->id, soak_client->connection->id);
 
             NBN_GameServer_SendReliableMessageTo(soak_client->connection, SOAK_MESSAGE, echo_msg);
@@ -170,13 +163,15 @@ static int HandleReceivedSoakMessage(SoakMessage *msg, NBN_Connection *sender)
         return -1;
     }
 
-    Soak_LogInfo("Received message %d from client %d", msg->id, sender->id);
+    Soak_LogInfo("Received soak message %d from client %d", msg->id, sender->id);
 
     soak_client->recved_messages_count++;
     soak_client->last_recved_message_id = msg->id;
 
     assert(soak_client->echo_queue.count < SOAK_CLIENT_MAX_PENDING_MESSAGES);
     assert(!soak_client->echo_queue.messages[soak_client->echo_queue.tail]);
+
+    Soak_LogInfo("Enqueue soak message %d's echo for client", msg->id, soak_client->connection->id);
 
     soak_client->echo_queue.messages[soak_client->echo_queue.tail] = msg;
     soak_client->echo_queue.tail = (soak_client->echo_queue.tail + 1) % SOAK_CLIENT_MAX_PENDING_MESSAGES;

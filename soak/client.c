@@ -63,13 +63,22 @@ static int SendSoakMessages(void)
         // number of messages sent but not yet acked
         unsigned int pending_message_count = last_sent_message_id - last_recved_message_id;
 
+        Soak_LogInfo("Compute number of soak messages to send (sent: %d, pending: %d, remaining: %d)",
+                sent_message_count, pending_message_count, remaining_message_count);
+
         // don't send anything on this tick if we have reached the max number of unacked messages
         if (pending_message_count >= SOAK_CLIENT_MAX_PENDING_MESSAGES)
+        {
+            Soak_LogInfo("Max number of pending messages has been reached, not sending anything this tick");
+
             return 0;
+        }
 
         // number of messages to send on this tick
         unsigned int send_message_count = MIN(
                 SOAK_CLIENT_MAX_PENDING_MESSAGES - pending_message_count, remaining_message_count);
+
+        Soak_LogInfo("Will send %d soak messages this tick", send_message_count);
 
         for (int i = 0; i < send_message_count; i++)
         {
@@ -92,14 +101,7 @@ static int SendSoakMessages(void)
             else
             {
                 // not chuncked
-                msg->data_length = rand() % (500 - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
-            }
-
-            if (!NBN_GameClient_CanSendReliableMessage(SOAK_MESSAGE, msg))
-            {
-                SoakMessage_Destroy(msg);
-
-                return 0;
+                msg->data_length = rand() % (200 - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
             }
 
             msg->id = next_msg_id++;
