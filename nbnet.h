@@ -611,7 +611,7 @@ NBN_StartEncryptMessage *NBN_StartEncryptMessage_Create(void);
 
 #pragma region NBN_Channel
 
-#define NBN_CHANNEL_BUFFER_SIZE 512
+#define NBN_CHANNEL_BUFFER_SIZE 1024
 #define NBN_CHANNEL_CHUNKS_BUFFER_SIZE 255
 #define NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE 2048
 
@@ -665,7 +665,6 @@ void NBN_Channel_Destroy(NBN_Channel *);
 void NBN_Channel_AddTime(NBN_Channel *, double);
 bool NBN_Channel_AddChunk(NBN_Channel *, NBN_Message *);
 int NBN_Channel_ReconstructMessageFromChunks(NBN_Channel *, NBN_Connection *, NBN_Message *);
-bool NBN_Channel_HasRoomForMessage(NBN_Channel *, unsigned int);
 void NBN_Channel_ResizeWriteChunkBuffer(NBN_Channel *, unsigned int);
 void NBN_Channel_ResizeReadChunkBuffer(NBN_Channel *, unsigned int);
 
@@ -719,6 +718,12 @@ typedef struct
 #pragma region NBN_Connection
 
 #define NBN_MAX_PACKET_ENTRIES 1024
+
+/* Maximum number of packets that can be sent in a single flush
+ *
+ * IMPORTANT: do not increase this, it will break packet acks
+*/
+#define NBN_CONNECTION_MAX_SENT_PACKET_COUNT 32
 
 /* Number of seconds before the connection is considered stale and get closed */
 #define NBN_CONNECTION_STALE_TIME_THRESHOLD 3
@@ -876,7 +881,7 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *);
 
 #pragma region Packet simulator
 
-#define NBN_PACKET_SIMULATOR_QUEUE_CAPACITY 512
+#define NBN_PACKET_SIMULATOR_QUEUE_CAPACITY 2048
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
 
@@ -1085,8 +1090,6 @@ void NBN_GameClient_EnableEncryption(void);
 #ifdef NBN_DEBUG
 
 void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
-bool NBN_GameClient_CanSendMessage(uint8_t, uint8_t, void *);
-bool NBN_GameClient_CanSendReliableMessage(uint8_t, void *);
 
 #endif /* NBN_DEBUG */
 
@@ -1152,8 +1155,6 @@ bool NBN_GameServer_IsEncryptionEnabled(void);
 #ifdef NBN_DEBUG
 
 void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
-bool NBN_GameServer_CanSendMessageTo(NBN_Connection *, uint8_t, uint8_t, void *);
-bool NBN_GameServer_CanSendReliableMessageTo(NBN_Connection *, uint8_t, void *);
 
 #endif /* NBN_DEBUG */
 
@@ -2279,6 +2280,7 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
 
     NBN_Packet packet;
     NBN_PacketEntry *packet_entry;
+    unsigned int sent_packet_count = 0;
     unsigned int sent_bytes = 0;
 
     NBN_Connection_InitOutgoingPacket(connection, &packet, &packet_entry);
@@ -2290,9 +2292,14 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
         if (channel == NULL)
             continue;
 
+        NBN_LogTrace("Flushing channel %d (message count: %d)", channel->id, channel->outgoing_message_count);
+
         NBN_Message *message;
 
-        while ((message = channel->GetNextOutgoingMessage(channel)) != NULL)
+        while (
+                sent_packet_count < NBN_CONNECTION_MAX_SENT_PACKET_COUNT &&
+                (message = channel->GetNextOutgoingMessage(channel)) != NULL
+              )
         {
             bool message_sent = false;
             int ret = NBN_Packet_WriteMessage(&packet, message);
@@ -2310,6 +2317,7 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
                     return NBN_ERROR;
                 }
 
+                sent_packet_count++;
                 sent_bytes += packet.size;
 
                 NBN_Connection_InitOutgoingPacket(connection, &packet, &packet_entry);
@@ -2357,6 +2365,7 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
     }
 
     sent_bytes += packet.size;
+    sent_packet_count++;
 
     double t = connection->time - connection->last_flush_time;
 
@@ -3039,19 +3048,6 @@ int NBN_Channel_ReconstructMessageFromChunks(
     return 0;
 }
 
-bool NBN_Channel_HasRoomForMessage(NBN_Channel *channel, unsigned int message_size)
-{
-    unsigned int chunk_count = ((message_size - 1) / NBN_MESSAGE_CHUNK_SIZE) + 1;
-
-    for (unsigned int i = 0; i < chunk_count; i++)
-    {
-        if (!channel->outgoing_message_buffer[(channel->next_outgoing_message_id + i) % NBN_CHANNEL_BUFFER_SIZE].free)
-            return false;
-    }
-
-    return true;
-}
-
 void NBN_Channel_ResizeWriteChunkBuffer(NBN_Channel *channel, unsigned int size)
 {
 #if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
@@ -3248,18 +3244,6 @@ static bool NBN_ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, 
     memcpy(&slot->message, message, sizeof(NBN_Message));
 
     slot->free = false;
-
-    /*if (slot->free || slot->message.header.id != message->header.id)
-    {
-        if (!slot->free)
-            NBN_Connection_RecycleMessage(channel->connection, slot->message.header.type, slot->message.data);
-
-        memcpy(&slot->message, message, sizeof(NBN_Message));
-
-        slot->free = false;
-
-        return true;
-    }*/
 
     return true;
 }
@@ -3945,30 +3929,6 @@ void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, 
     }
 }
 
-bool NBN_GameClient_CanSendMessage(uint8_t msg_type, uint8_t channel_id, void *msg_data)
-{
-    NBN_Channel *channel = __game_client.server_connection->channels[channel_id];
-
-    assert(channel != NULL);
-
-    NBN_Message message;
-
-    NBN_Endpoint_InitOutgoingMessage(&__game_client.endpoint, &message, msg_type, channel_id, msg_data);
-
-    NBN_MeasureStream measure_stream;
-
-    NBN_MeasureStream_Init(&measure_stream);
-
-    unsigned int message_size = (NBN_Message_Measure(&message, &measure_stream) - 1) / 8 + 1;
-
-    return NBN_Channel_HasRoomForMessage(channel, message_size);
-}
-
-bool NBN_GameClient_CanSendReliableMessage(uint8_t msg_type, void *msg_data)
-{
-    return NBN_GameClient_CanSendMessage(msg_type, NBN_CHANNEL_RESERVED_RELIABLE, msg_data);
-}
-
 #endif /* NBN_DEBUG */
 
 static int NBN_GameClient_ProcessReceivedMessage(NBN_Message *message, NBN_Connection *server_connection)
@@ -4538,30 +4498,6 @@ void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, 
             __game_server.endpoint.OnMessageAddedToRecvQueue = cb;
             break;
     }
-}
-
-bool NBN_GameServer_CanSendMessageTo(NBN_Connection *client, uint8_t msg_type, uint8_t channel_id, void *msg_data)
-{
-    NBN_Channel *channel = client->channels[channel_id];
-
-    assert(channel != NULL);
-
-    NBN_Message message;
-
-    NBN_Endpoint_InitOutgoingMessage(&__game_server.endpoint, &message, msg_type, channel_id, msg_data);
-
-    NBN_MeasureStream measure_stream;
-
-    NBN_MeasureStream_Init(&measure_stream);
-
-    unsigned int message_size = (NBN_Message_Measure(&message, &measure_stream) - 1) / 8 + 1;
-
-    return NBN_Channel_HasRoomForMessage(channel, message_size);
-}
-
-bool NBN_GameServer_CanSendReliableMessageTo(NBN_Connection *client, uint8_t msg_type, void *msg_data)
-{
-    return NBN_GameServer_CanSendMessageTo(client, msg_type, NBN_CHANNEL_RESERVED_RELIABLE, msg_data);
 }
 
 #endif /* NBN_DEBUG */
