@@ -99,7 +99,9 @@ mergeInto(LibraryManager.library, {
 
     __js_game_client_start: function(hostPtr, port) {
         return Asyncify.handleSleep(function (wakeUp) {
-            this.gameClient.connect(UTF8ToString(hostPtr), port).then(() => {
+			// Ignore the ip and just connect to the web host address
+			console.log("Connecting to " + location.hostname);
+            this.gameClient.connect(location.hostname, port).then(() => {
                 wakeUp(0)
             }).catch(_ => {
                 wakeUp(-1)
