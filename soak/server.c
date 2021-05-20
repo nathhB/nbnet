@@ -108,7 +108,7 @@ static void EchoReceivedSoakMessages(void)
     {
         SoakClient *soak_client = clients[i];
 
-        if (soak_client == NULL)
+        if (soak_client == NULL || soak_client->connection->is_closed)
             continue;
 
         while (soak_client->echo_queue.count > 0)
@@ -135,7 +135,8 @@ static void EchoReceivedSoakMessages(void)
 
             Soak_LogInfo("Send soak message %d's echo to client %d", echo_msg->id, soak_client->connection->id);
 
-            NBN_GameServer_SendReliableMessageTo(soak_client->connection, SOAK_MESSAGE, echo_msg);
+            if (NBN_GameServer_SendReliableMessageTo(soak_client->connection, SOAK_MESSAGE, echo_msg) < 0)
+                break;
 
             SoakMessage_Destroy(msg);
 
@@ -150,7 +151,7 @@ static int HandleReceivedSoakMessage(SoakMessage *msg, NBN_Connection *sender)
 {
     SoakClient *soak_client = clients[sender->id];
 
-    if (soak_client->error)
+    if (!soak_client || soak_client->error)
         return 0;
 
     if (msg->id != soak_client->last_recved_message_id + 1)

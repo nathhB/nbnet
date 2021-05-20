@@ -59,12 +59,12 @@ void Soak_Dealloc(void *, unsigned int);
 #define SOAK_TICK_DT (1.0 / SOAK_TICK_RATE)
 #define SOAK_MESSAGE_MIN_DATA_LENGTH 50
 #define SOAK_MESSAGE_MAX_DATA_LENGTH 4096
-#define SOAK_BIG_MESSAGE_PERCENTAGE 33
+#define SOAK_BIG_MESSAGE_PERCENTAGE 30
 #define SOAK_MESSAGE 0
 #define SOAK_SEED time(NULL)
 #define SOAK_DONE 1
 #define SOAK_MAX_CLIENTS 32
-#define SOAK_CLIENT_MAX_PENDING_MESSAGES 100 // max number of unacked messages at a time
+#define SOAK_CLIENT_MAX_PENDING_MESSAGES 50 // max number of unacked messages at a time
 #define SOAK_SERVER_FULL_CODE 42
 
 typedef struct
