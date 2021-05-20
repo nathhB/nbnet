@@ -259,7 +259,6 @@ typedef struct
 {
     NBN_MessageHeader header;
     NBN_Connection *sender;
-    NBN_MessageSerializer serializer;
     double last_send_time;
     void *data;
 } NBN_Message;
@@ -275,8 +274,8 @@ typedef struct
 } NBN_MessageInfo;
 
 int NBN_Message_SerializeHeader(NBN_MessageHeader *, NBN_Stream *);
-int NBN_Message_Measure(NBN_Message *, NBN_MeasureStream *);
-int NBN_Message_SerializeData(NBN_Message *, NBN_Stream *);
+int NBN_Message_Measure(NBN_Message *, NBN_MeasureStream *, NBN_MessageSerializer);
+int NBN_Message_SerializeData(NBN_Message *, NBN_Stream *, NBN_MessageSerializer);
 
 #pragma endregion /* NBN_Message */
 
@@ -476,7 +475,7 @@ typedef struct
 void NBN_Packet_InitWrite(NBN_Packet *, uint32_t, uint16_t, uint16_t, uint32_t);
 int NBN_Packet_InitRead(NBN_Packet *, NBN_Connection *, uint8_t[NBN_PACKET_MAX_SIZE], unsigned int);
 uint32_t NBN_Packet_ReadProtocolId(uint8_t[NBN_PACKET_MAX_SIZE], unsigned int);
-int NBN_Packet_WriteMessage(NBN_Packet *, NBN_Message *);
+int NBN_Packet_WriteMessage(NBN_Packet *, NBN_Message *, NBN_MessageSerializer);
 int NBN_Packet_Seal(NBN_Packet *, NBN_Connection *);
 
 /* Encryption related functions */
@@ -1808,14 +1807,14 @@ uint32_t NBN_Packet_ReadProtocolId(uint8_t buffer[NBN_PACKET_MAX_SIZE], unsigned
     return header.protocol_id;
 }
 
-int NBN_Packet_WriteMessage(NBN_Packet *packet, NBN_Message *message)
+int NBN_Packet_WriteMessage(NBN_Packet *packet, NBN_Message *message, NBN_MessageSerializer msg_serializer)
 {
     if (packet->mode != NBN_PACKET_MODE_WRITE || packet->sealed)
         return NBN_PACKET_WRITE_ERROR;
 
     int current_number_of_bits = packet->m_stream.number_of_bits;
 
-    if (NBN_Message_Measure(message, &packet->m_stream) < 0)
+    if (NBN_Message_Measure(message, &packet->m_stream, msg_serializer) < 0)
         return NBN_PACKET_WRITE_ERROR;
 
     if (
@@ -1830,7 +1829,7 @@ int NBN_Packet_WriteMessage(NBN_Packet *packet, NBN_Message *message)
     if (NBN_Message_SerializeHeader(&message->header, (NBN_Stream *)&packet->w_stream) < 0)
         return NBN_PACKET_WRITE_ERROR;
 
-    if (NBN_Message_SerializeData(message, (NBN_Stream *)&packet->w_stream) < 0)
+    if (NBN_Message_SerializeData(message, (NBN_Stream *)&packet->w_stream, msg_serializer) < 0)
         return NBN_PACKET_WRITE_ERROR;
 
     packet->size = (packet->m_stream.number_of_bits - 1) / 8 + 1;
@@ -1997,20 +1996,20 @@ int NBN_Message_SerializeHeader(NBN_MessageHeader *message_header, NBN_Stream *s
     return 0;
 }
 
-int NBN_Message_Measure(NBN_Message *message, NBN_MeasureStream *m_stream)
+int NBN_Message_Measure(NBN_Message *message, NBN_MeasureStream *m_stream, NBN_MessageSerializer msg_serializer)
 {
     if (NBN_Message_SerializeHeader(&message->header, (NBN_Stream *)m_stream) < 0)
         return NBN_ERROR;
 
-    if (NBN_Message_SerializeData(message, (NBN_Stream *)m_stream) < 0)
+    if (NBN_Message_SerializeData(message, (NBN_Stream *)m_stream, msg_serializer) < 0)
         return NBN_ERROR;
 
     return m_stream->number_of_bits;
 }
 
-int NBN_Message_SerializeData(NBN_Message *message, NBN_Stream *stream)
+int NBN_Message_SerializeData(NBN_Message *message, NBN_Stream *stream, NBN_MessageSerializer msg_serializer)
 {
-    return message->serializer(message->data, stream);
+    return msg_serializer(message->data, stream);
 }
 
 #pragma endregion /* NBN_Message */
@@ -2305,7 +2304,11 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
               )
         {
             bool message_sent = false;
-            int ret = NBN_Packet_WriteMessage(&packet, message);
+            NBN_MessageSerializer msg_serializer = connection->endpoint->message_serializers[message->header.type];
+
+            assert(msg_serializer);
+
+            int ret = NBN_Packet_WriteMessage(&packet, message, msg_serializer);
 
             if (ret == NBN_PACKET_WRITE_OK)
             {
@@ -2325,7 +2328,7 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
 
                 NBN_Connection_InitOutgoingPacket(connection, &packet, &packet_entry);
 
-                int ret = NBN_Packet_WriteMessage(&packet, message);
+                int ret = NBN_Packet_WriteMessage(&packet, message, msg_serializer);
 
                 if (ret != NBN_PACKET_WRITE_OK)
                 {
@@ -3414,7 +3417,8 @@ static uint32_t NBN_Endpoint_BuildProtocolId(const char *);
 static int NBN_Endpoint_ProcessReceivedPacket(NBN_Endpoint *, NBN_Packet *, NBN_Connection *);
 static int NBN_Endpoint_InitOutgoingMessage(NBN_Endpoint *, NBN_Message *, uint8_t, uint8_t, void *);
 static int NBN_Endpoint_EnqueueOutgoingMessage(NBN_Endpoint *, NBN_Connection *, uint8_t, uint8_t, void *);
-static int NBN_Endpoint_SplitMessageIntoChunks(NBN_Message *, NBN_Channel *, unsigned int, NBN_MessageChunk **);
+static int NBN_Endpoint_SplitMessageIntoChunks(
+        NBN_Message *, NBN_Channel *, NBN_MessageSerializer, unsigned int, NBN_MessageChunk **);
 
 void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server)
 {
@@ -3569,18 +3573,8 @@ static int NBN_Endpoint_InitOutgoingMessage(
         return NBN_ERROR;
     }
 
-    NBN_MessageSerializer msg_serializer = endpoint->message_serializers[msg_type];
-
-    if (msg_serializer == NULL)
-    {
-        NBN_LogError("No message serializer is registered for messages of type %d", msg_type);
-
-        return NBN_ERROR;
-    }
-
     message->header = (NBN_MessageHeader){ .type = msg_type, .channel_id = channel_id };
     message->sender = NULL;
-    message->serializer = msg_serializer;
     message->last_send_time = -1;
     message->data = msg_data;
 
@@ -3590,6 +3584,15 @@ static int NBN_Endpoint_InitOutgoingMessage(
 static int NBN_Endpoint_EnqueueOutgoingMessage(
         NBN_Endpoint *endpoint, NBN_Connection *connection, uint8_t msg_type, uint8_t channel_id, void *msg_data)
 {
+    NBN_MessageSerializer msg_serializer = endpoint->message_serializers[msg_type];
+
+    if (msg_serializer == NULL)
+    {
+        NBN_LogError("No message serializer is registered for messages of type %d", msg_type);
+
+        return NBN_ERROR;
+    }
+
     NBN_Message message;
 
     if (NBN_Endpoint_InitOutgoingMessage(endpoint, &message, msg_type, channel_id, msg_data) < 0)
@@ -3599,7 +3602,7 @@ static int NBN_Endpoint_EnqueueOutgoingMessage(
 
     NBN_MeasureStream_Init(&m_stream);
 
-    unsigned int message_size = (NBN_Message_Measure(&message, &m_stream) - 1) / 8 + 1;
+    unsigned int message_size = (NBN_Message_Measure(&message, &m_stream, msg_serializer) - 1) / 8 + 1;
 
     if (message_size > NBN_PACKET_MAX_USER_DATA_SIZE)
     {
@@ -3608,7 +3611,7 @@ static int NBN_Endpoint_EnqueueOutgoingMessage(
         assert(channel);
 
         NBN_MessageChunk *chunks[NBN_CHANNEL_CHUNKS_BUFFER_SIZE];
-        int chunk_count = NBN_Endpoint_SplitMessageIntoChunks(&message, channel, message_size, chunks);
+        int chunk_count = NBN_Endpoint_SplitMessageIntoChunks(&message, channel, msg_serializer, message_size, chunks);
 
         assert(chunk_count <= NBN_CHANNEL_CHUNKS_BUFFER_SIZE);
 
@@ -3641,7 +3644,11 @@ static int NBN_Endpoint_EnqueueOutgoingMessage(
 }
 
 static int NBN_Endpoint_SplitMessageIntoChunks(
-        NBN_Message *message, NBN_Channel *channel, unsigned int message_size, NBN_MessageChunk **chunks)
+        NBN_Message *message,
+        NBN_Channel *channel,
+        NBN_MessageSerializer msg_serializer,
+        unsigned int message_size,
+        NBN_MessageChunk **chunks)
 {
     unsigned int chunk_count = ((message_size - 1) / NBN_MESSAGE_CHUNK_SIZE) + 1;
 
@@ -3664,7 +3671,7 @@ static int NBN_Endpoint_SplitMessageIntoChunks(
     if (NBN_Message_SerializeHeader(&message->header, (NBN_Stream *)&w_stream) < 0)
         return NBN_ERROR;
 
-    if (NBN_Message_SerializeData(message, (NBN_Stream *)&w_stream) < 0)
+    if (NBN_Message_SerializeData(message, (NBN_Stream *)&w_stream, msg_serializer) < 0)
         return NBN_ERROR;
 
     for (unsigned int i = 0; i < chunk_count; i++)
