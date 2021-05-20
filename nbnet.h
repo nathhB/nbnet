@@ -259,7 +259,6 @@ typedef struct
 {
     NBN_MessageHeader header;
     NBN_Connection *sender;
-    double last_send_time;
     void *data;
 } NBN_Message;
 
@@ -633,6 +632,7 @@ typedef enum
 typedef struct
 {
     NBN_Message message;
+    double last_send_time;
     bool free;
 } NBN_MessageSlot;
 
@@ -669,6 +669,7 @@ bool NBN_Channel_AddChunk(NBN_Channel *, NBN_Message *);
 int NBN_Channel_ReconstructMessageFromChunks(NBN_Channel *, NBN_Connection *, NBN_Message *);
 void NBN_Channel_ResizeWriteChunkBuffer(NBN_Channel *, unsigned int);
 void NBN_Channel_ResizeReadChunkBuffer(NBN_Channel *, unsigned int);
+void NBN_Channel_UpdateMessageLastSendTime(NBN_Channel *, NBN_Message *, double);
 
 /*
    Unreliable ordered
@@ -2351,7 +2352,7 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
             {
                 NBN_LogTrace("Message %d added to packet %d", message->header.id, packet.header.seq_number);
 
-                message->last_send_time = connection->time;
+                NBN_Channel_UpdateMessageLastSendTime(channel, message, connection->time);
 
                 packet_entry->messages[packet_entry->messages_count++] = (NBN_MessageEntry){
                     .id = message->header.id, .channel_id = channel->id
@@ -3076,6 +3077,15 @@ void NBN_Channel_ResizeReadChunkBuffer(NBN_Channel *channel, unsigned int size)
     channel->read_chunk_buffer_size = size;
 }
 
+void NBN_Channel_UpdateMessageLastSendTime(NBN_Channel *channel, NBN_Message *message, double time)
+{
+    NBN_MessageSlot *slot = &channel->outgoing_message_buffer[message->header.id % NBN_CHANNEL_BUFFER_SIZE];
+
+    assert(slot->message.header.id == message->header.id);
+
+    slot->last_send_time = time;
+}
+
 /* Unreliable ordered */
 
 static bool NBN_UnreliableOrderedChannel_AddReceivedMessage(NBN_Channel *, NBN_Message *);
@@ -3271,7 +3281,7 @@ static bool NBN_ReliableOrderedChannel_AddOutgoingMessage(NBN_Channel *channel, 
     memcpy(&slot->message, message, sizeof(NBN_Message));
 
     slot->message.header.id = msg_id;
-    slot->message.last_send_time = -1;
+    slot->last_send_time = -1;
     slot->free = false;
 
     channel->next_outgoing_message_id++;
@@ -3315,7 +3325,7 @@ static NBN_Message *NBN_ReliableOrderedChannel_GetNextOutgoingMessage(NBN_Channe
 
         if (
                 !slot->free &&
-                (slot->message.last_send_time < 0 || channel->time - slot->message.last_send_time >= NBN_MESSAGE_RESEND_DELAY)
+                (slot->last_send_time < 0 || channel->time - slot->last_send_time >= NBN_MESSAGE_RESEND_DELAY)
            )
         {
             return &slot->message;
@@ -3575,7 +3585,6 @@ static int NBN_Endpoint_InitOutgoingMessage(
 
     message->header = (NBN_MessageHeader){ .type = msg_type, .channel_id = channel_id };
     message->sender = NULL;
-    message->last_send_time = -1;
     message->data = msg_data;
 
     return 0;
