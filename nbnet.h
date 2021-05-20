@@ -621,6 +621,9 @@ NBN_StartEncryptMessage *NBN_StartEncryptMessage_Create(void);
 /* Library reserved reliable ordered channel */
 #define NBN_CHANNEL_RESERVED_RELIABLE (NBN_MAX_CHANNELS - 2)
 
+/* Library reserved messages reliable ordered channel */
+#define NBN_CHANNEL_RESERVED_LIBRARY_MESSAGES (NBN_MAX_CHANNELS - 3)
+
 typedef enum
 {
     NBN_CHANNEL_TYPE_UNDEFINED = -1,
@@ -723,7 +726,7 @@ typedef struct
  *
  * IMPORTANT: do not increase this, it will break packet acks
 */
-#define NBN_CONNECTION_MAX_SENT_PACKET_COUNT 32
+#define NBN_CONNECTION_MAX_SENT_PACKET_COUNT 16
 
 /* Number of seconds before the connection is considered stale and get closed */
 #define NBN_CONNECTION_STALE_TIME_THRESHOLD 3
@@ -984,7 +987,7 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 
 #define NBN_GameClient_RegisterChannel(type, id) \
 { \
-    if (id == NBN_CHANNEL_RESERVED_UNRELIABLE || id == NBN_CHANNEL_RESERVED_RELIABLE) \
+    if (id == NBN_CHANNEL_RESERVED_UNRELIABLE || id == NBN_CHANNEL_RESERVED_RELIABLE || id == NBN_CHANNEL_RESERVED_LIBRARY_MESSAGES) \
     { \
         NBN_LogError("Channel id %d is reserved by the library", type); \
         NBN_Abort(); \
@@ -1006,7 +1009,7 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 
 #define NBN_GameServer_RegisterChannel(type, id) \
 { \
-    if (id == NBN_CHANNEL_RESERVED_UNRELIABLE || id == NBN_CHANNEL_RESERVED_RELIABLE) \
+    if (id == NBN_CHANNEL_RESERVED_UNRELIABLE || id == NBN_CHANNEL_RESERVED_RELIABLE || id == NBN_CHANNEL_RESERVED_LIBRARY_MESSAGES) \
     { \
         NBN_LogError("Channel id %d is reserved by the library", type); \
         NBN_Abort(); \
@@ -2254,7 +2257,7 @@ int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet 
 
 int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection, NBN_Message *message)
 {
-    assert(!connection->is_closed);
+    assert(!connection->is_closed || message->header.type == NBN_CLIENT_CLOSED_MESSAGE_TYPE);
     assert(!connection->is_stale);
 
     NBN_Channel *channel = connection->channels[message->header.channel_id];
@@ -3256,8 +3259,8 @@ static bool NBN_ReliableOrderedChannel_AddOutgoingMessage(NBN_Channel *channel, 
 
     if (!slot->free)
     {
-        NBN_LogTrace("Slot %d is not free on channel %d (outgoing message count: %d)",
-                index, channel->id, channel->outgoing_message_count);
+        NBN_LogTrace("Slot %d is not free on channel %d (slot msg id: %d, outgoing message count: %d)",
+                index, channel->id, slot->message.header.id, channel->outgoing_message_count);
 
         return false;
     }
@@ -3433,6 +3436,7 @@ void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server
     /* Register library reserved channels */
     NBN_Endpoint_RegisterChannel(endpoint, NBN_CHANNEL_TYPE_UNRELIABLE_ORDERED, NBN_CHANNEL_RESERVED_UNRELIABLE);
     NBN_Endpoint_RegisterChannel(endpoint, NBN_CHANNEL_TYPE_RELIABLE_ORDERED, NBN_CHANNEL_RESERVED_RELIABLE);
+    NBN_Endpoint_RegisterChannel(endpoint, NBN_CHANNEL_TYPE_RELIABLE_ORDERED, NBN_CHANNEL_RESERVED_LIBRARY_MESSAGES);
 
     /* Register NBN_MessageChunk library message */
     NBN_Endpoint_RegisterMessageBuilder(
@@ -4276,6 +4280,8 @@ NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t id, void *driver_
 
 int NBN_GameServer_CloseClientWithCode(NBN_Connection *client, int code)
 {
+    NBN_LogTrace("Closing connection %d", client->id);
+
     if (!client->is_closed && client->is_accepted)
     {
         if (!NBN_EventQueue_Enqueue(
@@ -4299,7 +4305,7 @@ int NBN_GameServer_CloseClientWithCode(NBN_Connection *client, int code)
 
     msg->code = code;
 
-    NBN_GameServer_SendReliableMessageTo(client, NBN_CLIENT_CLOSED_MESSAGE_TYPE, msg);
+    NBN_GameServer_SendMessageTo(client, NBN_CLIENT_CLOSED_MESSAGE_TYPE, msg, NBN_CHANNEL_RESERVED_LIBRARY_MESSAGES);
 
     return 0;
 }
@@ -4317,9 +4323,15 @@ int NBN_GameServer_SendMessageTo(NBN_Connection *client, uint8_t msg_type, void 
 
     if (NBN_Endpoint_EnqueueOutgoingMessage(&__game_server.endpoint, client, msg_type, channel_id, msg_data) < 0)
     {
-        NBN_LogError("Failed to create outgoing message");
+        NBN_LogError("Failed to create outgoing message for client %d");
 
-        return -1;
+        /* Do not close the client if we failed to send the close client message to avoid infinite loops */
+        if (msg_type != NBN_CLIENT_CLOSED_MESSAGE_TYPE)
+        {
+            NBN_GameServer_CloseClient(client);
+
+            return NBN_ERROR;
+        }
     }
 
     return 0;
