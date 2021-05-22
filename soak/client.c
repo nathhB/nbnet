@@ -82,7 +82,7 @@ static int SendSoakMessages(void)
 
         for (int i = 0; i < send_message_count; i++)
         {
-            SoakMessage *msg = SoakMessage_Create(true);
+            SoakMessage *msg = SoakMessage_CreateOutgoing();
 
             if (msg == NULL)
             {
@@ -118,7 +118,9 @@ static int SendSoakMessages(void)
 
             Soak_LogInfo("Send soak message (id: %d, data length: %d)", msg->id, msg->data_length);
 
-            if (NBN_GameClient_SendReliableMessage(SOAK_MESSAGE, msg) < 0)
+            NBN_OutgoingMessage *outgoing_msg = NBN_GameClient_CreateMessage(SOAK_MESSAGE, msg);
+
+            if (NBN_GameClient_SendReliableMessage(outgoing_msg) < 0)
                 return -1;
 
             sent_message_count++;

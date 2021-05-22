@@ -63,7 +63,10 @@ int Soak_Init(int argc, char *argv[])
     NBN_GameClient_EnableEncryption();
 #endif
 
-    NBN_GameClient_RegisterMessage(SOAK_MESSAGE, SoakMessage);
+    NBN_GameClient_RegisterMessage(SOAK_MESSAGE,
+            (NBN_MessageBuilder)SoakMessage_CreateIncoming,
+            (NBN_MessageDestructor)SoakMessage_Destroy,
+            (NBN_MessageSerializer)SoakMessage_Serialize);
 
 #endif
 
@@ -73,7 +76,10 @@ int Soak_Init(int argc, char *argv[])
     NBN_GameServer_EnableEncryption();
 #endif
 
-    NBN_GameServer_RegisterMessage(SOAK_MESSAGE, SoakMessage);
+    NBN_GameServer_RegisterMessage(SOAK_MESSAGE,
+            (NBN_MessageBuilder)SoakMessage_CreateIncoming,
+            (NBN_MessageDestructor)SoakMessage_Destroy,
+            (NBN_MessageSerializer)SoakMessage_Serialize);
 
 #endif
 
@@ -236,16 +242,24 @@ unsigned int Soak_GetDestroyedIncomingSoakMessageCount(void)
     return destroyed_incoming_soak_message_count;
 }
 
-SoakMessage *SoakMessage_Create(bool outgoing)
+SoakMessage *SoakMessage_CreateIncoming(void)
 {
     SoakMessage *msg = malloc(sizeof(SoakMessage));
 
-    msg->outgoing = outgoing;
+    msg->outgoing = false;
 
-    if (msg->outgoing)
-        created_outgoing_soak_message_count++;
-    else
-        created_incoming_soak_message_count++;
+    created_incoming_soak_message_count++;
+
+    return msg;
+}
+
+SoakMessage *SoakMessage_CreateOutgoing(void)
+{
+    SoakMessage *msg = malloc(sizeof(SoakMessage));
+
+    msg->outgoing = true;
+
+    created_outgoing_soak_message_count++;
 
     return msg;
 }
