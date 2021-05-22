@@ -3671,7 +3671,11 @@ static int NBN_Endpoint_EnqueueOutgoingMessage(
 
     assert(msg_serializer); 
 
-    NBN_Message message = { .header = { 0, outgoing_msg->type, channel_id }, .data = outgoing_msg->data };
+    NBN_Message message = {
+        .header = { 0, outgoing_msg->type, channel_id },
+        .outgoing_msg = outgoing_msg,
+        .data = outgoing_msg->data
+    };
 
     NBN_MeasureStream m_stream;
 
