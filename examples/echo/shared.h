@@ -34,6 +34,7 @@
 
 #define NBN_Allocator malloc // nbnet allocator
 #define NBN_Deallocator free // nbnet deallocator
+#define NBN_Reallocator realloc // nbnet deallocator
 
 // nbnet logging
 // nbnet does not implement any logging capabilities, you need to provide your own
@@ -70,6 +71,9 @@ BEGIN_MESSAGE(EchoMessage)
     SERIALIZE_UINT(msg->length, 0, ECHO_MESSAGE_LENGTH);
     SERIALIZE_BYTES(msg->data, msg->length);
 END_MESSAGE
+
+EchoMessage *EchoMessage_Create(void);
+void EchoMessage_Destroy(EchoMessage *);
 
 void Sleep(double);
 

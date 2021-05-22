@@ -126,7 +126,7 @@ static void CreateClient(ClientState state)
 
     client_count++;
 
-    NBN_LogInfo("New remote client (ID: %d)", client->client_id);
+    TraceLog(LOG_INFO, "New remote client (ID: %d)", client->client_id);
 }
 
 static void UpdateClient(ClientState state)
@@ -159,7 +159,7 @@ static void DestroyClient(uint32_t client_id)
 
         if (client && client->client_id == client_id)
         {
-            NBN_LogInfo("Destroy disconnected client (ID: %d)", client->client_id);
+            TraceLog(LOG_INFO, "Destroy disconnected client (ID: %d)", client->client_id);
 
             free(client);
             clients[i] = NULL;
@@ -229,13 +229,13 @@ static void HandleGameStateMessage(GameStateMessage *msg)
     // Destroy disconnected clients
     DestroyDisconnectedClients();
 
-    NBN_GameClient_DestroyMessage(GAME_STATE_MESSAGE, msg);
+    GameStateMessage_Destroy(msg);
 }
 
 static void HandleReceivedMessage(void)
 {
     // Fetch info about the last received message
-    NBN_MessageInfo msg_info = NBN_GameClient_GetReceivedMessageInfo();
+    NBN_MessageInfo msg_info = NBN_GameClient_GetMessageInfo();
 
     switch (msg_info.type)
     {
@@ -269,19 +269,20 @@ static void HandleGameClientEvent(int ev)
 
 static int SendPositionUpdate(void)
 {
-    // Create an unreliable UpdateStateMessage message
-    UpdateStateMessage *msg = NBN_GameClient_CreateUnreliableMessage(UPDATE_STATE_MESSAGE);
-
-    if (msg == NULL)
-        return -1;
+    UpdateStateMessage *msg = UpdateStateMessage_Create();
 
     // Fill message data
     msg->x = local_client_state.x;
     msg->y = local_client_state.y;
     msg->val = local_client_state.val;
 
-    // Enqueue the message
-    if (NBN_GameClient_SendMessage() < 0)
+    // Create a nbnet outgoing message
+    NBN_OutgoingMessage *outgoing_msg = NBN_GameClient_CreateMessage(UPDATE_STATE_MESSAGE, msg);
+
+    assert(outgoing_msg);
+
+    // Unreliably send it to the server
+    if (NBN_GameClient_SendUnreliableMessage(outgoing_msg) < 0)
         return -1;
 
     return 0;
@@ -289,17 +290,18 @@ static int SendPositionUpdate(void)
 
 static int SendColorUpdate(void)
 {
-    // Create a reliable ChangeColorMessage message
-    ChangeColorMessage *msg = NBN_GameClient_CreateReliableMessage(CHANGE_COLOR_MESSAGE);
-
-    if (msg == NULL)
-        return -1;
+    ChangeColorMessage *msg = ChangeColorMessage_Create();
 
     // Fill message data
     msg->color = local_client_state.color;
 
-    // Enqueue the message
-    if (NBN_GameClient_SendMessage() < 0)
+    // Create a nbnet outgoing message
+    NBN_OutgoingMessage *outgoing_msg = NBN_GameClient_CreateMessage(CHANGE_COLOR_MESSAGE, msg);
+
+    assert(outgoing_msg);
+
+    // Reliably send it to the server
+    if (NBN_GameClient_SendReliableMessage(outgoing_msg) < 0)
         return -1;
 
     return 0;
@@ -518,9 +520,21 @@ int main(int argc, char *argv[])
 
     // Register messages, have to be done after NBN_GameClient_Init and before NBN_GameClient_Start
     // Messages need to be registered on both client and server side
-    NBN_GameClient_RegisterMessage(CHANGE_COLOR_MESSAGE, ChangeColorMessage);
-    NBN_GameClient_RegisterMessage(UPDATE_STATE_MESSAGE, UpdateStateMessage);
-    NBN_GameClient_RegisterMessage(GAME_STATE_MESSAGE, GameStateMessage);
+    NBN_GameClient_RegisterMessage(
+            CHANGE_COLOR_MESSAGE,
+            (NBN_MessageBuilder)ChangeColorMessage_Create,
+            (NBN_MessageDestructor)ChangeColorMessage_Destroy,
+            (NBN_MessageSerializer)ChangeColorMessage_Serialize);
+    NBN_GameClient_RegisterMessage(
+            UPDATE_STATE_MESSAGE,
+            (NBN_MessageBuilder)UpdateStateMessage_Create,
+            (NBN_MessageDestructor)UpdateStateMessage_Destroy,
+            (NBN_MessageSerializer)UpdateStateMessage_Serialize);
+    NBN_GameClient_RegisterMessage(
+            GAME_STATE_MESSAGE,
+            (NBN_MessageBuilder)GameStateMessage_Create,
+            (NBN_MessageDestructor)GameStateMessage_Destroy,
+            (NBN_MessageSerializer)GameStateMessage_Serialize);
 
     // Network conditions simulated variables (read from the command line, default is always 0)
     NBN_GameClient_SetPing(GetOptions().ping);

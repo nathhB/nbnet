@@ -20,6 +20,7 @@
 
 */
 
+#include <stdlib.h>
 #include <limits.h>
 #include <getopt.h>
 
@@ -39,6 +40,36 @@ enum
 };
 
 static Options options = {0};
+
+ChangeColorMessage *ChangeColorMessage_Create(void)
+{
+    return malloc(sizeof(ChangeColorMessage));
+}
+
+void ChangeColorMessage_Destroy(ChangeColorMessage *msg)
+{
+    free(msg);
+}
+
+UpdateStateMessage *UpdateStateMessage_Create(void)
+{
+    return malloc(sizeof(UpdateStateMessage));
+}
+
+void UpdateStateMessage_Destroy(UpdateStateMessage *msg)
+{
+    free(msg);
+}
+
+GameStateMessage *GameStateMessage_Create(void)
+{
+    return malloc(sizeof(GameStateMessage));
+}
+
+void GameStateMessage_Destroy(GameStateMessage *msg)
+{
+    free(msg);
+}
 
 // Parse the command line
 int ReadCommandLine(int argc, char *argv[])

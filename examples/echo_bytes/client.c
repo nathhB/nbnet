@@ -58,7 +58,7 @@ void OnDisconnected(void)
 void OnMessageReceived(void)
 {
     // Get info about the received message
-    NBN_MessageInfo msg_info = NBN_GameClient_GetReceivedMessageInfo();
+    NBN_MessageInfo msg_info = NBN_GameClient_GetMessageInfo();
 
     assert(msg_info.type == NBN_BYTE_ARRAY_MESSAGE_TYPE);
 
@@ -67,14 +67,21 @@ void OnMessageReceived(void)
 
     Log(LOG_INFO, "Received echo: %s (%d bytes)", msg->bytes, msg->length);
 
-    NBN_GameClient_DestroyMessage(ECHO_MESSAGE_TYPE, msg);
+    // Destroy the received message
+    NBN_ByteArrayMessage_Destroy(msg);
 }
 
 int SendEchoMessage(const char *msg)
 {
     unsigned int length = strlen(msg); // Compute message length
 
-    if (NBN_GameClient_SendReliableByteArray((uint8_t *)msg, length) < 0)
+    // Create a nbnet outgoing message
+    NBN_OutgoingMessage *outgoing_msg = NBN_GameClient_CreateByteArrayMessage((uint8_t *)msg, length);
+
+    assert(outgoing_msg);
+
+    // Reliably send it to the server
+    if (NBN_GameClient_SendReliableMessage(outgoing_msg) < 0)
         return -1;
 
     return 0;

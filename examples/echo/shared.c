@@ -35,6 +35,16 @@
 
 #include "shared.h"
 
+EchoMessage *EchoMessage_Create(void)
+{
+    return malloc(sizeof(EchoMessage));
+}
+
+void EchoMessage_Destroy(EchoMessage *msg)
+{
+    free(msg);
+}
+
 // Sleep for a given amount of seconds
 // Used to limit client and server tick rate
 void Sleep(double sec)

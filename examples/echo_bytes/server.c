@@ -35,7 +35,7 @@ static NBN_Connection *client = NULL;
 static int EchoReceivedMessage(void)
 {
     // Get info about the received message
-    NBN_MessageInfo msg_info = NBN_GameServer_GetReceivedMessageInfo();
+    NBN_MessageInfo msg_info = NBN_GameServer_GetMessageInfo();
 
     assert(msg_info.sender == client);
     assert(msg_info.type == NBN_BYTE_ARRAY_MESSAGE_TYPE);
@@ -43,14 +43,19 @@ static int EchoReceivedMessage(void)
     // Retrieve the received message
     NBN_ByteArrayMessage *msg = (NBN_ByteArrayMessage *)msg_info.data;
 
+    // Create a nbnet outgoing message from the received data
+    NBN_OutgoingMessage *outgoing_msg = NBN_GameServer_CreateByteArrayMessage(msg->bytes, msg->length);
+
+    assert(outgoing_msg);
+
     // If the send fails the client will be disconnected and a NBN_CLIENT_DISCONNECTED event
     // will be received (see event polling in main)
-    if (NBN_GameServer_SendReliableByteArrayTo(msg->bytes, msg->length, client) < 0)
+    if (NBN_GameServer_SendReliableMessageTo(client, outgoing_msg) < 0)
         return -1;
 
     // Destroy the received message
-    NBN_GameServer_DestroyMessage(ECHO_MESSAGE_TYPE, msg); 
-
+    NBN_ByteArrayMessage_Destroy(msg);
+    
     return 0;
 }
 

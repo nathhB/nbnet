@@ -58,7 +58,7 @@ void OnDisconnected(void)
 void OnMessageReceived(void)
 {
     // Get info about the received message
-    NBN_MessageInfo msg_info = NBN_GameClient_GetReceivedMessageInfo();
+    NBN_MessageInfo msg_info = NBN_GameClient_GetMessageInfo();
 
     assert(msg_info.type == ECHO_MESSAGE_TYPE);
 
@@ -67,25 +67,30 @@ void OnMessageReceived(void)
 
     Log(LOG_INFO, "Received echo: %s (%d bytes)", msg->data, msg->length);
 
-    NBN_GameClient_DestroyMessage(ECHO_MESSAGE_TYPE, msg);
+    EchoMessage_Destroy(msg); // Destroy the received echo message
 }
 
 int SendEchoMessage(const char *msg)
 {
     unsigned int length = strlen(msg); // Compute message length
 
-    // Create new reliable EchoMessage
-    EchoMessage *echo = NBN_GameClient_CreateReliableMessage(ECHO_MESSAGE_TYPE);
+    // Create the echo message's data
+    EchoMessage *echo = EchoMessage_Create();
 
     if (echo == NULL)
         return -1;
 
-    // Fill EchoMessage with message length and message data
+    // Fill echo message with message the length and the message
     echo->length = length + 1;
     memcpy(echo->data, msg, length + 1);
 
-    // Send it to the server
-    if (NBN_GameClient_SendMessage() < 0)
+    // Create a nbnet outgoing message
+    NBN_OutgoingMessage *outgoing_msg = NBN_GameClient_CreateMessage(ECHO_MESSAGE_TYPE, echo);
+
+    assert(outgoing_msg);
+
+    // Reliably send it to the server
+    if (NBN_GameClient_SendReliableMessage(outgoing_msg) < 0)
         return -1;
 
     return 0;
@@ -129,7 +134,10 @@ int main(int argc, char *argv[])
 
     // Registering messages, have to be done after NBN_GameClient_Init and before NBN_GameClient_Start
     // Messages need to be registered on both client and server side
-    NBN_GameClient_RegisterMessage(ECHO_MESSAGE_TYPE, EchoMessage);
+    NBN_GameClient_RegisterMessage(ECHO_MESSAGE_TYPE,
+            (NBN_MessageBuilder)EchoMessage_Create,
+            (NBN_MessageDestructor)EchoMessage_Destroy,
+            (NBN_MessageSerializer)EchoMessage_Serialize);
 
     if (NBN_GameClient_Start() < 0)
     {

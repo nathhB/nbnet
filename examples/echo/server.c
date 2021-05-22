@@ -35,7 +35,7 @@ static NBN_Connection *client = NULL;
 static int EchoReceivedMessage(void)
 {
     // Get info about the received message
-    NBN_MessageInfo msg_info = NBN_GameServer_GetReceivedMessageInfo();
+    NBN_MessageInfo msg_info = NBN_GameServer_GetMessageInfo();
 
     assert(msg_info.sender == client);
     assert(msg_info.type == ECHO_MESSAGE_TYPE);
@@ -43,23 +43,24 @@ static int EchoReceivedMessage(void)
     // Retrieve the received message
     EchoMessage *msg = (EchoMessage *)msg_info.data;
 
-    // Create a new reliable EchoMessage
-    EchoMessage *echo = NBN_GameServer_CreateReliableMessage(ECHO_MESSAGE_TYPE);
-
-    if (echo == NULL)
-        return -1;
+    // Create an echo message
+    EchoMessage *echo = EchoMessage_Create();
 
     // Fill it with the received message data and length
     memcpy(echo->data, msg->data, msg->length);
     echo->length = msg->length;
 
-    // Destroy the received message
-    NBN_GameServer_DestroyMessage(ECHO_MESSAGE_TYPE, msg);
+    // Create a nbnet outgoing message
+    NBN_OutgoingMessage *outgoing_msg = NBN_GameServer_CreateMessage(ECHO_MESSAGE_TYPE, echo);
 
-    // Send the EchoMessage to the client
+    assert(outgoing_msg);
+
+    // Reliably send it to the client
     // If the send fails the client will be disconnected and a NBN_CLIENT_DISCONNECTED event
     // will be received (see event polling in main)
-    NBN_GameServer_SendMessageTo(client);
+    NBN_GameServer_SendReliableMessageTo(client, outgoing_msg);
+
+    EchoMessage_Destroy(msg); // Destroy the received echo message
 
     return 0;
 }
@@ -76,7 +77,10 @@ int main(void)
 #endif
 
     // Registering messages, have to be done after NBN_GameServer_Init and before NBN_GameServer_Start
-    NBN_GameServer_RegisterMessage(ECHO_MESSAGE_TYPE, EchoMessage);
+    NBN_GameServer_RegisterMessage(ECHO_MESSAGE_TYPE,
+            (NBN_MessageBuilder)EchoMessage_Create,
+            (NBN_MessageDestructor)EchoMessage_Destroy,
+            (NBN_MessageSerializer)EchoMessage_Serialize);
 
     // Start the server
     if (NBN_GameServer_Start() < 0)

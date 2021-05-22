@@ -94,6 +94,7 @@ typedef struct tagMSG *LPMSG;
 #define NBN_LogTrace(...) TraceLog(LOG_TRACE, __VA_ARGS__)
 
 #define NBN_Allocator malloc // nbnet allocation function
+#define NBN_Reallocator realloc // nbnet reallocation function
 #define NBN_Deallocator free // nbnet deallocation function
 
 #include "../../nbnet.h"
@@ -181,6 +182,12 @@ typedef struct
     float jitter;
 } Options;
 
+ChangeColorMessage *ChangeColorMessage_Create(void);
+void ChangeColorMessage_Destroy(ChangeColorMessage *);
+UpdateStateMessage *UpdateStateMessage_Create(void);
+void UpdateStateMessage_Destroy(UpdateStateMessage *);
+GameStateMessage *GameStateMessage_Create(void);
+void GameStateMessage_Destroy(GameStateMessage *);
 int ReadCommandLine(int, char *[]);
 Options GetOptions(void);
 
