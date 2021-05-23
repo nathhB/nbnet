@@ -25,12 +25,6 @@ If you want to discuss the library, you can join the [nbnet's discord server](ht
 
 ## Projects using nbnet
 
-### Vinox
-
-An open-source voxel sandbox rpg game.
-
-https://github.com/muevoid/Vinox
-
 ### nb_tanks
 
 A little online tank game showcasing the library.
