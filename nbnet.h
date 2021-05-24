@@ -246,7 +246,7 @@ static inline int name##_Serialize(name *msg, NBN_Stream *stream) {
 
 typedef int (*NBN_MessageSerializer)(void *, NBN_Stream *);
 typedef void *(*NBN_MessageBuilder)(void);
-typedef void *(*NBN_MessageDestructor)(void *);
+typedef void (*NBN_MessageDestructor)(void *);
 
 typedef struct
 {
