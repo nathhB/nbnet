@@ -72,16 +72,16 @@ int NBN_Driver_GServ_RecvPackets(void)
     {
         NBN_Packet packet;
 
-        if (NBN_Packet_InitRead(&packet, data, len) < 0)
-            continue;
-
         NBN_Connection *cli = NBN_GameServer_FindClientById(peer_id);
 
         if (cli == NULL)
         {
             NBN_LogTrace("Peer %d has connected", peer_id);
 
-            cli = NBN_GameServer_CreateClientConnection(peer_id);
+            cli = NBN_GameServer_CreateClientConnection(peer_id, NULL);
+
+            if (NBN_Packet_InitRead(&packet, cli, data, len) < 0)
+                continue;
 
             NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_CONNECTED, cli);
         }
@@ -94,14 +94,14 @@ int NBN_Driver_GServ_RecvPackets(void)
     return 0;
 }
 
-void NBN_Driver_GServ_DestroyClientConnection(uint32_t peer_id)
+void NBN_Driver_GServ_DestroyClientConnection(NBN_Connection *conn)
 {
-    __js_game_server_close_client_peer(peer_id);
+    __js_game_server_close_client_peer(conn->id);
 }
 
-int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, uint32_t peer_id)
+int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, NBN_Connection *conn)
 {
-    return __js_game_server_send_packet_to(packet->buffer, packet->size, peer_id);
+    return __js_game_server_send_packet_to(packet->buffer, packet->size, conn->id);
 }
 
 #pragma endregion /* Game server */
@@ -125,7 +125,7 @@ int NBN_Driver_GCli_Start(uint32_t protocol_id, const char *host, uint16_t port)
 {
     __js_game_client_init(protocol_id);
 
-    server = NBN_GameClient_CreateServerConnection();
+    server = NBN_GameClient_CreateServerConnection(NULL);
 
     int res;
 
@@ -149,7 +149,7 @@ int NBN_Driver_GCli_RecvPackets(void)
     {
         NBN_Packet packet;
 
-        if (NBN_Packet_InitRead(&packet, data, len) < 0)
+        if (NBN_Packet_InitRead(&packet, server, data, len) < 0)
             continue;
 
         if (!is_connected_to_server)
