@@ -2513,7 +2513,7 @@ static int NBN_Connection_DecodePacketHeader(NBN_Connection *connection, NBN_Pac
         return NBN_ERROR;
     }
 
-    for (int i = 0; i < 32; i++)
+    for (unsigned int i = 0; i < 32; i++)
     {
         if (B_IS_UNSET(packet->header.ack_bits, i))
             continue;
