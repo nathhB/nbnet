@@ -80,11 +80,11 @@ int NBN_Driver_GServ_RecvPackets(void)
 
             cli = NBN_GameServer_CreateClientConnection(peer_id, NULL);
 
-            if (NBN_Packet_InitRead(&packet, cli, data, len) < 0)
-                continue;
-
             NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_CONNECTED, cli);
         }
+
+        if (NBN_Packet_InitRead(&packet, cli, data, len) < 0)
+            continue;
 
         packet.sender = cli;
 
