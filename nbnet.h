@@ -53,7 +53,8 @@ enum
     NBN_MEMORY_CHANNELS,
     NBN_MEMORY_READ_CHUNK_BUFFERS,
     NBN_MEMORY_WRITE_CHUNK_BUFFERS,
-    NBN_MEMORY_UDP_DRIVER
+    NBN_MEMORY_UDP_DRIVER,
+    NBN_MEMORY_PACKET_SIMULATOR_ENTRY
 };
 
 #endif /* NBN_MEMORY_TRACING */
@@ -905,8 +906,6 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *);
 
 #pragma region Packet simulator
 
-#define NBN_PACKET_SIMULATOR_QUEUE_CAPACITY 2048
-
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -933,18 +932,22 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *);
 #define NBN_GameServer_SetPacketLoss(v) { __game_server.endpoint.packet_simulator.packet_loss_ratio = v; }
 #define NBN_GameServer_SetPacketDuplication(v) { __game_server.endpoint.packet_simulator.packet_duplication_ratio = v; }
 
-typedef struct
+typedef struct __NBN_PacketSimulatorEntry NBN_PacketSimulatorEntry;
+
+struct __NBN_PacketSimulatorEntry
 {
     NBN_Packet packet;
     NBN_Connection *receiver;
     double delay;
     double enqueued_at;
-    bool free;
-} NBN_PacketSimulatorEntry;
+    struct __NBN_PacketSimulatorEntry *next;
+    struct __NBN_PacketSimulatorEntry *prev;
+};
 
 typedef struct
 {
-    NBN_PacketSimulatorEntry packets[NBN_PACKET_SIMULATOR_QUEUE_CAPACITY];
+    NBN_PacketSimulatorEntry *head_packet;
+    NBN_PacketSimulatorEntry *tail_packet;
     unsigned int packet_count;
     double time;
 
@@ -4968,10 +4971,9 @@ void NBN_PacketSimulator_Init(NBN_PacketSimulator *packet_simulator)
     packet_simulator->jitter = 0;
     packet_simulator->packet_loss_ratio = 0;
     packet_simulator->packet_duplication_ratio = 0;
+    packet_simulator->head_packet = NULL;
+    packet_simulator->tail_packet = NULL;
     packet_simulator->packet_count = 0;
-
-    for (int i = 0; i < NBN_PACKET_SIMULATOR_QUEUE_CAPACITY; i++)
-        packet_simulator->packets[i].free = true;
 
 #ifdef NBNET_WINDOWS
     packet_simulator->queue_mutex = CreateMutex(NULL, FALSE, NULL);
@@ -4989,39 +4991,45 @@ int NBN_PacketSimulator_EnqueuePacket(
     pthread_mutex_lock(&packet_simulator->queue_mutex);
 #endif
 
-    if (packet_simulator->packet_count < NBN_PACKET_SIMULATOR_QUEUE_CAPACITY)
+    /* Compute jitter in range [ -jitter, +jitter ].
+     * Jitter is converted from seconds to milliseconds for the random operation below.
+     */
+
+    int jitter = packet_simulator->jitter * 1000;
+
+    jitter = (jitter > 0) ? (rand() % (jitter * 2)) - jitter : 0;
+
+
+#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
+    NBN_PacketSimulatorEntry *entry = NBN_Allocator(sizeof(NBN_PacketSimulatorEntry), NBN_MEMORY_PACKET_SIMULATOR_ENTRY);
+#else
+    NBN_PacketSimulatorEntry *entry = NBN_Allocator(sizeof(NBN_PacketSimulatorEntry));
+#endif
+
+    entry->delay = packet_simulator->ping + jitter / 1000; /* and converted back to seconds */
+    entry->receiver = receiver;
+    entry->enqueued_at = packet_simulator->time;
+
+    memcpy(&entry->packet, packet, sizeof(NBN_Packet));
+
+    if (packet_simulator->packet_count > 0)
     {
-        NBN_PacketSimulatorEntry *entry = NULL;
+        entry->prev = packet_simulator->tail_packet;
+        entry->next = NULL;
 
-        for (int i = 0; i < NBN_PACKET_SIMULATOR_QUEUE_CAPACITY; i++)
-        {
-            if (packet_simulator->packets[i].free)
-                entry = &packet_simulator->packets[i];
-        }
-
-        assert(entry);
-
-        /* Compute jitter in range [ -jitter, +jitter ].
-         * Jitter is converted from seconds to milliseconds for the random operation below.
-         */
-
-        int jitter = packet_simulator->jitter * 1000;
-
-        jitter = (jitter > 0) ? (rand() % (jitter * 2)) - jitter : 0;
-
-        entry->delay = packet_simulator->ping + jitter / 1000; /* and converted back to seconds */
-        entry->receiver = receiver;
-        entry->enqueued_at = packet_simulator->time;
-        entry->free = false;
-
-        memcpy(&entry->packet, packet, sizeof(NBN_Packet));
-
-        packet_simulator->packet_count++;
+        packet_simulator->tail_packet->next = entry;
+        packet_simulator->tail_packet = entry;
     }
-    else
+    else // the list is empty
     {
-        NBN_LogTrace("Packet simulator: cannot enqueue packet, packet simulator's queue is full, packet is discarded");
+        entry->prev = NULL;
+        entry->next = NULL;
+
+        packet_simulator->head_packet = entry;
+        packet_simulator->tail_packet = entry;
     }
+
+    packet_simulator->packet_count++;
 
 #ifdef NBNET_WINDOWS
     ReleaseMutex(packet_simulator->queue_mutex);
@@ -5075,16 +5083,18 @@ static void *NBN_PacketSimulator_Routine(void *arg)
         pthread_mutex_lock(&packet_simulator->queue_mutex);
 #endif
 
-        for (int i = 0; i < NBN_PACKET_SIMULATOR_QUEUE_CAPACITY; i++)
+        NBN_PacketSimulatorEntry *entry = packet_simulator->head_packet;
+
+        while (entry)
         {
-            NBN_PacketSimulatorEntry *entry = &packet_simulator->packets[i];
+            NBN_PacketSimulatorEntry *next = entry->next;
 
-            if (entry->free || packet_simulator->time - entry->enqueued_at < entry->delay)
+            if (packet_simulator->time - entry->enqueued_at < entry->delay)
+            {
+                entry = next;
+
                 continue;
-
-            entry->free = true;
-
-            packet_simulator->packet_count--;
+            }
 
             NBN_PacketSimulator_SendPacket(packet_simulator, &entry->packet, entry->receiver);
 
@@ -5094,6 +5104,42 @@ static void *NBN_PacketSimulator_Routine(void *arg)
 
                 NBN_PacketSimulator_SendPacket(packet_simulator, &entry->packet, entry->receiver);
             }
+
+            // remove the entry from the packet list
+            if (entry == packet_simulator->head_packet) // it's the head of the list
+            {
+                NBN_PacketSimulatorEntry *new_head = entry->next;
+
+                if (new_head)
+                    new_head->prev = NULL;
+                else
+                    packet_simulator->tail_packet = NULL;
+
+                packet_simulator->head_packet = new_head;
+            }
+            else if (entry == packet_simulator->tail_packet) // it's the tail of the list
+            {
+                NBN_PacketSimulatorEntry *new_tail = entry->prev;
+
+                new_tail->next = NULL;
+                packet_simulator->tail_packet = new_tail;
+            }
+            else // it's in the middle of the list
+            {
+                entry->prev->next = entry->next;
+                entry->next->prev = entry->prev;
+            }
+
+            packet_simulator->packet_count--;
+
+            // release the memory allocated for the entry
+#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
+            NBN_Deallocator(entry, NBN_MEMORY_PACKET_SIMULATOR_ENTRY);
+#else
+            NBN_Deallocator(entry);
+#endif
+
+            entry = next;
         }
 
 #ifdef NBNET_WINDOWS
