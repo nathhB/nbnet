@@ -1155,7 +1155,7 @@ int NBN_GameServer_AcceptIncomingConnection(NBN_AcceptData *);
 int NBN_GameServer_RejectIncomingConnectionWithCode(int);
 int NBN_GameServer_RejectIncomingConnection(void);
 NBN_Connection *NBN_GameServer_GetIncomingConnection(void);
-uint32_t NBN_GameServer_GetDisconnectedClientId(void);
+NBN_Connection *NBN_GameServer_GetDisconnectedClient(void);
 NBN_Connection *NBN_GameServer_FindClientById(uint32_t);
 NBN_MessageInfo NBN_GameServer_GetMessageInfo(void);
 NBN_GameServerStats NBN_GameServer_GetStats(void);
@@ -4631,11 +4631,11 @@ NBN_Connection *NBN_GameServer_GetIncomingConnection(void)
     return server_last_event.data.connection;
 }
 
-uint32_t NBN_GameServer_GetDisconnectedClientId(void)
+NBN_Connection *NBN_GameServer_GetDisconnectedClient(void)
 {
     assert(server_last_event.type == NBN_CLIENT_DISCONNECTED);
 
-    return server_last_event.data.connection->id;
+    return server_last_event.data.connection;
 }
 
 NBN_Connection *NBN_GameServer_FindClientById(uint32_t client_id)
@@ -4717,8 +4717,6 @@ static bool NBN_GameServer_RemoveClient(NBN_Connection *client)
 
         if (c && c->id == client->id)
         {
-            NBN_Connection_Destroy(client);
-
             __game_server.clients[i] = NULL;
             __game_server.client_count--;
 
@@ -4802,7 +4800,7 @@ static void NBN_GameServer_RemoveClosedClientConnections(void)
 
             if (client->is_closed && client->is_stale)
             {
-                NBN_LogDebug("Destroy closed client connection (ID: %d)", client->id);
+                NBN_LogDebug("Remove closed client connection (ID: %d)", client->id);
 
                 NBN_GameServer_RemoveClient(client);
                 NBN_Driver_GServ_DestroyClientConnection(client);
