@@ -37,13 +37,9 @@
 
 #include "logging.h"
 
-void *Soak_Alloc(size_t, unsigned int);
-void *Soak_Realloc(void *, size_t, unsigned int);
-void Soak_Dealloc(void *, unsigned int);
-
-#define NBN_Allocator Soak_Alloc
-#define NBN_Reallocator Soak_Realloc
-#define NBN_Deallocator Soak_Dealloc
+#define NBN_Allocator malloc
+#define NBN_Reallocator realloc
+#define NBN_Deallocator free
 
 /* nbnet logging */
 #define NBN_LogInfo Soak_LogInfo

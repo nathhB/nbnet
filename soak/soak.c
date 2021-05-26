@@ -273,18 +273,3 @@ void SoakMessage_Destroy(SoakMessage *msg)
 
     free(msg);
 }
-
-void *Soak_Alloc(size_t size, unsigned int tag)
-{
-    return malloc(size);
-}
-
-void *Soak_Realloc(void *ptr, size_t size, unsigned int tag)
-{
-    return realloc(ptr, size);
-}
-
-void Soak_Dealloc(void *ptr, unsigned int tag)
-{
-    free(ptr);
-}
