@@ -38,26 +38,41 @@
 #define NBN_Abort abort /* TODO: custom abort mechanism */
 #define NBN_ERROR -1
 
-#ifdef NBN_MEMORY_TRACING
+#pragma region Memory management
 
 enum
 {
-    NBN_MEMORY_MESSAGE_CHUNKS,
-    NBN_MEMORY_CLIENT_CLOSED_MESSAGE,
-    NBN_MEMORY_CLIENT_ACCEPTED_MESSAGE,
-    NBN_MEMORY_BYTE_ARRAY_MESSAGE,
-    NBN_MEMORY_PUBLIC_CRYPTO_INFO_MESSAGE,
-    NBN_MEMORY_START_ENCRYPT_MESSAGE,
-    NBN_MEMORY_CONNECTIONS,
-    NBN_MEMORY_ACCEPT_DATA,
-    NBN_MEMORY_CHANNELS,
-    NBN_MEMORY_READ_CHUNK_BUFFERS,
-    NBN_MEMORY_WRITE_CHUNK_BUFFERS,
-    NBN_MEMORY_UDP_DRIVER,
-    NBN_MEMORY_PACKET_SIMULATOR_ENTRY
+    NBN_MEM_MESSAGE_CHUNK,
+    NBN_MEM_BYTE_ARRAY_MESSAGE,
+    NBN_MEM_CONNECTION,
+
+#if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
+    NBN_MEM_PACKET_SIMULATOR_ENTRY
+#endif
 };
 
-#endif /* NBN_MEMORY_TRACING */
+typedef struct NBN_MemPoolFreeBlock
+{
+    struct NBN_MemPoolFreeBlock *next;
+} NBN_MemPoolFreeBlock;
+
+typedef struct
+{
+    uint8_t **blocks;
+    size_t block_size;
+    unsigned int block_count;
+    unsigned int block_idx;
+    NBN_MemPoolFreeBlock *free;
+} NBN_MemPool;
+
+typedef struct
+{
+    NBN_MemPool mem_pools[16];
+} NBN_MemoryManager;
+
+extern NBN_MemoryManager __mem_manager;
+
+#pragma endregion /* Memory management */
 
 #pragma region Serialization
 
@@ -1223,6 +1238,113 @@ int NBN_Driver_GServ_RaiseEvent(NBN_Driver_GServ_EventType, void *);
 
 #ifdef NBNET_IMPL
 
+#pragma region Memory management
+
+NBN_MemoryManager __mem_manager;
+
+static void NBN_MemoryManager_Init(void);
+static void NBN_MemoryManager_Deinit(void);
+static void *NBN_MemoryManager_Alloc(unsigned int);
+static void NBN_MemoryManager_Dealloc(void *, unsigned int);
+
+static void NBN_MemPool_Init(NBN_MemPool *, size_t, unsigned int);
+static void NBN_MemPool_Deinit(NBN_MemPool *);
+static void NBN_MemPool_Grow(NBN_MemPool *, unsigned int);
+static void *NBN_MemPool_Alloc(NBN_MemPool *);
+static void NBN_MemPool_Dealloc(NBN_MemPool *, void *);
+static void NBN_MemPool_Grow(NBN_MemPool *, unsigned int);
+
+static void NBN_MemoryManager_Init(void)
+{
+    NBN_MemPool_Init(&__mem_manager.mem_pools[NBN_MEM_MESSAGE_CHUNK], sizeof(NBN_MessageChunk), 256);
+    NBN_MemPool_Init(&__mem_manager.mem_pools[NBN_MEM_BYTE_ARRAY_MESSAGE], sizeof(NBN_ByteArrayMessage), 256);
+    NBN_MemPool_Init(&__mem_manager.mem_pools[NBN_MEM_CONNECTION], sizeof(NBN_Connection), 16);
+
+#if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
+    NBN_MemPool_Init(&__mem_manager.mem_pools[NBN_MEM_PACKET_SIMULATOR_ENTRY], sizeof(NBN_PacketSimulatorEntry), 512);
+#endif
+}
+
+static void NBN_MemoryManager_Deinit(void)
+{
+    NBN_MemPool_Deinit(&__mem_manager.mem_pools[NBN_MEM_MESSAGE_CHUNK]);
+    NBN_MemPool_Deinit(&__mem_manager.mem_pools[NBN_MEM_BYTE_ARRAY_MESSAGE]);
+    // NBN_MemPool_Deinit(&__mem_manager.mem_pools[NBN_MEM_CONNECTION]);
+
+#if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
+    NBN_MemPool_Deinit(&__mem_manager.mem_pools[NBN_MEM_PACKET_SIMULATOR_ENTRY]);
+#endif
+}
+
+static void *NBN_MemoryManager_Alloc(unsigned int mem_tag)
+{
+    return NBN_MemPool_Alloc(&__mem_manager.mem_pools[mem_tag]);
+}
+
+static void NBN_MemoryManager_Dealloc(void *ptr, unsigned int mem_tag)
+{
+    NBN_MemPool_Dealloc(&__mem_manager.mem_pools[mem_tag], ptr);
+}
+
+static void NBN_MemPool_Init(NBN_MemPool *pool, size_t block_size, unsigned int initial_block_count)
+{
+    pool->block_size = MAX(block_size, sizeof(NBN_MemPoolFreeBlock));
+    pool->block_idx = 0;
+    pool->block_count = 0;
+    pool->free = NULL;
+
+    NBN_MemPool_Grow(pool, initial_block_count);
+}
+
+static void NBN_MemPool_Deinit(NBN_MemPool *pool)
+{
+    for (unsigned int i = 0; i < pool->block_count; i++)
+        NBN_Deallocator(pool->blocks[i]);
+
+    NBN_Deallocator(pool->blocks);
+}
+
+static void *NBN_MemPool_Alloc(NBN_MemPool *pool)
+{
+    if (pool->free)
+    {
+        void *block = pool->free;
+
+        pool->free = pool->free->next;
+
+        return block;
+    }
+
+    if (pool->block_idx == pool->block_count)
+        NBN_MemPool_Grow(pool, pool->block_count * 2);
+
+    void *block = pool->blocks[pool->block_idx];
+
+    pool->block_idx++;
+
+    return block;
+}
+
+static void NBN_MemPool_Dealloc(NBN_MemPool *pool, void *ptr)
+{
+    NBN_MemPoolFreeBlock *free = pool->free;
+
+    pool->free = ptr;
+    pool->free->next = free;
+}
+
+static void NBN_MemPool_Grow(NBN_MemPool *pool, unsigned int block_count)
+{
+    pool->blocks = NBN_Reallocator(pool->blocks, sizeof(uint8_t *) * block_count);
+
+    for (unsigned int i = 0; i < block_count - pool->block_count; i++)
+        pool->blocks[pool->block_idx + i] = NBN_Allocator(pool->block_size);
+
+    pool->block_count = block_count;
+}
+
+#pragma endregion /* Memory management */
+
 #pragma region Serialization
 
 unsigned int GetRequiredNumberOfBitsFor(unsigned int v)
@@ -2011,11 +2133,7 @@ int NBN_Message_SerializeData(NBN_Message *message, NBN_Stream *stream, NBN_Mess
 
 NBN_MessageChunk *NBN_MessageChunk_Create(void)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    NBN_MessageChunk *chunk = NBN_Allocator(sizeof(NBN_MessageChunk), NBN_MEMORY_MESSAGE_CHUNKS);
-#else
-    NBN_MessageChunk *chunk = NBN_Allocator(sizeof(NBN_MessageChunk));
-#endif
+    NBN_MessageChunk *chunk = NBN_MemoryManager_Alloc(NBN_MEM_MESSAGE_CHUNK);
 
     chunk->outgoing_msg = NULL;
 
@@ -2024,11 +2142,7 @@ NBN_MessageChunk *NBN_MessageChunk_Create(void)
 
 void NBN_MessageChunk_Destroy(NBN_MessageChunk *chunk)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    NBN_Deallocator(chunk, NBN_MEMORY_MESSAGE_CHUNKS);
-#else
-    NBN_Deallocator(chunk);
-#endif
+    NBN_MemoryManager_Dealloc(chunk, NBN_MEM_MESSAGE_CHUNK);
 }
 
 #pragma endregion /* NBN_MessageChunk */
@@ -2037,20 +2151,12 @@ void NBN_MessageChunk_Destroy(NBN_MessageChunk *chunk)
 
 NBN_ClientClosedMessage *NBN_ClientClosedMessage_Create(void)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    return NBN_Allocator(sizeof(NBN_ClientClosedMessage), NBN_MEMORY_CLIENT_CLOSED_MESSAGE);
-#else
     return NBN_Allocator(sizeof(NBN_ClientClosedMessage));
-#endif
 }
 
 void NBN_ClientClosedMessage_Destroy(NBN_ClientClosedMessage *msg)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    return NBN_Deallocator(msg, NBN_MEMORY_CLIENT_CLOSED_MESSAGE);
-#else
     return NBN_Deallocator(msg);
-#endif
 }
 
 #pragma endregion /* NBN_ClientClosedMessage */
@@ -2059,20 +2165,12 @@ void NBN_ClientClosedMessage_Destroy(NBN_ClientClosedMessage *msg)
 
 NBN_ClientAcceptedMessage *NBN_ClientAcceptedMessage_Create(void)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    return NBN_Allocator(sizeof(NBN_ClientAcceptedMessage), NBN_MEMORY_CLIENT_ACCEPTED_MESSAGE);
-#else
     return NBN_Allocator(sizeof(NBN_ClientAcceptedMessage));
-#endif
 }
 
 void NBN_ClientAcceptedMessage_Destroy(NBN_ClientAcceptedMessage *msg)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    return NBN_Deallocator(msg, NBN_MEMORY_CLIENT_ACCEPTED_MESSAGE);
-#else
     return NBN_Deallocator(msg);
-#endif
 }
 
 #pragma endregion /* NBN_ClientAcceptedMessage */
@@ -2081,20 +2179,12 @@ void NBN_ClientAcceptedMessage_Destroy(NBN_ClientAcceptedMessage *msg)
 
 NBN_ByteArrayMessage *NBN_ByteArrayMessage_Create(void)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    return NBN_Allocator(sizeof(NBN_ByteArrayMessage), NBN_MEMORY_BYTE_ARRAY_MESSAGE);
-#else
-    return NBN_Allocator(sizeof(NBN_ByteArrayMessage));
-#endif
+    return NBN_MemoryManager_Alloc(NBN_MEM_BYTE_ARRAY_MESSAGE);
 }
 
 void NBN_ByteArrayMessage_Destroy(NBN_ByteArrayMessage *msg)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    return NBN_Deallocator(msg, NBN_MEMORY_BYTE_ARRAY_MESSAGE);
-#else
-    return NBN_Deallocator(msg);
-#endif
+    NBN_MemoryManager_Dealloc(msg, NBN_MEM_BYTE_ARRAY_MESSAGE);
 }
 
 #pragma endregion /* NBN_ByteArrayMessage */
@@ -2103,20 +2193,12 @@ void NBN_ByteArrayMessage_Destroy(NBN_ByteArrayMessage *msg)
 
 NBN_PublicCryptoInfoMessage *NBN_PublicCryptoInfoMessage_Create(void)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    return NBN_Allocator(sizeof(NBN_PublicCryptoInfoMessage), NBN_MEMORY_PUBLIC_CRYPTO_INFO_MESSAGE);
-#else
     return NBN_Allocator(sizeof(NBN_PublicCryptoInfoMessage));
-#endif
 }
 
 void NBN_PublicCryptoInfoMessage_Destroy(NBN_PublicCryptoInfoMessage *msg)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    return NBN_Deallocator(msg, NBN_MEMORY_PUBLIC_CRYPTO_INFO_MESSAGE);
-#else
     return NBN_Deallocator(msg);
-#endif
 }
 
 #pragma endregion /* NBN_PublicCryptoInfoMessage */
@@ -2125,20 +2207,12 @@ void NBN_PublicCryptoInfoMessage_Destroy(NBN_PublicCryptoInfoMessage *msg)
 
 NBN_StartEncryptMessage *NBN_StartEncryptMessage_Create(void)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    return NBN_Allocator(sizeof(NBN_StartEncryptMessage), NBN_MEMORY_START_ENCRYPT_MESSAGE);
-#else
     return NBN_Allocator(sizeof(NBN_StartEncryptMessage));
-#endif
 }
 
 void NBN_StartEncryptMessage_Destroy(NBN_StartEncryptMessage *msg)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    return NBN_Deallocator(msg, NBN_MEMORY_START_ENCRYPT_MESSAGE);
-#else
     return NBN_Deallocator(msg);
-#endif
 }
 
 #pragma endregion /* NBN_StartEncryptMessage */
@@ -2178,11 +2252,7 @@ static int csprng_get(CSPRNG, void*, unsigned long long);
 
 NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, void *driver_data, NBN_Endpoint *endpoint)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    NBN_Connection *connection = NBN_Allocator(sizeof(NBN_Connection), NBN_MEMORY_CONNECTIONS);
-#else
-    NBN_Connection *connection = NBN_Allocator(sizeof(NBN_Connection));
-#endif
+    NBN_Connection *connection = NBN_MemoryManager_Alloc(NBN_MEM_CONNECTION);
 
     connection->id = id;
     connection->protocol_id = protocol_id;
@@ -2218,11 +2288,7 @@ NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, void *d
         {
             NBN_LogError("Failed to generate keys");
 
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-            NBN_Deallocator(connection, NBN_MEMORY_CONNECTIONS);
-#else
             NBN_Deallocator(connection);
-#endif
 
             return NULL;
         }
@@ -2236,14 +2302,10 @@ void NBN_Connection_Destroy(NBN_Connection *connection)
     for (int i = 0; i < NBN_MAX_CHANNELS; i++)
     {
         if (connection->channels[i])
-            NBN_Channel_Destroy(connection->channels[i]);
+            NBN_Deallocator(connection->channels[i]);
     }
 
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    NBN_Deallocator(connection, NBN_MEMORY_CONNECTIONS);
-#else
-    NBN_Deallocator(connection);
-#endif
+    NBN_MemoryManager_Dealloc(connection, NBN_MEM_CONNECTION);
 }
 
 int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet *packet)
@@ -2450,15 +2512,8 @@ int NBN_Connection_CreateChannel(NBN_Connection *connection, NBN_ChannelType typ
     channel->type = type;
     channel->connection = connection;
 
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    channel->read_chunk_buffer = NBN_Allocator(
-            NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE, NBN_MEMORY_READ_CHUNK_BUFFERS);
-    channel->write_chunk_buffer = NBN_Allocator(
-            NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE,NBN_MEMORY_WRITE_CHUNK_BUFFERS);
-#else
     channel->read_chunk_buffer = NBN_Allocator(NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE);
     channel->write_chunk_buffer = NBN_Allocator(NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE);
-#endif
 
     channel->read_chunk_buffer_size = NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE;
     channel->write_chunk_buffer_size = NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE;
@@ -2884,11 +2939,7 @@ static void NBN_Connection_StartEncryption(NBN_Connection *connection)
 
 NBN_AcceptData *NBN_AcceptData_Create(void)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    NBN_AcceptData *accept_data = NBN_Allocator(sizeof(NBN_AcceptData), NBN_MEMORY_ACCEPT_DATA);
-#else
     NBN_AcceptData *accept_data = NBN_Allocator(sizeof(NBN_AcceptData));
-#endif
 
     memset(accept_data->buffer, 0, NBN_ACCEPT_DATA_MAX_SIZE);
     NBN_WriteStream_Init(&accept_data->write_stream, accept_data->buffer, NBN_ACCEPT_DATA_MAX_SIZE);
@@ -2898,11 +2949,7 @@ NBN_AcceptData *NBN_AcceptData_Create(void)
 
 NBN_AcceptData *NBN_AcceptData_Read(uint8_t *buffer)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    NBN_AcceptData *accept_data = NBN_Allocator(sizeof(NBN_AcceptData), NBN_MEMORY_ACCEPT_DATA);
-#else
     NBN_AcceptData *accept_data = NBN_Allocator(sizeof(NBN_AcceptData));
-#endif
 
     memcpy(accept_data->buffer, buffer, NBN_ACCEPT_DATA_MAX_SIZE);
     NBN_ReadStream_Init(&accept_data->read_stream, accept_data->buffer, NBN_ACCEPT_DATA_MAX_SIZE);
@@ -2912,11 +2959,7 @@ NBN_AcceptData *NBN_AcceptData_Read(uint8_t *buffer)
 
 void NBN_AcceptData_Destroy(NBN_AcceptData *accept_data)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    NBN_Deallocator(accept_data, NBN_MEMORY_ACCEPT_DATA);
-#else
     NBN_Deallocator(accept_data);
-#endif
 }
 
 void NBN_AcceptData_WriteUInt(NBN_AcceptData *accept_data, unsigned int v)
@@ -3007,11 +3050,7 @@ void NBN_Channel_Destroy(NBN_Channel *channel)
             NBN_Connection_RecycleMessage(channel->connection, &slot->message);
     }
 
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    NBN_Deallocator(channel, NBN_MEMORY_CHANNELS);
-#else
     NBN_Deallocator(channel);
-#endif
 }
 
 void NBN_Channel_AddTime(NBN_Channel *channel, double time)
@@ -3109,22 +3148,14 @@ int NBN_Channel_ReconstructMessageFromChunks(
 
 void NBN_Channel_ResizeWriteChunkBuffer(NBN_Channel *channel, unsigned int size)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    channel->write_chunk_buffer = NBN_Reallocator(channel->write_chunk_buffer, size, NBN_MEMORY_WRITE_CHUNK_BUFFERS);
-#else
     channel->write_chunk_buffer = NBN_Reallocator(channel->write_chunk_buffer, size);
-#endif
 
     channel->write_chunk_buffer_size = size;
 }
 
 void NBN_Channel_ResizeReadChunkBuffer(NBN_Channel *channel, unsigned int size)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    channel->read_chunk_buffer = NBN_Reallocator(channel->read_chunk_buffer, size, NBN_MEMORY_READ_CHUNK_BUFFERS);
-#else
     channel->read_chunk_buffer = NBN_Reallocator(channel->read_chunk_buffer, size);
-#endif
 
     channel->read_chunk_buffer_size = size;
 }
@@ -3147,12 +3178,7 @@ static NBN_Message *NBN_UnreliableOrderedChannel_GetNextOutgoingMessage(NBN_Chan
 
 NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(void)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    NBN_UnreliableOrderedChannel *channel = NBN_Allocator(
-            sizeof(NBN_UnreliableOrderedChannel), NBN_MEMORY_CHANNELS);
-#else
     NBN_UnreliableOrderedChannel *channel = NBN_Allocator(sizeof(NBN_UnreliableOrderedChannel));
-#endif
 
     channel->base.AddReceivedMessage = NBN_UnreliableOrderedChannel_AddReceivedMessage;
     channel->base.AddOutgoingMessage = NBN_UnreliableOrderedChannel_AddOutgoingMessage;
@@ -3250,12 +3276,7 @@ static int NBN_ReliableOrderedChannel_OnOutgoingMessageAcked(NBN_Channel *, uint
 
 NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(void)
 {
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    NBN_ReliableOrderedChannel *channel = NBN_Allocator(
-            sizeof(NBN_ReliableOrderedChannel), NBN_MEMORY_CHANNELS);
-#else
     NBN_ReliableOrderedChannel *channel = NBN_Allocator(sizeof(NBN_ReliableOrderedChannel));
-#endif
 
     channel->base.AddReceivedMessage = NBN_ReliableOrderedChannel_AddReceivedMessage;
     channel->base.AddOutgoingMessage = NBN_ReliableOrderedChannel_AddOutgoingMessage;
@@ -3484,6 +3505,8 @@ static int NBN_Endpoint_SplitMessageIntoChunks(
 
 void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server)
 {
+    NBN_MemoryManager_Init();
+
     endpoint->config = config;
     endpoint->is_server = is_server;
     endpoint->next_outgoing_message = 0;
@@ -3568,6 +3591,8 @@ void NBN_Endpoint_Deinit(NBN_Endpoint *endpoint)
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
     NBN_PacketSimulator_Stop(&endpoint->packet_simulator);
 #endif
+
+    NBN_MemoryManager_Deinit();
 }
 
 void NBN_Endpoint_RegisterMessageBuilder(NBN_Endpoint *endpoint, NBN_MessageBuilder msg_builder, uint8_t msg_type)
@@ -3813,12 +3838,15 @@ void NBN_GameClient_Init(const char *protocol_name, const char *ip_address, uint
 
     NBN_Endpoint_Init(&__game_client.endpoint, config, false);
     __game_client.accept_data = NULL;
+    __game_client.server_connection = NULL;
 }
 
 void NBN_GameClient_Deinit(void)
 {
     NBN_Endpoint_Deinit(&__game_client.endpoint);
-    NBN_Connection_Destroy(__game_client.server_connection);
+
+    if (__game_client.server_connection)
+        NBN_Connection_Destroy(__game_client.server_connection);
 
     if (__game_client.accept_data != NULL)
         NBN_AcceptData_Destroy(__game_client.accept_data);
@@ -5000,11 +5028,7 @@ int NBN_PacketSimulator_EnqueuePacket(
     jitter = (jitter > 0) ? (rand() % (jitter * 2)) - jitter : 0;
 
 
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-    NBN_PacketSimulatorEntry *entry = NBN_Allocator(sizeof(NBN_PacketSimulatorEntry), NBN_MEMORY_PACKET_SIMULATOR_ENTRY);
-#else
-    NBN_PacketSimulatorEntry *entry = NBN_Allocator(sizeof(NBN_PacketSimulatorEntry));
-#endif
+    NBN_PacketSimulatorEntry *entry = NBN_MemoryManager_Alloc(NBN_MEM_PACKET_SIMULATOR_ENTRY);
 
     entry->delay = packet_simulator->ping + jitter / 1000; /* and converted back to seconds */
     entry->receiver = receiver;
@@ -5133,11 +5157,7 @@ static void *NBN_PacketSimulator_Routine(void *arg)
             packet_simulator->packet_count--;
 
             // release the memory allocated for the entry
-#if defined(NBN_DEBUG) && defined(NBN_MEMORY_TRACING)
-            NBN_Deallocator(entry, NBN_MEMORY_PACKET_SIMULATOR_ENTRY);
-#else
-            NBN_Deallocator(entry);
-#endif
+            NBN_MemoryManager_Dealloc(entry, NBN_MEM_PACKET_SIMULATOR_ENTRY);
 
             entry = next;
         }
