@@ -73,7 +73,6 @@ static int HandleNewConnection(void)
 
     // Otherwise...
 
-    // Retrieve the incoming client connection
     NBN_Connection *connection = NBN_GameServer_GetIncomingConnection(); 
 
     // Get a spawning position for the client
@@ -117,31 +116,6 @@ static int HandleNewConnection(void)
     return 0;
 }
 
-static void DestroyClient(uint32_t client_id)
-{
-    for (int i = 0; i < MAX_CLIENTS; i++)
-    {
-        if (clients[i] && clients[i]->state.client_id == client_id)
-        {
-            free(clients[i]);
-            clients[i] = NULL;
-
-            return;
-        }
-    }
-}
-
-static void HandleClientDisconnection()
-{
-    uint32_t client_id = NBN_GameServer_GetDisconnectedClientId(); // Get the id of the disconnected client
-
-    TraceLog(LOG_INFO, "Client has disconnected (id: %d)", client_id);
-
-    DestroyClient(client_id);
-
-    client_count--;
-}
-
 static Client *FindClientById(uint32_t client_id)
 {
     for (int i = 0; i < MAX_CLIENTS; i++)
@@ -151,6 +125,37 @@ static Client *FindClientById(uint32_t client_id)
     }
 
     return NULL;
+}
+
+static void DestroyClient(Client *client)
+{
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (clients[i] && clients[i]->state.client_id == client->state.client_id)
+        {
+            clients[i] = NULL;
+
+            return;
+        }
+    }
+
+    free(client);
+}
+
+static void HandleClientDisconnection()
+{
+    NBN_Connection *cli_conn = NBN_GameServer_GetDisconnectedClient(); // Get the disconnected client
+
+    TraceLog(LOG_INFO, "Client has disconnected (id: %d)", cli_conn->id);
+
+    Client *client = FindClientById(cli_conn->id);
+
+    assert(client);
+
+    DestroyClient(client);
+    NBN_Connection_Destroy(cli_conn);
+
+    client_count--;
 }
 
 static void HandleUpdateStateMessage(UpdateStateMessage *msg, Client *sender)
