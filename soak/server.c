@@ -222,7 +222,7 @@ static int Tick(void)
                 break;
 
             case NBN_CLIENT_DISCONNECTED:
-                HandleClientDisconnection(NBN_GameServer_GetDisconnectedClientId());
+                HandleClientDisconnection(NBN_GameServer_GetDisconnectedClient()->id);
                 break;
 
             case NBN_CLIENT_MESSAGE_RECEIVED:
