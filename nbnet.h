@@ -1156,6 +1156,7 @@ int NBN_GameServer_RejectIncomingConnectionWithCode(int);
 int NBN_GameServer_RejectIncomingConnection(void);
 NBN_Connection *NBN_GameServer_GetIncomingConnection(void);
 NBN_Connection *NBN_GameServer_GetDisconnectedClient(void);
+NBN_Connection *NBN_GameServer_FindClientById(uint32_t);
 NBN_MessageInfo NBN_GameServer_GetMessageInfo(void);
 NBN_GameServerStats NBN_GameServer_GetStats(void);
 void NBN_GameServer_EnableEncryption(void);
@@ -4635,6 +4636,22 @@ NBN_Connection *NBN_GameServer_GetDisconnectedClient(void)
     assert(server_last_event.type == NBN_CLIENT_DISCONNECTED);
 
     return server_last_event.data.connection;
+}
+
+NBN_Connection *NBN_GameServer_FindClientById(uint32_t client_id)
+{
+    for (int i = 0; i < NBN_MAX_CLIENTS; i++)
+    {
+        if (__game_server.clients[i])
+        {
+            NBN_Connection *client = __game_server.clients[i];
+
+            if (client->id == client_id)
+                return client;
+        }
+    }
+
+    return NULL;
 }
 
 NBN_MessageInfo NBN_GameServer_GetMessageInfo(void)
