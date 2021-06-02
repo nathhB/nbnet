@@ -67,7 +67,11 @@ typedef struct
 
 typedef struct
 {
+#ifdef NBN_DISABLE_MEMORY_POOLING
+    size_t mem_sizes[16];
+#else
     NBN_MemPool mem_pools[16];
+#endif /* NBN_DISABLE_MEMORY_POOLING */
 } NBN_MemoryManager;
 
 extern NBN_MemoryManager __mem_manager;
@@ -821,6 +825,7 @@ struct __NBN_Connection
     struct __NBN_Endpoint *endpoint;
     NBN_ConnectionStats stats;
     void *driver_data; /* Data attached to the connection by the underlying driver */
+    void *user_data; /* Used to attach data from the user code */
 
 #ifdef NBN_DEBUG
     /* Debug callbacks */
@@ -1247,6 +1252,8 @@ static void NBN_MemoryManager_Deinit(void);
 static void *NBN_MemoryManager_Alloc(unsigned int);
 static void NBN_MemoryManager_Dealloc(void *, unsigned int);
 
+#if !defined(NBN_DISABLE_MEMORY_POOLING)
+
 static void NBN_MemPool_Init(NBN_MemPool *, size_t, unsigned int);
 static void NBN_MemPool_Deinit(NBN_MemPool *);
 static void NBN_MemPool_Grow(NBN_MemPool *, unsigned int);
@@ -1254,8 +1261,15 @@ static void *NBN_MemPool_Alloc(NBN_MemPool *);
 static void NBN_MemPool_Dealloc(NBN_MemPool *, void *);
 static void NBN_MemPool_Grow(NBN_MemPool *, unsigned int);
 
+#endif /* NBN_DISABLE_MEMORY_POOLING */
+
 static void NBN_MemoryManager_Init(void)
 {
+#ifdef NBN_DISABLE_MEMORY_POOLING
+    __mem_manager.mem_sizes[NBN_MEM_MESSAGE_CHUNK] = sizeof(NBN_MessageChunk);
+    __mem_manager.mem_sizes[NBN_MEM_BYTE_ARRAY_MESSAGE] = sizeof(NBN_ByteArrayMessage);
+    __mem_manager.mem_sizes[NBN_MEM_CONNECTION] = sizeof(NBN_Connection);
+#else
     NBN_MemPool_Init(&__mem_manager.mem_pools[NBN_MEM_MESSAGE_CHUNK], sizeof(NBN_MessageChunk), 256);
     NBN_MemPool_Init(&__mem_manager.mem_pools[NBN_MEM_BYTE_ARRAY_MESSAGE], sizeof(NBN_ByteArrayMessage), 256);
     NBN_MemPool_Init(&__mem_manager.mem_pools[NBN_MEM_CONNECTION], sizeof(NBN_Connection), 16);
@@ -1263,28 +1277,43 @@ static void NBN_MemoryManager_Init(void)
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
     NBN_MemPool_Init(&__mem_manager.mem_pools[NBN_MEM_PACKET_SIMULATOR_ENTRY], sizeof(NBN_PacketSimulatorEntry), 512);
 #endif
+#endif /* NBN_DISABLE_MEMORY_POOLING */
 }
 
 static void NBN_MemoryManager_Deinit(void)
 {
+#if !defined(NBN_DISABLE_MEMORY_POOLING)
     NBN_MemPool_Deinit(&__mem_manager.mem_pools[NBN_MEM_MESSAGE_CHUNK]);
     NBN_MemPool_Deinit(&__mem_manager.mem_pools[NBN_MEM_BYTE_ARRAY_MESSAGE]);
-    // NBN_MemPool_Deinit(&__mem_manager.mem_pools[NBN_MEM_CONNECTION]);
+    NBN_MemPool_Deinit(&__mem_manager.mem_pools[NBN_MEM_CONNECTION]);
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
     NBN_MemPool_Deinit(&__mem_manager.mem_pools[NBN_MEM_PACKET_SIMULATOR_ENTRY]);
 #endif
+#endif /* NBN_DISABLE_MEMORY_POOLING */
 }
 
 static void *NBN_MemoryManager_Alloc(unsigned int mem_tag)
 {
+#ifdef NBN_DISABLE_MEMORY_POOLING
+    return NBN_Allocator(__mem_manager.mem_sizes[mem_tag]);
+#else
     return NBN_MemPool_Alloc(&__mem_manager.mem_pools[mem_tag]);
+#endif /* NBN_DISABLE_MEMORY_POOLING */
 }
 
 static void NBN_MemoryManager_Dealloc(void *ptr, unsigned int mem_tag)
 {
+#ifdef NBN_DISABLE_MEMORY_POOLING
+    (void)mem_tag;
+
+    NBN_Deallocator(ptr);
+#else
     NBN_MemPool_Dealloc(&__mem_manager.mem_pools[mem_tag], ptr);
+#endif /* NBN_DISABLE_MEMORY_POOLING */
 }
+
+#if !defined(NBN_DISABLE_MEMORY_POOLING)
 
 static void NBN_MemPool_Init(NBN_MemPool *pool, size_t block_size, unsigned int initial_block_count)
 {
@@ -1342,6 +1371,8 @@ static void NBN_MemPool_Grow(NBN_MemPool *pool, unsigned int block_count)
 
     pool->block_count = block_count;
 }
+
+#endif /* NBN_DISABLE_MEMORY_POOLING */
 
 #pragma endregion /* Memory management */
 
@@ -2257,6 +2288,7 @@ NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, void *d
     connection->id = id;
     connection->protocol_id = protocol_id;
     connection->driver_data = driver_data;
+    connection->user_data = NULL;
     connection->endpoint = endpoint;
     connection->last_recv_packet_time = 0;
     connection->next_packet_seq_number = 1;
