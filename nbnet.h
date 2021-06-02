@@ -1269,6 +1269,10 @@ static void NBN_MemoryManager_Init(void)
     __mem_manager.mem_sizes[NBN_MEM_MESSAGE_CHUNK] = sizeof(NBN_MessageChunk);
     __mem_manager.mem_sizes[NBN_MEM_BYTE_ARRAY_MESSAGE] = sizeof(NBN_ByteArrayMessage);
     __mem_manager.mem_sizes[NBN_MEM_CONNECTION] = sizeof(NBN_Connection);
+
+#if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
+    __mem_manager.mem_sizes[NBN_MEM_PACKET_SIMULATOR_ENTRY] = sizeof(NBN_PacketSimulatorEntry);
+#endif
 #else
     NBN_MemPool_Init(&__mem_manager.mem_pools[NBN_MEM_MESSAGE_CHUNK], sizeof(NBN_MessageChunk), 256);
     NBN_MemPool_Init(&__mem_manager.mem_pools[NBN_MEM_BYTE_ARRAY_MESSAGE], sizeof(NBN_ByteArrayMessage), 256);
