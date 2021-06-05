@@ -47,7 +47,8 @@ mergeInto(LibraryManager.library, {
         const packet = this.gameServer.packets.shift()
 
         if (packet) {
-            const [ packetData, packetSenderId ] = packet
+	    const packetData = packet[0]
+            const packetSenderId = packet[1]
             const ptr = stackAlloc(packetData.byteLength)
             const byteArray = new Uint8Array(packetData)
 
