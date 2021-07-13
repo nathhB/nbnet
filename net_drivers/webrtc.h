@@ -32,18 +32,26 @@ freely, subject to the following restrictions:
 
 #ifdef NBNET_IMPL
 
+#if !defined(EXTERN_C)
+#if defined(__cplusplus)
+#define NBN_EXTERN extern "C"
+#else
+#define NBN_EXTERN extern
+#endif
+#endif
+
 #include <emscripten/emscripten.h>
 
 #pragma region Game server
 
 /* --- JS API --- */
 
-extern void __js_game_server_init(uint32_t);
-extern int __js_game_server_start(uint16_t);
-extern uint8_t *__js_game_server_dequeue_packet(uint32_t *, unsigned int *);
-extern int __js_game_server_send_packet_to(uint8_t *, unsigned int, uint32_t);
-extern void __js_game_server_close_client_peer(unsigned int);
-extern void __js_game_server_stop(void);
+NBN_EXTERN void __js_game_server_init(uint32_t);
+NBN_EXTERN int __js_game_server_start(uint16_t);
+NBN_EXTERN uint8_t *__js_game_server_dequeue_packet(uint32_t *, unsigned int *);
+NBN_EXTERN int __js_game_server_send_packet_to(uint8_t *, unsigned int, uint32_t);
+NBN_EXTERN void __js_game_server_close_client_peer(unsigned int);
+NBN_EXTERN void __js_game_server_stop(void);
 
 /* --- Driver implementation --- */
 
@@ -110,11 +118,11 @@ int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, NBN_Connection *conn)
 
 /* --- JS API --- */
 
-extern void __js_game_client_init(uint32_t);
-extern int __js_game_client_start(const char *, uint16_t);
-extern uint8_t *__js_game_client_dequeue_packet(unsigned int *);
-extern int __js_game_client_send_packet(uint8_t *, unsigned int);
-extern void __js_game_client_close(void);
+NBN_EXTERN void __js_game_client_init(uint32_t);
+NBN_EXTERN int __js_game_client_start(const char *, uint16_t);
+NBN_EXTERN uint8_t *__js_game_client_dequeue_packet(unsigned int *);
+NBN_EXTERN int __js_game_client_send_packet(uint8_t *, unsigned int);
+NBN_EXTERN void __js_game_client_close(void);
 
 /* --- Driver implementation --- */
 

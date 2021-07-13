@@ -39,11 +39,13 @@ freely, subject to the following restrictions:
 #pragma region Platform detection
 
 #if defined(_WIN32) || defined(_WIN64)
-#define PLATFORM_WINDOWS
+	#ifndef PLATFORM_WINDOWS
+		#define PLATFORM_WINDOWS
+	#endif
 #elif (defined(__APPLE__) && defined(__MACH__))
-#define PLATFORM_MAC
+	#define PLATFORM_MAC
 #else
-#define PLATFORM_UNIX
+	#define PLATFORM_UNIX
 #endif
 
 #pragma endregion /* Platform detection */
@@ -291,7 +293,7 @@ void NBN_Driver_GServ_DestroyClientConnection(NBN_Connection *connection)
 
 int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, NBN_Connection *connection)
 {
-    NBN_UDPConnection *udp_conn = connection->driver_data;
+    NBN_UDPConnection *udp_conn = (NBN_UDPConnection*)connection->driver_data;
 
     SOCKADDR_IN dest_addr;
 
@@ -317,7 +319,7 @@ static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress addre
     {
         /* this is a new connection */
 
-        NBN_UDPConnection *udp_conn = NBN_Allocator(sizeof(NBN_UDPConnection));
+        NBN_UDPConnection *udp_conn = (NBN_UDPConnection*)NBN_Allocator(sizeof(NBN_UDPConnection));
 
         udp_conn->id = next_conn_id++;
         udp_conn->address = address;
@@ -345,7 +347,7 @@ static NBN_Connection *FindClientConnectionByAddress(NBN_IPAddress address)
 
         if (connection)
         {
-            NBN_UDPConnection *udp_conn = connection->driver_data;
+            NBN_UDPConnection *udp_conn = (NBN_UDPConnection*)connection->driver_data;
 
             if (udp_conn->address.host == address.host && udp_conn->address.port == address.port)
                 return connection;
@@ -366,7 +368,7 @@ static int ResolveIpAddress(const char *, uint16_t, NBN_IPAddress *);
 
 int NBN_Driver_GCli_Start(uint32_t proto_id, const char *host, uint16_t port)
 {
-    NBN_UDPConnection *udp_conn = NBN_Allocator(sizeof(NBN_Connection));
+    NBN_UDPConnection *udp_conn = (NBN_UDPConnection*)NBN_Allocator(sizeof(NBN_Connection));
 
     protocol_id = proto_id;
 
@@ -395,7 +397,7 @@ void NBN_Driver_GCli_Stop(void)
 
 int NBN_Driver_GCli_RecvPackets(void)
 {
-    NBN_UDPConnection *udp_conn = server_connection->driver_data;
+    NBN_UDPConnection *udp_conn = (NBN_UDPConnection*)server_connection->driver_data;
     uint8_t buffer[NBN_PACKET_MAX_SIZE] = {0};
     SOCKADDR_IN src_addr;
     socklen_t src_addr_len = sizeof(src_addr);
@@ -440,7 +442,7 @@ int NBN_Driver_GCli_RecvPackets(void)
 
 int NBN_Driver_GCli_SendPacket(NBN_Packet *packet)
 {
-    NBN_UDPConnection *udp_conn = server_connection->driver_data;
+    NBN_UDPConnection *udp_conn = (NBN_UDPConnection*)server_connection->driver_data;
     SOCKADDR_IN dest_addr;
 
     dest_addr.sin_addr.s_addr = htonl(udp_conn->address.host);
