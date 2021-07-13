@@ -39,13 +39,13 @@ freely, subject to the following restrictions:
 #pragma region Platform detection
 
 #if defined(_WIN32) || defined(_WIN64)
-	#ifndef PLATFORM_WINDOWS
-		#define PLATFORM_WINDOWS
-	#endif
+    #ifndef PLATFORM_WINDOWS
+        #define PLATFORM_WINDOWS
+    #endif
 #elif (defined(__APPLE__) && defined(__MACH__))
-	#define PLATFORM_MAC
+    #define PLATFORM_MAC
 #else
-	#define PLATFORM_UNIX
+    #define PLATFORM_UNIX
 #endif
 
 #pragma endregion /* Platform detection */
