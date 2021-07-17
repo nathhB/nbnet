@@ -58,10 +58,10 @@ Peer.prototype.connect = function() {
 
             this.connection.send(description)
         }).catch((err) => {
-            raiseError(`setLocalDescription: ${err}`)
+            raiseError(this, `setLocalDescription: ${err}`)
         })
     }).catch((err) => {
-        raiseError(`createOffer: ${err}`)
+        raiseError(this, `createOffer: ${err}`)
     })
 }
 
@@ -125,7 +125,7 @@ function onIceGatheringStateChanged(peer) {
         waitForRemotePeerToBeReadyToReceiveIceCandidates(peer).then(() => {
             sendCandidates(peer)
         }).catch((err) => {
-            raiseError(`waitForRemotePeerToBeReadyToReceiveIceCandidates: ${err}`)
+            raiseError(peer, `waitForRemotePeerToBeReadyToReceiveIceCandidates: ${err}`)
         })
     }
 }
@@ -137,7 +137,7 @@ function handleOffer(peer, offer) {
         onRemoteDescriptionSet(peer)
         createAnswer(peer)
     }).catch((err) => {
-        raiseError(`setRemoteDescription: ${err}`)
+        raiseError(peer, `setRemoteDescription: ${err}`)
     })
 }
 
@@ -147,7 +147,7 @@ function handleAnswer(peer, answer) {
     peer.peerConnection.setRemoteDescription(answer).then(() => {
         onRemoteDescriptionSet(peer)
     }).catch((err) => {
-        raiseError(`setRemoteDescription: ${err}`)
+        raiseError(peer, `setRemoteDescription: ${err}`)
     })
 }
 
@@ -167,7 +167,7 @@ function handleCandidate(peer, candidate) {
     peer.peerConnection.addIceCandidate(candidate).then(() => {
         peer.logger.info('Candidate added')
     }).catch((err) => {
-        raiseError(`addIceCandidate: ${err}`)
+        raiseError(peer, `addIceCandidate: ${err}`)
     })
 }
 
@@ -180,10 +180,10 @@ function createAnswer(peer) {
 
             peer.connection.send(answer)
         }).catch((err) => {
-            raiseError(`setLocalDescription: ${err}`)
+            raiseError(peer, `setLocalDescription: ${err}`)
         })
     }).catch((err) => {
-        raiseError(`createAnswer: ${err}`)
+        raiseError(peer, `createAnswer: ${err}`)
     })
 }
 
