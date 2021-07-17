@@ -33,11 +33,11 @@ freely, subject to the following restrictions:
 #ifdef NBNET_IMPL
 
 #if !defined(EXTERN_C)
-#if defined(__cplusplus)
-#define NBN_EXTERN extern "C"
-#else
-#define NBN_EXTERN extern
-#endif
+    #if defined(__cplusplus)
+        #define NBN_EXTERN extern "C"
+    #else
+        #define NBN_EXTERN extern
+    #endif
 #endif
 
 #include <emscripten/emscripten.h>
