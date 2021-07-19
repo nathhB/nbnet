@@ -1070,6 +1070,7 @@ typedef struct
     NBN_Endpoint endpoint;
     NBN_Connection *server_connection;
     NBN_AcceptData *accept_data;
+    void *context;
 } NBN_GameClient;
 
 extern NBN_GameClient __game_client;
@@ -1083,6 +1084,8 @@ void NBN_GameClient_RegisterChannel(uint8_t, uint8_t);
 void NBN_GameClient_AddTime(double);
 int NBN_GameClient_Poll(void);
 int NBN_GameClient_SendPackets(void);
+void NBN_GameClient_SetContext(void *);
+void *NBN_GameClient_GetContext(void);
 NBN_OutgoingMessage *NBN_GameClient_CreateMessage(uint8_t, void *);
 NBN_OutgoingMessage *NBN_GameClient_CreateByteArrayMessage(uint8_t *, unsigned int);
 int NBN_GameClient_SendMessage(NBN_OutgoingMessage *, uint8_t);
@@ -1132,6 +1135,7 @@ typedef struct
     NBN_Connection *clients[NBN_MAX_CLIENTS];
     unsigned int client_count;
     NBN_GameServerStats stats;
+    void *context;
 } NBN_GameServer;
 
 extern NBN_GameServer __game_server;
@@ -1145,6 +1149,8 @@ void NBN_GameServer_RegisterChannel(uint8_t, uint8_t);
 void NBN_GameServer_AddTime(double);
 int NBN_GameServer_Poll(void);
 int NBN_GameServer_SendPackets(void);
+void NBN_GameServer_SetContext(void *);
+void *NBN_GameServer_GetContext(void);
 NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t, void *);
 int NBN_GameServer_CloseClient(NBN_Connection *);
 int NBN_GameServer_CloseClientWithCode(NBN_Connection *, int);
@@ -4017,6 +4023,16 @@ int NBN_GameClient_SendPackets(void)
     return NBN_Connection_FlushSendQueue(__game_client.server_connection);
 }
 
+void NBN_GameClient_SetContext(void *context)
+{
+    __game_client.context = context;
+}
+
+void *NBN_GameClient_GetContext(void)
+{
+    return __game_client.context;
+}
+
 NBN_OutgoingMessage *NBN_GameClient_CreateMessage(uint8_t msg_type, void *msg_data)
 {
     return NBN_Endpoint_CreateOutgoingMessage(&__game_client.endpoint, msg_type, msg_data);
@@ -4484,6 +4500,16 @@ int NBN_GameServer_SendPackets(void)
     }
 
     return 0;
+}
+
+void NBN_GameServer_SetContext(void *context)
+{
+    __game_server.context = context;
+}
+
+void *NBN_GameServer_GetContext(void)
+{
+    return __game_server.context;
 }
 
 NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t id, void *driver_data)
