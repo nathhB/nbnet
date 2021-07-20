@@ -1889,8 +1889,9 @@ void poly1305_auth(uint8_t out[POLY1305_TAGLEN], const uint8_t *m, size_t inlen,
 #ifndef _MSC_VER
     __attribute__((__bounded__(__minbytes__, 1, POLY1305_TAGLEN)))
     __attribute__((__bounded__(__buffer__, 2, 3)))
-    __attribute__((__bounded__(__minbytes__, 4, POLY1305_KEYLEN)));
+    __attribute__((__bounded__(__minbytes__, 4, POLY1305_KEYLEN)))
 #endif
+;
 
 void NBN_Packet_InitWrite(
         NBN_Packet *packet, uint32_t protocol_id, uint16_t seq_number, uint16_t ack, uint32_t ack_bits)
