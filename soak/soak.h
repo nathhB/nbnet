@@ -80,12 +80,6 @@ typedef struct
     uint8_t data[SOAK_MESSAGE_MAX_DATA_LENGTH];
 } SoakMessage;
 
-BEGIN_MESSAGE(SoakMessage)
-    SERIALIZE_UINT(msg->id, 0, UINT32_MAX);
-    SERIALIZE_UINT(msg->data_length, 1, SOAK_MESSAGE_MAX_DATA_LENGTH);
-    SERIALIZE_BYTES(msg->data, msg->data_length);
-END_MESSAGE
-
 int Soak_Init(int, char *[]);
 void Soak_Deinit(void);
 int Soak_ReadCommandLine(int, char *[]);
@@ -100,5 +94,6 @@ unsigned int Soak_GetDestroyedIncomingSoakMessageCount(void);
 SoakMessage *SoakMessage_CreateOutgoing(void);
 SoakMessage *SoakMessage_CreateIncoming(void);
 void SoakMessage_Destroy(SoakMessage *);
+int SoakMessage_Serialize(SoakMessage *, NBN_Stream *);
 
 #endif // SOAK_H_INCLUDED
