@@ -2816,7 +2816,7 @@ static int NBN_Connection_ReadNextMessageFromStream(
     {
         NBN_LogError("Failed to read message header");
 
-        return -1;
+        return NBN_ERROR;
     }
     
     uint8_t msg_type = message->header.type;
@@ -2826,7 +2826,7 @@ static int NBN_Connection_ReadNextMessageFromStream(
     {
         NBN_LogError("No message builder is registered for messages of type %d", msg_type);
 
-        return -1;
+        return NBN_ERROR;
     }
 
     NBN_MessageSerializer msg_serializer = connection->endpoint->message_serializers[msg_type];
@@ -2835,7 +2835,7 @@ static int NBN_Connection_ReadNextMessageFromStream(
     {
         NBN_LogError("No message serializer attached to message of type %d", msg_type);
 
-        return -1;
+        return NBN_ERROR;
     }
 
     NBN_Channel *channel = connection->channels[message->header.channel_id];
@@ -2844,7 +2844,7 @@ static int NBN_Connection_ReadNextMessageFromStream(
     {
         NBN_LogError("Channel %d does not exist", message->header.channel_id);
 
-        return -1;
+        return NBN_ERROR;
     }
 
     message->data = msg_builder();
@@ -2853,7 +2853,7 @@ static int NBN_Connection_ReadNextMessageFromStream(
     {
         NBN_LogError("Failed to read message body");
 
-        return -1;
+        return NBN_ERROR;
     }
 
     return 0;
@@ -2955,17 +2955,17 @@ static int NBN_Connection_GenerateKeys(NBN_Connection *connection)
     {
         NBN_LogError("Failed to initialize pseudo random number generator");
 
-        return -1;
+        return NBN_ERROR;
     }
 
     if (NBN_Connection_GenerateKeySet(&connection->keys1, &prng) < 0)
-        return -1;
+        return NBN_ERROR;
 
     if (NBN_Connection_GenerateKeySet(&connection->keys2, &prng) < 0)
-        return -1; 
+        return NBN_ERROR;
 
     if (NBN_Connection_GenerateKeySet(&connection->keys3, &prng) < 0)
-        return -1;
+        return NBN_ERROR;
 
     csprng_get(prng, connection->aes_iv, AES_BLOCKLEN);
     csprng_destroy(prng);
@@ -2982,7 +2982,7 @@ static int NBN_Connection_GenerateKeySet(NBN_ConnectionKeySet *key_set, CSPRNG *
     {
         NBN_LogError("Failed to generate public and private keys");
 
-        return -1;
+        return NBN_ERROR;
     }
 
     return 0;
@@ -2991,7 +2991,7 @@ static int NBN_Connection_GenerateKeySet(NBN_ConnectionKeySet *key_set, CSPRNG *
 static int NBN_Connection_BuildSharedKey(NBN_ConnectionKeySet *key_set, uint8_t *pub_key)
 {
     if (!ecdh_shared_secret(key_set->prv_key, pub_key, key_set->shared_key))
-        return -1;
+        return NBN_ERROR;
 
     return 0;
 }
@@ -4066,7 +4066,7 @@ int NBN_GameClient_SendMessage(NBN_OutgoingMessage *outgoing_msg, uint8_t channe
     {
         NBN_LogError("Failed to create outgoing message");
 
-        return -1;
+        return NBN_ERROR;
     }
 
     return 0;
@@ -4180,7 +4180,7 @@ static int NBN_GameClient_ProcessReceivedMessage(NBN_Message *message, NBN_Conne
         {
             NBN_LogError("Failed to reconstruct message from chunks");
 
-            return -1;
+            return NBN_ERROR;
         }
 
         NBN_MessageInfo msg_info = { complete_message.header.type, complete_message.data, NULL };
@@ -4856,7 +4856,7 @@ static int NBN_GameServer_ProcessReceivedMessage(NBN_Message *message, NBN_Conne
         {
             NBN_LogError("Failed to reconstruct message from chunks");
 
-            return -1;
+            return NBN_ERROR;
         }
 
         NBN_MessageInfo msg_info = { complete_message.header.type, complete_message.data, client };
