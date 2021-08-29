@@ -33,6 +33,18 @@
 #include <math.h>
 #include <assert.h>
 
+#ifndef NBN_Allocator
+#define NBN_Allocator malloc
+#endif
+
+#ifndef NBN_Reallocator
+#define NBN_Reallocator realloc
+#endif
+
+#ifndef NBN_Deallocator
+#define NBN_Deallocator free
+#endif
+
 #pragma region Declarations
 
 #define NBN_Abort abort /* TODO: custom abort mechanism */
