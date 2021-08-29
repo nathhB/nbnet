@@ -105,16 +105,16 @@ unsigned int GetRequiredNumberOfBitsFor(unsigned int);
     ASSERT_VALUE_IN_RANGE(v, min, max);             \
 }
 
-#define SERIALIZE_UINT(v, min, max) \
+#define NBN_SerializeUInt(v, min, max) \
     ASSERTED_SERIALIZE(v, min, max, stream->serialize_uint_func(stream, (unsigned int *)&(v), min, max))
-#define SERIALIZE_INT(v, min, max) \
+#define NBN_SerializeInt(v, min, max) \
     ASSERTED_SERIALIZE(v, min, max, stream->serialize_int_func(stream, &(v), min, max))
-#define SERIALIZE_FLOAT(v, min, max, precision) \
+#define NBN_SerializeFloat(v, min, max, precision) \
     ASSERTED_SERIALIZE(v, min, max, stream->serialize_float_func(stream, &(v), min, max, precision))
-#define SERIALIZE_BOOL(v) ASSERTED_SERIALIZE(v, 0, 1, stream->serialize_bool_func(stream, &(v)))
-#define SERIALIZE_STRING(v, length) SERIALIZE_BYTES(v, length)
-#define SERIALIZE_BYTES(v, length) stream->serialize_bytes_func(stream, (uint8_t *)v, length)
-#define SERIALIZE_PADDING() stream->serialize_padding_func(stream)
+#define NBN_SerializeBool(v) ASSERTED_SERIALIZE(v, 0, 1, stream->serialize_bool_func(stream, &(v)))
+#define NBN_SerializeString(v, length) NBN_SerializeBytes(v, length)
+#define NBN_SerializeBytes(v, length) stream->serialize_bytes_func(stream, (uint8_t *)v, length)
+#define NBN_SerializePadding() stream->serialize_padding_func(stream)
 
 #pragma region NBN_BitReader
 
@@ -243,26 +243,6 @@ void NBN_MeasureStream_Reset(NBN_MeasureStream *);
 #define NBN_MAX_CHANNELS 8 /* Maximum value of uint8_t, see message header */
 #define NBN_MAX_MESSAGE_TYPES 255 /* Maximum value of uint8_t, see message header */
 #define NBN_MESSAGE_RESEND_DELAY 0.1 /* Number of seconds before a message is resent (reliable messages redundancy) */
-
-/*
- * Message definition macro, use it like this in an header file shared between your client and server code:
- *
- * typedef struct
- * {
- *     ...
- * } SomeMessage;
- *
- * BEGIN_MESSAGE(SomeMessage)
- *     < USE SERIALIZATION MACROS HERE >
- * END_MESSAGE
- */
-
-#define BEGIN_MESSAGE(name) \
-static inline int name##_Serialize(name *msg, NBN_Stream *stream) {
-
-#define END_MESSAGE \
-    return 0; \
-}
 
 typedef int (*NBN_MessageSerializer)(void *, NBN_Stream *);
 typedef void *(*NBN_MessageBuilder)(void);
@@ -541,12 +521,7 @@ typedef struct
 
 NBN_MessageChunk *NBN_MessageChunk_Create(void);
 void NBN_MessageChunk_Destroy(NBN_MessageChunk *);
-
-BEGIN_MESSAGE(NBN_MessageChunk)
-    SERIALIZE_BYTES(&msg->id, 1);
-    SERIALIZE_BYTES(&msg->total, 1);
-    SERIALIZE_BYTES(msg->data, NBN_MESSAGE_CHUNK_SIZE);
-END_MESSAGE
+int NBN_MessageChunk_Serialize(NBN_MessageChunk *, NBN_Stream *);
 
 #pragma endregion /* NBN_MessageChunk */
 
@@ -559,31 +534,25 @@ typedef struct
     int code;
 } NBN_ClientClosedMessage;
 
-BEGIN_MESSAGE(NBN_ClientClosedMessage)
-    SERIALIZE_INT(msg->code, SHRT_MIN, SHRT_MAX);
-END_MESSAGE
-
 NBN_ClientClosedMessage *NBN_ClientClosedMessage_Create(void);
 void NBN_ClientClosedMessage_Destroy(NBN_ClientClosedMessage *);
+int NBN_ClientClosedMessage_Serialize(NBN_ClientClosedMessage *, NBN_Stream *);
 
 #pragma endregion /* NBN_ClientClosedMessage */
 
 #pragma region NBN_ClientAcceptedMessage
 
 #define NBN_CLIENT_ACCEPTED_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 3) /* Reserved message type */
-#define NBN_ACCEPT_DATA_MAX_SIZE 255
+#define NBN_ACCEPT_DATA_MAX_SIZE 4096
 
 typedef struct
 {
     uint8_t data[NBN_ACCEPT_DATA_MAX_SIZE];
 } NBN_ClientAcceptedMessage;
 
-BEGIN_MESSAGE(NBN_ClientAcceptedMessage)
-    SERIALIZE_BYTES(msg->data, NBN_ACCEPT_DATA_MAX_SIZE);
-END_MESSAGE
-
 NBN_ClientAcceptedMessage *NBN_ClientAcceptedMessage_Create(void);
 void NBN_ClientAcceptedMessage_Destroy(NBN_ClientAcceptedMessage *);
+int NBN_ClientAcceptedMessage_Serialize(NBN_ClientAcceptedMessage *, NBN_Stream *);
 
 #pragma endregion /* NBN_ClientAcceptedMessage */
 
@@ -598,13 +567,9 @@ typedef struct
     unsigned int length;
 } NBN_ByteArrayMessage;
 
-BEGIN_MESSAGE(NBN_ByteArrayMessage)
-    SERIALIZE_UINT(msg->length, 0, NBN_BYTE_ARRAY_MAX_SIZE);
-    SERIALIZE_BYTES(msg->bytes, msg->length);
-END_MESSAGE
-
 NBN_ByteArrayMessage *NBN_ByteArrayMessage_Create(void);
 void NBN_ByteArrayMessage_Destroy(NBN_ByteArrayMessage *);
+int NBN_ByteArrayMessage_Serialize(NBN_ByteArrayMessage *, NBN_Stream *);
 
 #pragma endregion /* NBN_ByteArrayMessage */
 
@@ -620,15 +585,9 @@ typedef struct
     uint8_t aes_iv[AES_BLOCKLEN];
 } NBN_PublicCryptoInfoMessage;
 
-BEGIN_MESSAGE(NBN_PublicCryptoInfoMessage)
-    SERIALIZE_BYTES(msg->pub_key1, ECC_PUB_KEY_SIZE);
-    SERIALIZE_BYTES(msg->pub_key2, ECC_PUB_KEY_SIZE);
-    SERIALIZE_BYTES(msg->pub_key3, ECC_PUB_KEY_SIZE);
-    SERIALIZE_BYTES(msg->aes_iv, AES_BLOCKLEN);
-END_MESSAGE
-
 NBN_PublicCryptoInfoMessage *NBN_PublicCryptoInfoMessage_Create(void);
 void NBN_PublicCryptoInfoMessage_Destroy(NBN_PublicCryptoInfoMessage *);
+int NBN_PublicCryptoInfoMessage_Serialize(NBN_PublicCryptoInfoMessage *, NBN_Stream *);
 
 #pragma endregion /* NBN_PublicCryptoInfoMessage */
 
@@ -638,13 +597,9 @@ void NBN_PublicCryptoInfoMessage_Destroy(NBN_PublicCryptoInfoMessage *);
 
 typedef struct {} NBN_StartEncryptMessage;
 
-BEGIN_MESSAGE(NBN_StartEncryptMessage)
-    (void)msg;
-    (void)stream;
-END_MESSAGE
-
 NBN_StartEncryptMessage *NBN_StartEncryptMessage_Create(void);
 void NBN_StartEncryptMessage_Destroy(NBN_StartEncryptMessage *);
+int NBN_StartEncryptMessage_Serialize(NBN_StartEncryptMessage *, NBN_Stream *);
 
 #pragma endregion /* NBN_StartEncryptMessage */
 
@@ -2040,16 +1995,16 @@ int NBN_Packet_Seal(NBN_Packet *packet, NBN_Connection *connection)
 
 static int NBN_Packet_SerializeHeader(NBN_PacketHeader *header, NBN_Stream *stream)
 {
-    SERIALIZE_BYTES(&header->protocol_id, sizeof(header->protocol_id));
-    SERIALIZE_BYTES(&header->seq_number, sizeof(header->seq_number));
-    SERIALIZE_BYTES(&header->ack, sizeof(header->ack));
-    SERIALIZE_BYTES(&header->ack_bits, sizeof(header->ack_bits));
-    SERIALIZE_BYTES(&header->messages_count, sizeof(header->messages_count));
-    SERIALIZE_BYTES(&header->is_encrypted, sizeof(header->is_encrypted));
+    NBN_SerializeBytes(&header->protocol_id, sizeof(header->protocol_id));
+    NBN_SerializeBytes(&header->seq_number, sizeof(header->seq_number));
+    NBN_SerializeBytes(&header->ack, sizeof(header->ack));
+    NBN_SerializeBytes(&header->ack_bits, sizeof(header->ack_bits));
+    NBN_SerializeBytes(&header->messages_count, sizeof(header->messages_count));
+    NBN_SerializeBytes(&header->is_encrypted, sizeof(header->is_encrypted));
 
     /* Do not serialize authentication tag when packet is not encrypted to save some bandwith */
     if (header->is_encrypted)
-        SERIALIZE_BYTES(&header->auth_tag, sizeof(header->auth_tag));
+        NBN_SerializeBytes(&header->auth_tag, sizeof(header->auth_tag));
 
     return 0;
 }
@@ -2154,9 +2109,9 @@ void NBN_Packet_ComputePoly1305Key(NBN_Packet *packet, NBN_Connection *connectio
 
 int NBN_Message_SerializeHeader(NBN_MessageHeader *message_header, NBN_Stream *stream)
 {
-    SERIALIZE_BYTES(&message_header->id, sizeof(message_header->id));
-    SERIALIZE_BYTES(&message_header->type, sizeof(message_header->type));
-    SERIALIZE_BYTES(&message_header->channel_id, sizeof(message_header->channel_id));
+    NBN_SerializeBytes(&message_header->id, sizeof(message_header->id));
+    NBN_SerializeBytes(&message_header->type, sizeof(message_header->type));
+    NBN_SerializeBytes(&message_header->channel_id, sizeof(message_header->channel_id));
 
     return 0;
 }
@@ -2195,6 +2150,15 @@ void NBN_MessageChunk_Destroy(NBN_MessageChunk *chunk)
     NBN_MemoryManager_Dealloc(chunk, NBN_MEM_MESSAGE_CHUNK);
 }
 
+int NBN_MessageChunk_Serialize(NBN_MessageChunk *msg, NBN_Stream *stream)
+{
+    NBN_SerializeBytes(&msg->id, 1);
+    NBN_SerializeBytes(&msg->total, 1);
+    NBN_SerializeBytes(msg->data, NBN_MESSAGE_CHUNK_SIZE);
+
+    return 0;
+}
+
 #pragma endregion /* NBN_MessageChunk */
 
 #pragma region NBN_ClientClosedMessage
@@ -2207,6 +2171,13 @@ NBN_ClientClosedMessage *NBN_ClientClosedMessage_Create(void)
 void NBN_ClientClosedMessage_Destroy(NBN_ClientClosedMessage *msg)
 {
     return NBN_Deallocator(msg);
+}
+
+int NBN_ClientClosedMessage_Serialize(NBN_ClientClosedMessage *msg, NBN_Stream *stream)
+{
+    NBN_SerializeInt(msg->code, SHRT_MIN, SHRT_MAX);
+
+    return 0;
 }
 
 #pragma endregion /* NBN_ClientClosedMessage */
@@ -2223,6 +2194,13 @@ void NBN_ClientAcceptedMessage_Destroy(NBN_ClientAcceptedMessage *msg)
     return NBN_Deallocator(msg);
 }
 
+int NBN_ClientAcceptedMessage_Serialize(NBN_ClientAcceptedMessage *msg, NBN_Stream *stream)
+{
+    NBN_SerializeBytes(msg->data, NBN_ACCEPT_DATA_MAX_SIZE);
+
+    return 0;
+}
+
 #pragma endregion /* NBN_ClientAcceptedMessage */
 
 #pragma region NBN_ByteArrayMessage
@@ -2235,6 +2213,14 @@ NBN_ByteArrayMessage *NBN_ByteArrayMessage_Create(void)
 void NBN_ByteArrayMessage_Destroy(NBN_ByteArrayMessage *msg)
 {
     NBN_MemoryManager_Dealloc(msg, NBN_MEM_BYTE_ARRAY_MESSAGE);
+}
+
+int NBN_ByteArrayMessage_Serialize(NBN_ByteArrayMessage *msg, NBN_Stream *stream)
+{
+    NBN_SerializeUInt(msg->length, 0, NBN_BYTE_ARRAY_MAX_SIZE);
+    NBN_SerializeBytes(msg->bytes, msg->length);
+
+    return 0;
 }
 
 #pragma endregion /* NBN_ByteArrayMessage */
@@ -2251,6 +2237,16 @@ void NBN_PublicCryptoInfoMessage_Destroy(NBN_PublicCryptoInfoMessage *msg)
     return NBN_Deallocator(msg);
 }
 
+int NBN_PublicCryptoInfoMessage_Serialize(NBN_PublicCryptoInfoMessage *msg, NBN_Stream *stream)
+{
+    NBN_SerializeBytes(msg->pub_key1, ECC_PUB_KEY_SIZE);
+    NBN_SerializeBytes(msg->pub_key2, ECC_PUB_KEY_SIZE);
+    NBN_SerializeBytes(msg->pub_key3, ECC_PUB_KEY_SIZE);
+    NBN_SerializeBytes(msg->aes_iv, AES_BLOCKLEN);
+
+    return 0;
+}
+
 #pragma endregion /* NBN_PublicCryptoInfoMessage */
 
 #pragma region NBN_StartEncryptMessage
@@ -2263,6 +2259,14 @@ NBN_StartEncryptMessage *NBN_StartEncryptMessage_Create(void)
 void NBN_StartEncryptMessage_Destroy(NBN_StartEncryptMessage *msg)
 {
     return NBN_Deallocator(msg);
+}
+
+int NBN_StartEncryptMessage_Serialize(NBN_StartEncryptMessage *msg, NBN_Stream *stream)
+{
+    (void)msg;
+    (void)stream;
+
+    return 0;
 }
 
 #pragma endregion /* NBN_StartEncryptMessage */
