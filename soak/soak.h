@@ -37,10 +37,6 @@
 
 #include "logging.h"
 
-#define NBN_Allocator malloc
-#define NBN_Reallocator realloc
-#define NBN_Deallocator free
-
 /* nbnet logging */
 #define NBN_LogInfo Soak_LogInfo
 #define NBN_LogTrace Soak_LogTrace
