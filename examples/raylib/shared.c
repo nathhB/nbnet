@@ -51,6 +51,13 @@ void ChangeColorMessage_Destroy(ChangeColorMessage *msg)
     free(msg);
 }
 
+int ChangeColorMessage_Serialize(ChangeColorMessage *msg, NBN_Stream *stream)
+{
+    NBN_SerializeUInt(msg->color, 0, MAX_COLORS - 1);
+
+    return 0;
+}
+
 UpdateStateMessage *UpdateStateMessage_Create(void)
 {
     return malloc(sizeof(UpdateStateMessage));
@@ -61,6 +68,15 @@ void UpdateStateMessage_Destroy(UpdateStateMessage *msg)
     free(msg);
 }
 
+int UpdateStateMessage_Serialize(UpdateStateMessage *msg, NBN_Stream *stream)
+{
+    NBN_SerializeUInt(msg->x, 0, GAME_WIDTH);
+    NBN_SerializeUInt(msg->y, 0, GAME_HEIGHT);
+    NBN_SerializeFloat(msg->val, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
+
+    return 0;
+}
+
 GameStateMessage *GameStateMessage_Create(void)
 {
     return malloc(sizeof(GameStateMessage));
@@ -69,6 +85,22 @@ GameStateMessage *GameStateMessage_Create(void)
 void GameStateMessage_Destroy(GameStateMessage *msg)
 {
     free(msg);
+}
+
+int GameStateMessage_Serialize(GameStateMessage *msg, NBN_Stream *stream)
+{
+    NBN_SerializeUInt(msg->client_count, 0, MAX_CLIENTS);
+
+    for (unsigned int i = 0; i < msg->client_count; i++)
+    {
+        NBN_SerializeUInt(msg->client_states[i].client_id, 0, UINT_MAX);
+        NBN_SerializeUInt(msg->client_states[i].color, 0, MAX_COLORS - 1);
+        NBN_SerializeUInt(msg->client_states[i].x, 0, GAME_WIDTH);
+        NBN_SerializeUInt(msg->client_states[i].y, 0, GAME_HEIGHT);
+        NBN_SerializeFloat(msg->client_states[i].val, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
+    }
+
+    return 0;
 }
 
 // Parse the command line

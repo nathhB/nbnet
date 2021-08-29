@@ -124,7 +124,7 @@ int main(void)
 
                     // The client has disconnected
                 case NBN_CLIENT_DISCONNECTED:
-                    assert(NBN_GameServer_GetDisconnectedClientId() == client->id);
+                    assert(NBN_GameServer_GetDisconnectedClient()->id == client->id);
 
                     client = NULL;
                     break;

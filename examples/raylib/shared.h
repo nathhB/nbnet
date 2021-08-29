@@ -184,34 +184,17 @@ typedef struct
 
 ChangeColorMessage *ChangeColorMessage_Create(void);
 void ChangeColorMessage_Destroy(ChangeColorMessage *);
+int ChangeColorMessage_Serialize(ChangeColorMessage *msg, NBN_Stream *);
+
 UpdateStateMessage *UpdateStateMessage_Create(void);
 void UpdateStateMessage_Destroy(UpdateStateMessage *);
+int UpdateStateMessage_Serialize(UpdateStateMessage *, NBN_Stream *);
+
 GameStateMessage *GameStateMessage_Create(void);
 void GameStateMessage_Destroy(GameStateMessage *);
+int GameStateMessage_Serialize(GameStateMessage *, NBN_Stream *);
+
 int ReadCommandLine(int, char *[]);
 Options GetOptions(void);
-
-BEGIN_MESSAGE(ChangeColorMessage)
-    SERIALIZE_UINT(msg->color, 0, MAX_COLORS - 1);
-END_MESSAGE
-
-BEGIN_MESSAGE(UpdateStateMessage)
-    SERIALIZE_UINT(msg->x, 0, GAME_WIDTH);
-    SERIALIZE_UINT(msg->y, 0, GAME_HEIGHT);
-    SERIALIZE_FLOAT(msg->val, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-END_MESSAGE
-
-BEGIN_MESSAGE(GameStateMessage)
-    SERIALIZE_UINT(msg->client_count, 0, MAX_CLIENTS);
-
-    for (unsigned int i = 0; i < msg->client_count; i++)
-    {
-        SERIALIZE_UINT(msg->client_states[i].client_id, 0, UINT_MAX);
-        SERIALIZE_UINT(msg->client_states[i].color, 0, MAX_COLORS - 1);
-        SERIALIZE_UINT(msg->client_states[i].x, 0, GAME_WIDTH);
-        SERIALIZE_UINT(msg->client_states[i].y, 0, GAME_HEIGHT);
-        SERIALIZE_FLOAT(msg->client_states[i].val, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-    }
-END_MESSAGE
 
 #endif /* RAYLIB_EXAMPLE_SHARED_H */

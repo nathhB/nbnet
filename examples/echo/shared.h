@@ -67,13 +67,9 @@ typedef struct
     char data[ECHO_MESSAGE_LENGTH];
 } EchoMessage;
 
-BEGIN_MESSAGE(EchoMessage)
-    SERIALIZE_UINT(msg->length, 0, ECHO_MESSAGE_LENGTH);
-    SERIALIZE_BYTES(msg->data, msg->length);
-END_MESSAGE
-
 EchoMessage *EchoMessage_Create(void);
 void EchoMessage_Destroy(EchoMessage *);
+int EchoMessage_Serialize(EchoMessage *, NBN_Stream *);
 
 void Sleep(double);
 

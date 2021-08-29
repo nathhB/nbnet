@@ -45,6 +45,14 @@ void EchoMessage_Destroy(EchoMessage *msg)
     free(msg);
 }
 
+int EchoMessage_Serialize(EchoMessage *msg, NBN_Stream *stream)
+{
+    NBN_SerializeUInt(msg->length, 0, ECHO_MESSAGE_LENGTH);
+    NBN_SerializeBytes(msg->data, msg->length);
+
+    return 0;
+}
+
 // Sleep for a given amount of seconds
 // Used to limit client and server tick rate
 void Sleep(double sec)
