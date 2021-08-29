@@ -1,6 +1,8 @@
 soak/build
+soak/build_web
 tests/build
 examples/raylib/build
+examples/raylib/build_web
 examples/echo/client
 examples/echo/server
 examples/echo_bytes/client
