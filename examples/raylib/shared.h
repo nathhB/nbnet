@@ -93,10 +93,6 @@ typedef struct tagMSG *LPMSG;
 #define NBN_LogDebug(...) TraceLog(LOG_DEBUG, __VA_ARGS__)
 #define NBN_LogTrace(...) TraceLog(LOG_TRACE, __VA_ARGS__)
 
-#define NBN_Allocator malloc // nbnet allocation function
-#define NBN_Reallocator realloc // nbnet reallocation function
-#define NBN_Deallocator free // nbnet deallocation function
-
 #include "../../nbnet.h"
 
 #ifdef __EMSCRIPTEN__

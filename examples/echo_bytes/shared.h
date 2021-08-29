@@ -31,10 +31,6 @@
 // An arbitrary chosen code used when rejecting a client to let it know that another client is already connected
 #define ECHO_SERVER_BUSY_CODE 42
 
-#define NBN_Allocator malloc // nbnet allocator
-#define NBN_Deallocator free // nbnet deallocator
-#define NBN_Reallocator realloc // nbnet reallocator
-
 // nbnet logging
 // nbnet does not implement any logging capabilities, you need to provide your own
 enum
