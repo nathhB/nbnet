@@ -86,10 +86,11 @@ nbnet does not provide any logging capacibilities so you have to provide your ow
 #define NBN_LogTrace(...) SomeLoggingFunction(__VA_ARGS__)
 ```
 
-Same for memory management:
+For memory management, nbnet uses `malloc`, `realloc` and `free`. You can redefine it using the following macros:
 
 ```
 #define NBN_Allocator malloc
+#define NBN_Reallocator realloc
 #define NBN_Deallocator free
 ```
 
