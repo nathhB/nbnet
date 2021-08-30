@@ -569,6 +569,11 @@ int main(int argc, char *argv[])
     }
 #endif
 
+    if (!disconnected)
+    {
+        NBN_GameClient_Disconnect();
+    }
+
     // Stop the client
     NBN_GameClient_Stop();
 
