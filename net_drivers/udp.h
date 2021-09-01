@@ -315,7 +315,7 @@ static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress addre
 {
     NBN_Connection *conn = FindClientConnectionByAddress(address);
 
-    if (conn == NULL && NBN_GameServer_GetClientCount() < NBN_MAX_CLIENTS)
+    if (conn == NULL && GameServer_GetClientCount() < NBN_MAX_CLIENTS)
     {
         /* this is a new connection */
 
