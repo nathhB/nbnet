@@ -872,6 +872,7 @@ uint8_t *NBN_AcceptData_ReadBytes(NBN_AcceptData *, uint8_t *, unsigned int);
 #pragma region NBN_EventQueue
 
 #define NBN_NO_EVENT 0 /* No event left in the events queue */
+#define NBN_SKIP_EVENT 1 /* Indicates that the event should be skipped */
 #define NBN_EVENT_QUEUE_CAPACITY 1024
 
 typedef struct
@@ -1034,7 +1035,7 @@ NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *, uint32_t, void *);
 enum
 {
     /* Client is connected to server */
-    NBN_CONNECTED = 1,
+    NBN_CONNECTED = 2,
 
     /* Client is disconnected from the server */
     NBN_DISCONNECTED,
@@ -1093,7 +1094,7 @@ void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
 enum
 {
     /* A new client has connected */
-    NBN_NEW_CONNECTION = 1,
+    NBN_NEW_CONNECTION = 2,
 
     /* A client has disconnected */
     NBN_CLIENT_DISCONNECTED,
@@ -4577,9 +4578,19 @@ int NBN_GameServer_Poll(void)
         GameServer_RemoveClosedClientConnections();
     }
 
-    bool ret = NBN_EventQueue_Dequeue(&__game_server.endpoint.event_queue, &server_last_event);
 
-    return ret ? GameServer_HandleEvent() : NBN_NO_EVENT;
+    while (true)
+    {
+        bool ret = NBN_EventQueue_Dequeue(&__game_server.endpoint.event_queue, &server_last_event);
+
+        if (!ret)
+            return NBN_NO_EVENT;
+
+        int ev = GameServer_HandleEvent();
+
+        if (ev != NBN_SKIP_EVENT)
+            return ev;
+    }
 }
 
 int NBN_GameServer_SendPackets(void)
@@ -5022,9 +5033,9 @@ static int GameServer_HandleMessageReceivedEvent(void)
 {
     NBN_MessageInfo message_info = server_last_event.data.message_info;
 
-    // TODO: find a way to skip events
-    if (message_info.sender->is_closed)
-        return NBN_NO_EVENT;
+    // skip all events related to a closed or stale connection
+    if (message_info.sender->is_closed || message_info.sender->is_stale)
+        return NBN_SKIP_EVENT;
 
     if (message_info.type == NBN_DISCONNECTION_MESSAGE_TYPE)
     {
