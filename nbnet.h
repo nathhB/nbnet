@@ -5004,7 +5004,7 @@ static void GameServer_RemoveClosedClientConnections(void)
         {
             NBN_Connection *client = __game_server.clients[i];
 
-            if (client->is_closed || client->is_stale)
+            if (client->is_closed && client->is_stale)
             {
                 NBN_LogDebug("Remove closed client connection (ID: %d)", client->id);
 
@@ -5045,6 +5045,8 @@ static int GameServer_HandleMessageReceivedEvent(void)
 
         if (GameServer_CloseClientWithCode(cli, -1, true) < 0)
             return NBN_ERROR;
+
+        cli->is_stale = true;
 
         GameServer_RemoveClosedClientConnections();
 
