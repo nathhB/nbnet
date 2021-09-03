@@ -1049,6 +1049,7 @@ typedef struct
     NBN_Endpoint endpoint;
     NBN_Connection *server_connection;
     NBN_AcceptData *accept_data;
+    bool is_connected;
     void *context;
 } NBN_GameClient;
 
@@ -1076,6 +1077,7 @@ NBN_MessageInfo NBN_GameClient_GetMessageInfo(void);
 NBN_ConnectionStats NBN_GameClient_GetStats(void);
 int NBN_GameClient_GetServerCloseCode(void);
 NBN_AcceptData *NBN_GameClient_GetAcceptData(void);
+bool NBN_GameClient_IsConnected(void);
 bool NBN_GameClient_IsEncryptionEnabled(void);
 void NBN_GameClient_EnableEncryption(void);
 
@@ -3950,8 +3952,10 @@ void NBN_GameClient_Init(const char *protocol_name, const char *ip_address, uint
     };
 
     NBN_Endpoint_Init(&__game_client.endpoint, config, false);
+
     __game_client.accept_data = NULL;
     __game_client.server_connection = NULL;
+    __game_client.is_connected = false;
 }
 
 void NBN_GameClient_Deinit(void)
@@ -4066,6 +4070,7 @@ int NBN_GameClient_Poll(void)
         if (NBN_Connection_CheckIfStale(__game_client.server_connection))
         {
             __game_client.server_connection->is_stale = true;
+            __game_client.is_connected = false;
 
             NBN_LogInfo("Server connection is stale. Disconnected.");
 
@@ -4211,6 +4216,11 @@ NBN_AcceptData *NBN_GameClient_GetAcceptData(void)
     return __game_client.accept_data;
 }
 
+bool NBN_GameClient_IsConnected(void)
+{
+    return __game_client.is_connected;
+}
+
 bool NBN_GameClient_IsEncryptionEnabled(void)
 {
     return __game_client.endpoint.config.is_encryption_enabled;
@@ -4296,12 +4306,14 @@ static int GameClient_HandleMessageReceivedEvent(void)
 
     if (message_info.type == NBN_CLIENT_CLOSED_MESSAGE_TYPE)
     {
+        __game_client.is_connected = false;
         client_closed_code = ((NBN_ClientClosedMessage *)message_info.data)->code;
 
         ret = NBN_DISCONNECTED;
     }
     else if (message_info.type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE)
     {
+        __game_client.is_connected = true;
         __game_client.accept_data = NBN_AcceptData_Read(((NBN_ClientAcceptedMessage *)message_info.data)->data); 
 
         ret = NBN_CONNECTED;
