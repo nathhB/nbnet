@@ -276,9 +276,9 @@ void SoakMessage_Destroy(SoakMessage *msg)
 
 int SoakMessage_Serialize(SoakMessage *msg, NBN_Stream *stream)
 {
-    NBN_SerializeUInt(msg->id, 0, UINT32_MAX);
-    NBN_SerializeUInt(msg->data_length, 1, SOAK_MESSAGE_MAX_DATA_LENGTH);
-    NBN_SerializeBytes(msg->data, msg->data_length);
+    NBN_SerializeUInt(stream, msg->id, 0, UINT32_MAX);
+    NBN_SerializeUInt(stream, msg->data_length, 1, SOAK_MESSAGE_MAX_DATA_LENGTH);
+    NBN_SerializeBytes(stream, msg->data, msg->data_length);
 
     return 0;
 }

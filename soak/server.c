@@ -72,7 +72,7 @@ static void HandleNewConnection(void)
 
     NBN_Connection *connection = NBN_GameServer_GetIncomingConnection();
 
-    NBN_GameServer_AcceptIncomingConnection(NULL);
+    NBN_GameServer_AcceptIncomingConnection();
 
     SoakClient *soak_client = malloc(sizeof(SoakClient));
 
