@@ -133,7 +133,7 @@ int main(void)
                     {
                         client = NBN_GameServer_GetIncomingConnection();
 
-                        NBN_GameServer_AcceptIncomingConnection(NULL);
+                        NBN_GameServer_AcceptIncomingConnection();
                     }
 
                     break;

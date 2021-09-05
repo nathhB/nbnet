@@ -47,8 +47,8 @@ void EchoMessage_Destroy(EchoMessage *msg)
 
 int EchoMessage_Serialize(EchoMessage *msg, NBN_Stream *stream)
 {
-    NBN_SerializeUInt(msg->length, 0, ECHO_MESSAGE_LENGTH);
-    NBN_SerializeBytes(msg->data, msg->length);
+    NBN_SerializeUInt(stream, msg->length, 0, ECHO_MESSAGE_LENGTH);
+    NBN_SerializeBytes(stream, msg->data, msg->length);
 
     return 0;
 }
