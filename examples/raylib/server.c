@@ -79,14 +79,18 @@ static int HandleNewConnection(void)
     Vector2 spawn = spawns[connection->id % MAX_CLIENTS];
 
     // Build some "initial" data that will be sent to the connected client
-    NBN_AcceptData *accept_data = NBN_AcceptData_Create();
 
-    NBN_AcceptData_WriteUInt(accept_data, spawn.x);
-    NBN_AcceptData_WriteUInt(accept_data, spawn.y);
-    NBN_AcceptData_WriteUInt(accept_data, connection->id);
+    NBN_Stream *ws = NBN_GameServer_GetConnectionAcceptDataWriteStream(connection);
 
+    unsigned int x = (unsigned int)spawn.x;
+    unsigned int y = (unsigned int)spawn.y;
+
+    NBN_SerializeUInt(ws, x, 0, GAME_WIDTH);
+    NBN_SerializeUInt(ws, y, 0, GAME_HEIGHT);
+    NBN_SerializeUInt(ws, connection->id, 0, UINT_MAX);
+    
     // Accept the connection
-    NBN_GameServer_AcceptIncomingConnection(accept_data);
+    NBN_GameServer_AcceptIncomingConnection();
 
     TraceLog(LOG_INFO, "Connection accepted (ID: %d)", connection->id);
 

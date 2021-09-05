@@ -29,10 +29,10 @@
 
 #define TARGET_FPS 100
 
-static bool connected = false; // Connected to the server
-static bool disconnected = false; // Got disconnected from the server
-static bool spawned = false; // Has spawned
-static int server_close_code; // The server code used when closing the connection
+static bool connected = false;         // Connected to the server
+static bool disconnected = false;      // Got disconnected from the server
+static bool spawned = false;           // Has spawned
+static int server_close_code;          // The server code used when closing the connection
 static ClientState local_client_state; // The state of the local client
 
 // Array to hold other client states (`MAX_CLIENTS - 1` because we don't need to store the state of the local client)
@@ -49,13 +49,13 @@ static unsigned int client_count = 0;
 
 // Conversion table between client color values and raylib colors
 Color client_colors_to_raylib_colors[] = {
-    RED,        // CLI_RED
-    LIME,       // CLI_GREEN
-    BLUE,       // CLI_BLUE
-    YELLOW,     // CLI_YELLOW
-    ORANGE,     // CLI_ORANGE
-    PURPLE,     // CLI_PURPLE
-    PINK        // CLI_PINK
+    RED,    // CLI_RED
+    LIME,   // CLI_GREEN
+    BLUE,   // CLI_BLUE
+    YELLOW, // CLI_YELLOW
+    ORANGE, // CLI_ORANGE
+    PURPLE, // CLI_PURPLE
+    PINK    // CLI_PINK
 };
 
 static void SpawnLocalClient(int x, int y, uint32_t client_id)
@@ -72,10 +72,17 @@ static void SpawnLocalClient(int x, int y, uint32_t client_id)
 
 static void HandleConnection(void)
 {
-    SpawnLocalClient(
-            NBN_AcceptData_ReadUInt(NBN_GameClient_GetAcceptData()),
-            NBN_AcceptData_ReadUInt(NBN_GameClient_GetAcceptData()),
-            NBN_AcceptData_ReadUInt(NBN_GameClient_GetAcceptData()));
+    NBN_Stream *rs = NBN_GameClient_GetAcceptDataReadStream();
+
+    unsigned int x = 0;
+    unsigned int y = 0;
+    unsigned int client_id = 0;
+
+    NBN_SerializeUInt(rs, x, 0, GAME_WIDTH);
+    NBN_SerializeUInt(rs, y, 0, GAME_HEIGHT);
+    NBN_SerializeUInt(rs, client_id, 0, UINT_MAX);
+
+    SpawnLocalClient(x, y, client_id);
 
     connected = true;
 }
@@ -216,7 +223,7 @@ static void HandleGameStateMessage(GameStateMessage *msg)
         // Ignore the state of the local client
         if (state.client_id != local_client_state.client_id)
         {
-            // If the client already exists we update it with the latest received state 
+            // If the client already exists we update it with the latest received state
             if (ClientExists(state.client_id))
                 UpdateClient(state);
             else // If the client does not exist, we create it
@@ -239,10 +246,10 @@ static void HandleReceivedMessage(void)
 
     switch (msg_info.type)
     {
-        // We received the latest game state from the server
-        case GAME_STATE_MESSAGE:
-            HandleGameStateMessage(msg_info.data);
-            break;
+    // We received the latest game state from the server
+    case GAME_STATE_MESSAGE:
+        HandleGameStateMessage(msg_info.data);
+        break;
     }
 }
 
@@ -250,20 +257,20 @@ static void HandleGameClientEvent(int ev)
 {
     switch (ev)
     {
-        case NBN_CONNECTED:
-            // We are connected to the server
-            HandleConnection(); 
-            break;
+    case NBN_CONNECTED:
+        // We are connected to the server
+        HandleConnection();
+        break;
 
-        case NBN_DISCONNECTED:
-            // The server has closed our connection
-            HandleDisconnection();
-            break;
+    case NBN_DISCONNECTED:
+        // The server has closed our connection
+        HandleDisconnection();
+        break;
 
-        case NBN_MESSAGE_RECEIVED:
-            // We received a message from the server
-            HandleReceivedMessage();
-            break;
+    case NBN_MESSAGE_RECEIVED:
+        // We received a message from the server
+        HandleReceivedMessage();
+        break;
     }
 }
 
@@ -480,7 +487,7 @@ void UpdateAndDraw(void)
         }
 
         acc -= tick_dt; // Consumes time
-    } 
+    }
 
     Draw();
 }
@@ -521,20 +528,20 @@ int main(int argc, char *argv[])
     // Register messages, have to be done after NBN_GameClient_Init and before NBN_GameClient_Start
     // Messages need to be registered on both client and server side
     NBN_GameClient_RegisterMessage(
-            CHANGE_COLOR_MESSAGE,
-            (NBN_MessageBuilder)ChangeColorMessage_Create,
-            (NBN_MessageDestructor)ChangeColorMessage_Destroy,
-            (NBN_MessageSerializer)ChangeColorMessage_Serialize);
+        CHANGE_COLOR_MESSAGE,
+        (NBN_MessageBuilder)ChangeColorMessage_Create,
+        (NBN_MessageDestructor)ChangeColorMessage_Destroy,
+        (NBN_MessageSerializer)ChangeColorMessage_Serialize);
     NBN_GameClient_RegisterMessage(
-            UPDATE_STATE_MESSAGE,
-            (NBN_MessageBuilder)UpdateStateMessage_Create,
-            (NBN_MessageDestructor)UpdateStateMessage_Destroy,
-            (NBN_MessageSerializer)UpdateStateMessage_Serialize);
+        UPDATE_STATE_MESSAGE,
+        (NBN_MessageBuilder)UpdateStateMessage_Create,
+        (NBN_MessageDestructor)UpdateStateMessage_Destroy,
+        (NBN_MessageSerializer)UpdateStateMessage_Serialize);
     NBN_GameClient_RegisterMessage(
-            GAME_STATE_MESSAGE,
-            (NBN_MessageBuilder)GameStateMessage_Create,
-            (NBN_MessageDestructor)GameStateMessage_Destroy,
-            (NBN_MessageSerializer)GameStateMessage_Serialize);
+        GAME_STATE_MESSAGE,
+        (NBN_MessageBuilder)GameStateMessage_Create,
+        (NBN_MessageDestructor)GameStateMessage_Destroy,
+        (NBN_MessageSerializer)GameStateMessage_Serialize);
 
     // Network conditions simulated variables (read from the command line, default is always 0)
     NBN_GameClient_SetPing(GetOptions().ping);
@@ -564,7 +571,7 @@ int main(int argc, char *argv[])
     }
 #else
     while (!WindowShouldClose())
-    { 
+    {
         UpdateAndDraw();
     }
 #endif
