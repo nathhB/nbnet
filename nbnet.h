@@ -169,7 +169,7 @@ typedef struct NBN_Stream NBN_Stream;
 typedef int (*NBN_Stream_SerializUint)(NBN_Stream *, unsigned int *, unsigned int, unsigned int);
 typedef int (*NBN_Stream_SerializeInt)(NBN_Stream *, int *, int, int);
 typedef int (*NBN_Stream_SerializeFloat)(NBN_Stream *, float *, float, float, int);
-typedef int (*NBN_Stream_SerializeBool)(NBN_Stream *, unsigned int *);
+typedef int (*NBN_Stream_SerializeBool)(NBN_Stream *, bool *);
 typedef int (*NBN_Stream_SerializePadding)(NBN_Stream *);
 typedef int (*NBN_Stream_SerializeBytes)(NBN_Stream *, uint8_t *, unsigned int);
 
@@ -205,7 +205,7 @@ void NBN_ReadStream_Init(NBN_ReadStream *, uint8_t *, unsigned int);
 int NBN_ReadStream_SerializeUint(NBN_ReadStream *, unsigned int *, unsigned int, unsigned int);
 int NBN_ReadStream_SerializeInt(NBN_ReadStream *, int *, int, int);
 int NBN_ReadStream_SerializeFloat(NBN_ReadStream *, float *, float, float, int);
-int NBN_ReadStream_SerializeBool(NBN_ReadStream *, unsigned int *);
+int NBN_ReadStream_SerializeBool(NBN_ReadStream *, bool *);
 int NBN_ReadStream_SerializePadding(NBN_ReadStream *);
 int NBN_ReadStream_SerializeBytes(NBN_ReadStream *, uint8_t *, unsigned int);
 
@@ -223,7 +223,7 @@ void NBN_WriteStream_Init(NBN_WriteStream *, uint8_t *, unsigned int);
 int NBN_WriteStream_SerializeUint(NBN_WriteStream *, unsigned int *, unsigned int, unsigned int);
 int NBN_WriteStream_SerializeInt(NBN_WriteStream *, int *, int, int);
 int NBN_WriteStream_SerializeFloat(NBN_WriteStream *, float *, float, float, int);
-int NBN_WriteStream_SerializeBool(NBN_WriteStream *, unsigned int *);
+int NBN_WriteStream_SerializeBool(NBN_WriteStream *, bool *);
 int NBN_WriteStream_SerializePadding(NBN_WriteStream *);
 int NBN_WriteStream_SerializeBytes(NBN_WriteStream *, uint8_t *, unsigned int);
 int NBN_WriteStream_Flush(NBN_WriteStream *);
@@ -242,7 +242,7 @@ void NBN_MeasureStream_Init(NBN_MeasureStream *);
 int NBN_MeasureStream_SerializeUint(NBN_MeasureStream *, unsigned int *, unsigned int, unsigned int);
 int NBN_MeasureStream_SerializeInt(NBN_MeasureStream *, int *, int, int);
 int NBN_MeasureStream_SerializeFloat(NBN_MeasureStream *, float *, float, float, int);
-int NBN_MeasureStream_SerializeBool(NBN_MeasureStream *, unsigned int *);
+int NBN_MeasureStream_SerializeBool(NBN_MeasureStream *, bool *);
 int NBN_MeasureStream_SerializePadding(NBN_MeasureStream *);
 int NBN_MeasureStream_SerializeBytes(NBN_MeasureStream *, uint8_t *, unsigned int);
 void NBN_MeasureStream_Reset(NBN_MeasureStream *);
@@ -1513,7 +1513,7 @@ int NBN_ReadStream_SerializeInt(NBN_ReadStream *read_stream, int *value, int min
 {
     assert(min <= max);
 
-    unsigned int isNegative = 0;
+    bool isNegative = 0;
     unsigned int abs_min = MIN(abs(min), abs(max));
     unsigned int abs_max = MAX(abs(min), abs(max));
 
@@ -1550,9 +1550,19 @@ int NBN_ReadStream_SerializeFloat(NBN_ReadStream *read_stream, float *value, flo
     return 0;
 }
 
-int NBN_ReadStream_SerializeBool(NBN_ReadStream *read_stream, unsigned int *value)
+int NBN_ReadStream_SerializeBool(NBN_ReadStream *read_stream, bool *value)
 {
-    return NBN_ReadStream_SerializeUint(read_stream, (unsigned int *)value, 0, 1);
+    Word v;
+
+    if (NBN_BitReader_Read(&read_stream->bit_reader, &v, 1) < 0)
+        return NBN_ERROR;
+
+    if (v < 0 || v > 1)
+        return NBN_ERROR;
+
+    *value = v;
+
+    return 0;
 }
 
 int NBN_ReadStream_SerializePadding(NBN_ReadStream *read_stream)
@@ -1657,7 +1667,7 @@ int NBN_WriteStream_SerializeInt(NBN_WriteStream *write_stream, int *value, int 
     isNegative = *value < 0;
     *value = abs(*value);
 
-    if (NBN_WriteStream_SerializeBool(write_stream, &isNegative) < 0)
+    if (NBN_WriteStream_SerializeUint(write_stream, &isNegative, 0, 1) < 0)
         return NBN_ERROR;
 
     if (NBN_WriteStream_SerializeUint(
@@ -1685,9 +1695,16 @@ int NBN_WriteStream_SerializeFloat(NBN_WriteStream *write_stream, float *value, 
     return 0;
 }
 
-int NBN_WriteStream_SerializeBool(NBN_WriteStream *write_stream, unsigned int *value)
+int NBN_WriteStream_SerializeBool(NBN_WriteStream *write_stream, bool *value)
 {
-    return NBN_WriteStream_SerializeUint(write_stream, value, 0, 1);
+    int v = *value;
+
+    assert(v >= 0 && v <= 1);
+
+    if (NBN_BitWriter_Write(&write_stream->bit_writer, v, 1) < 0)
+        return NBN_ERROR;
+
+    return 0;
 }
 
 int NBN_WriteStream_SerializePadding(NBN_WriteStream *write_stream)
@@ -1797,7 +1814,7 @@ int NBN_MeasureStream_SerializeFloat(
     return NBN_MeasureStream_SerializeInt(measure_stream, &i_val, i_min, i_max);
 }
 
-int NBN_MeasureStream_SerializeBool(NBN_MeasureStream *measure_stream, unsigned int *value)
+int NBN_MeasureStream_SerializeBool(NBN_MeasureStream *measure_stream, bool *value)
 {
     (void)value;
 
