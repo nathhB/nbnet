@@ -47,7 +47,10 @@
 
 #pragma region Declarations
 
-#define NBN_Abort abort /* TODO: custom abort mechanism */
+#ifndef NBN_Abort
+#define NBN_Abort abort
+#endif /* NBN_Abort */
+
 #define NBN_ERROR -1
 
 #pragma region Memory management
@@ -105,26 +108,26 @@ typedef uint32_t Word;
 #define B_IS_UNSET(mask, n) ((B_MASK(n) & mask) == 0)
 
 #define ASSERT_VALUE_IN_RANGE(v, min, max) assert(v >= min && v <= max)
-#define ASSERTED_SERIALIZE(v, min, max, code)       \
-{                                                   \
-    if (stream->type == NBN_STREAM_WRITE)           \
-    ASSERT_VALUE_IN_RANGE(v, min, max);             \
-    if (code < 0)                                   \
-    return NBN_ERROR;                               \
-    if (stream->type == NBN_STREAM_READ)            \
-    ASSERT_VALUE_IN_RANGE(v, min, max);             \
+#define ASSERTED_SERIALIZE(stream, v, min, max, func)       \
+{                                                           \
+    if (stream->type == NBN_STREAM_WRITE)                   \
+        ASSERT_VALUE_IN_RANGE(v, min, max);                 \
+    if ((func) < 0)                                         \
+        NBN_Abort();                                        \
+    if (stream->type == NBN_STREAM_READ)                    \
+        ASSERT_VALUE_IN_RANGE(v, min, max);                 \
 }
 
-#define NBN_SerializeUInt(v, min, max) \
-    ASSERTED_SERIALIZE(v, min, max, stream->serialize_uint_func(stream, (unsigned int *)&(v), min, max))
-#define NBN_SerializeInt(v, min, max) \
-    ASSERTED_SERIALIZE(v, min, max, stream->serialize_int_func(stream, &(v), min, max))
-#define NBN_SerializeFloat(v, min, max, precision) \
-    ASSERTED_SERIALIZE(v, min, max, stream->serialize_float_func(stream, &(v), min, max, precision))
-#define NBN_SerializeBool(v) ASSERTED_SERIALIZE(v, 0, 1, stream->serialize_bool_func(stream, &(v)))
-#define NBN_SerializeString(v, length) NBN_SerializeBytes(v, length)
-#define NBN_SerializeBytes(v, length) stream->serialize_bytes_func(stream, (uint8_t *)v, length)
-#define NBN_SerializePadding() stream->serialize_padding_func(stream)
+#define NBN_SerializeUInt(stream, v, min, max) \
+    ASSERTED_SERIALIZE(stream, v, min, max, stream->serialize_uint_func(stream, (unsigned int *)&(v), min, max))
+#define NBN_SerializeInt(stream, v, min, max) \
+    ASSERTED_SERIALIZE(stream, v, min, max, stream->serialize_int_func(stream, &(v), min, max))
+#define NBN_SerializeFloat(stream, v, min, max, precision) \
+    ASSERTED_SERIALIZE(stream, v, min, max, stream->serialize_float_func(stream, &(v), min, max, precision))
+#define NBN_SerializeBool(stream, v) ASSERTED_SERIALIZE(stream, v, 0, 1, stream->serialize_bool_func(stream, &(v)))
+#define NBN_SerializeString(stream, v, length) NBN_SerializeBytes(v, length)
+#define NBN_SerializeBytes(stream, v, length) stream->serialize_bytes_func(stream, (uint8_t *)v, length)
+#define NBN_SerializePadding(stream) stream->serialize_padding_func(stream)
 
 #pragma region NBN_BitReader
 
@@ -803,6 +806,9 @@ struct __NBN_Connection
     NBN_ConnectionStats stats;
     void *driver_data; /* Data attached to the connection by the underlying driver */
     void *user_data; /* Used to attach data from the user code */
+    uint8_t *accept_data[NBN_ACCEPT_DATA_MAX_SIZE]; /* Accept data */
+    NBN_WriteStream accept_data_w_stream; /* Used by the game server to write accept data */
+    NBN_ReadStream accept_data_r_stream; /* Used by the client to read accept data */
 
 #ifdef NBN_DEBUG
     /* Debug callbacks */
@@ -845,29 +851,6 @@ bool NBN_Connection_CheckIfStale(NBN_Connection *);
 void NBN_Connection_AddTime(NBN_Connection *, double);
 
 #pragma endregion /* NBN_Connection */
-
-#pragma region NBN_AcceptData
-
-typedef struct
-{
-    uint8_t buffer[NBN_ACCEPT_DATA_MAX_SIZE];
-    NBN_WriteStream write_stream;
-    NBN_ReadStream read_stream;
-} NBN_AcceptData;
-
-NBN_AcceptData *NBN_AcceptData_Create(void);
-NBN_AcceptData *NBN_AcceptData_Read(uint8_t *);
-void NBN_AcceptData_Destroy(NBN_AcceptData *);
-void NBN_AcceptData_WriteUInt(NBN_AcceptData *, unsigned int);
-void NBN_AcceptData_WriteInt(NBN_AcceptData *, int);
-void NBN_AcceptData_WriteFloat(NBN_AcceptData *, float);
-void NBN_AcceptData_WriteBytes(NBN_AcceptData *, uint8_t *, unsigned int);
-unsigned int NBN_AcceptData_ReadUInt(NBN_AcceptData *);
-int NBN_AcceptData_ReadInt(NBN_AcceptData *);
-float NBN_AcceptData_ReadFloat(NBN_AcceptData *);
-uint8_t *NBN_AcceptData_ReadBytes(NBN_AcceptData *, uint8_t *, unsigned int);
-
-#pragma endregion /* NBN_AcceptData */
 
 #pragma region NBN_EventQueue
 
@@ -1048,7 +1031,6 @@ typedef struct
 {
     NBN_Endpoint endpoint;
     NBN_Connection *server_connection;
-    NBN_AcceptData *accept_data;
     bool is_connected;
     void *context;
 } NBN_GameClient;
@@ -1076,7 +1058,7 @@ NBN_Connection *NBN_GameClient_CreateServerConnection(void *);
 NBN_MessageInfo NBN_GameClient_GetMessageInfo(void);
 NBN_ConnectionStats NBN_GameClient_GetStats(void);
 int NBN_GameClient_GetServerCloseCode(void);
-NBN_AcceptData *NBN_GameClient_GetAcceptData(void);
+NBN_Stream *NBN_GameClient_GetAcceptDataReadStream(void);
 bool NBN_GameClient_IsConnected(void);
 bool NBN_GameClient_IsEncryptionEnabled(void);
 void NBN_GameClient_EnableEncryption(void);
@@ -1144,7 +1126,8 @@ int NBN_GameServer_SendReliableMessageTo(NBN_Connection *, NBN_OutgoingMessage *
 int NBN_GameServer_BroadcastMessage(NBN_OutgoingMessage *, uint8_t);
 int NBN_GameServer_BroadcastUnreliableMessage(NBN_OutgoingMessage *);
 int NBN_GameServer_BroadcastReliableMessage(NBN_OutgoingMessage *);
-int NBN_GameServer_AcceptIncomingConnection(NBN_AcceptData *);
+NBN_Stream *NBN_GameServer_GetConnectionAcceptDataWriteStream(NBN_Connection *);
+int NBN_GameServer_AcceptIncomingConnection(void);
 int NBN_GameServer_RejectIncomingConnectionWithCode(int);
 int NBN_GameServer_RejectIncomingConnection(void);
 NBN_Connection *NBN_GameServer_GetIncomingConnection(void);
@@ -2021,16 +2004,16 @@ int NBN_Packet_Seal(NBN_Packet *packet, NBN_Connection *connection)
 
 static int Packet_SerializeHeader(NBN_PacketHeader *header, NBN_Stream *stream)
 {
-    NBN_SerializeBytes(&header->protocol_id, sizeof(header->protocol_id));
-    NBN_SerializeBytes(&header->seq_number, sizeof(header->seq_number));
-    NBN_SerializeBytes(&header->ack, sizeof(header->ack));
-    NBN_SerializeBytes(&header->ack_bits, sizeof(header->ack_bits));
-    NBN_SerializeBytes(&header->messages_count, sizeof(header->messages_count));
-    NBN_SerializeBytes(&header->is_encrypted, sizeof(header->is_encrypted));
+    NBN_SerializeBytes(stream, &header->protocol_id, sizeof(header->protocol_id));
+    NBN_SerializeBytes(stream, &header->seq_number, sizeof(header->seq_number));
+    NBN_SerializeBytes(stream, &header->ack, sizeof(header->ack));
+    NBN_SerializeBytes(stream, &header->ack_bits, sizeof(header->ack_bits));
+    NBN_SerializeBytes(stream, &header->messages_count, sizeof(header->messages_count));
+    NBN_SerializeBytes(stream, &header->is_encrypted, sizeof(header->is_encrypted));
 
     /* Do not serialize authentication tag when packet is not encrypted to save some bandwith */
     if (header->is_encrypted)
-        NBN_SerializeBytes(&header->auth_tag, sizeof(header->auth_tag));
+        NBN_SerializeBytes(stream, &header->auth_tag, sizeof(header->auth_tag));
 
     return 0;
 }
@@ -2135,9 +2118,9 @@ void NBN_Packet_ComputePoly1305Key(NBN_Packet *packet, NBN_Connection *connectio
 
 int NBN_Message_SerializeHeader(NBN_MessageHeader *message_header, NBN_Stream *stream)
 {
-    NBN_SerializeBytes(&message_header->id, sizeof(message_header->id));
-    NBN_SerializeBytes(&message_header->type, sizeof(message_header->type));
-    NBN_SerializeBytes(&message_header->channel_id, sizeof(message_header->channel_id));
+    NBN_SerializeBytes(stream, &message_header->id, sizeof(message_header->id));
+    NBN_SerializeBytes(stream, &message_header->type, sizeof(message_header->type));
+    NBN_SerializeBytes(stream, &message_header->channel_id, sizeof(message_header->channel_id));
 
     return 0;
 }
@@ -2178,9 +2161,9 @@ void NBN_MessageChunk_Destroy(NBN_MessageChunk *chunk)
 
 int NBN_MessageChunk_Serialize(NBN_MessageChunk *msg, NBN_Stream *stream)
 {
-    NBN_SerializeBytes(&msg->id, 1);
-    NBN_SerializeBytes(&msg->total, 1);
-    NBN_SerializeBytes(msg->data, NBN_MESSAGE_CHUNK_SIZE);
+    NBN_SerializeBytes(stream, &msg->id, 1);
+    NBN_SerializeBytes(stream, &msg->total, 1);
+    NBN_SerializeBytes(stream, msg->data, NBN_MESSAGE_CHUNK_SIZE);
 
     return 0;
 }
@@ -2201,7 +2184,7 @@ void NBN_ClientClosedMessage_Destroy(NBN_ClientClosedMessage *msg)
 
 int NBN_ClientClosedMessage_Serialize(NBN_ClientClosedMessage *msg, NBN_Stream *stream)
 {
-    NBN_SerializeInt(msg->code, SHRT_MIN, SHRT_MAX);
+    NBN_SerializeInt(stream, msg->code, SHRT_MIN, SHRT_MAX);
 
     return 0;
 }
@@ -2222,7 +2205,7 @@ void NBN_ClientAcceptedMessage_Destroy(NBN_ClientAcceptedMessage *msg)
 
 int NBN_ClientAcceptedMessage_Serialize(NBN_ClientAcceptedMessage *msg, NBN_Stream *stream)
 {
-    NBN_SerializeBytes(msg->data, NBN_ACCEPT_DATA_MAX_SIZE);
+    NBN_SerializeBytes(stream, msg->data, NBN_ACCEPT_DATA_MAX_SIZE);
 
     return 0;
 }
@@ -2243,8 +2226,8 @@ void NBN_ByteArrayMessage_Destroy(NBN_ByteArrayMessage *msg)
 
 int NBN_ByteArrayMessage_Serialize(NBN_ByteArrayMessage *msg, NBN_Stream *stream)
 {
-    NBN_SerializeUInt(msg->length, 0, NBN_BYTE_ARRAY_MAX_SIZE);
-    NBN_SerializeBytes(msg->bytes, msg->length);
+    NBN_SerializeUInt(stream, msg->length, 0, NBN_BYTE_ARRAY_MAX_SIZE);
+    NBN_SerializeBytes(stream, msg->bytes, msg->length);
 
     return 0;
 }
@@ -2265,10 +2248,10 @@ void NBN_PublicCryptoInfoMessage_Destroy(NBN_PublicCryptoInfoMessage *msg)
 
 int NBN_PublicCryptoInfoMessage_Serialize(NBN_PublicCryptoInfoMessage *msg, NBN_Stream *stream)
 {
-    NBN_SerializeBytes(msg->pub_key1, ECC_PUB_KEY_SIZE);
-    NBN_SerializeBytes(msg->pub_key2, ECC_PUB_KEY_SIZE);
-    NBN_SerializeBytes(msg->pub_key3, ECC_PUB_KEY_SIZE);
-    NBN_SerializeBytes(msg->aes_iv, AES_BLOCKLEN);
+    NBN_SerializeBytes(stream, msg->pub_key1, ECC_PUB_KEY_SIZE);
+    NBN_SerializeBytes(stream, msg->pub_key2, ECC_PUB_KEY_SIZE);
+    NBN_SerializeBytes(stream, msg->pub_key3, ECC_PUB_KEY_SIZE);
+    NBN_SerializeBytes(stream, msg->aes_iv, AES_BLOCKLEN);
 
     return 0;
 }
@@ -2397,7 +2380,16 @@ NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, void *d
 
             return NULL;
         }
-    } 
+    }
+
+    memset(connection->accept_data, 0, NBN_ACCEPT_DATA_MAX_SIZE);
+
+    if (connection->endpoint->is_server)
+        NBN_WriteStream_Init(
+            &connection->accept_data_w_stream, (uint8_t*)connection->accept_data, NBN_ACCEPT_DATA_MAX_SIZE);
+    else
+        NBN_ReadStream_Init(
+            &connection->accept_data_r_stream, (uint8_t *)connection->accept_data, NBN_ACCEPT_DATA_MAX_SIZE);
 
     return connection;
 }
@@ -3040,104 +3032,6 @@ static void Connection_StartEncryption(NBN_Connection *connection)
 }
 
 #pragma endregion /* NBN_Connection */
-
-#pragma region NBN_AcceptData
-
-NBN_AcceptData *NBN_AcceptData_Create(void)
-{
-    NBN_AcceptData *accept_data = (NBN_AcceptData*)NBN_Allocator(sizeof(NBN_AcceptData));
-
-    memset(accept_data->buffer, 0, NBN_ACCEPT_DATA_MAX_SIZE);
-    NBN_WriteStream_Init(&accept_data->write_stream, accept_data->buffer, NBN_ACCEPT_DATA_MAX_SIZE);
-
-    return accept_data;
-}
-
-NBN_AcceptData *NBN_AcceptData_Read(uint8_t *buffer)
-{
-    NBN_AcceptData *accept_data = (NBN_AcceptData*)NBN_Allocator(sizeof(NBN_AcceptData));
-
-    memcpy(accept_data->buffer, buffer, NBN_ACCEPT_DATA_MAX_SIZE);
-    NBN_ReadStream_Init(&accept_data->read_stream, accept_data->buffer, NBN_ACCEPT_DATA_MAX_SIZE);
-
-    return accept_data;
-}
-
-void NBN_AcceptData_Destroy(NBN_AcceptData *accept_data)
-{
-    NBN_Deallocator(accept_data);
-}
-
-void NBN_AcceptData_WriteUInt(NBN_AcceptData *accept_data, unsigned int v)
-{
-    int ret = NBN_WriteStream_SerializeUint(&accept_data->write_stream, &v, 0, UINT_MAX);
-
-    assert(ret == 0);
-}
-
-void NBN_AcceptData_WriteInt(NBN_AcceptData *accept_data, int v)
-{
-    int ret = NBN_WriteStream_SerializeInt(&accept_data->write_stream, &v, INT_MIN, INT_MAX);
-
-    assert(ret == 0);
-}
-
-void NBN_AcceptData_WriteFloat(NBN_AcceptData *accept_data, float v)
-{
-    unsigned int mult = pow(10, 3);
-    int ret = NBN_WriteStream_SerializeFloat(&accept_data->write_stream, &v, INT_MIN / mult, INT_MAX / mult, 3);
-
-    assert(ret == 0);
-}
-
-void NBN_AcceptData_WriteBytes(NBN_AcceptData *accept_data, uint8_t *bytes, unsigned int length)
-{
-    int ret = NBN_WriteStream_SerializeBytes(&accept_data->write_stream, bytes, length);
-
-    assert(ret == 0);
-}
-
-unsigned int NBN_AcceptData_ReadUInt(NBN_AcceptData *accept_data)
-{
-    uint32_t v;
-    int ret = NBN_ReadStream_SerializeUint(&accept_data->read_stream, &v, 0, UINT_MAX);
-
-    assert(ret == 0);
-
-    return v;
-}
-
-int NBN_AcceptData_ReadInt(NBN_AcceptData *accept_data)
-{
-    int v;
-    int ret = NBN_ReadStream_SerializeInt(&accept_data->read_stream, &v, INT_MIN, INT_MAX);
-
-    assert(ret == 0);
-
-    return v;
-}
-
-float NBN_AcceptData_ReadFloat(NBN_AcceptData *accept_data)
-{
-    float v;
-    unsigned int mult = pow(10, 3);
-    int ret = NBN_ReadStream_SerializeFloat(&accept_data->read_stream, &v, INT_MIN / mult, INT_MAX / mult, 3);
-
-    assert(ret == 0);
-
-    return v;
-}
-
-uint8_t *NBN_AcceptData_ReadBytes(NBN_AcceptData *accept_data, uint8_t *buffer, unsigned int length)
-{
-    int ret = NBN_ReadStream_SerializeBytes(&accept_data->read_stream, buffer, length);
-
-    assert(ret == 0);
-
-    return buffer;
-}
-
-#pragma endregion /* NBN_AcceptData */
 
 #pragma region NBN_Channel
 
@@ -3953,7 +3847,6 @@ void NBN_GameClient_Init(const char *protocol_name, const char *ip_address, uint
 
     NBN_Endpoint_Init(&__game_client.endpoint, config, false);
 
-    __game_client.accept_data = NULL;
     __game_client.server_connection = NULL;
     __game_client.is_connected = false;
 }
@@ -3964,9 +3857,6 @@ void NBN_GameClient_Deinit(void)
 
     if (__game_client.server_connection)
         NBN_Connection_Destroy(__game_client.server_connection);
-
-    if (__game_client.accept_data != NULL)
-        NBN_AcceptData_Destroy(__game_client.accept_data);
 }
 
 int NBN_GameClient_Start(void)
@@ -4211,9 +4101,9 @@ int NBN_GameClient_GetServerCloseCode(void)
     return client_closed_code;
 }
 
-NBN_AcceptData *NBN_GameClient_GetAcceptData(void)
+NBN_Stream *NBN_GameClient_GetAcceptDataReadStream(void)
 {
-    return __game_client.accept_data;
+    return (NBN_Stream *)&__game_client.server_connection->accept_data_r_stream;
 }
 
 bool NBN_GameClient_IsConnected(void)
@@ -4314,7 +4204,10 @@ static int GameClient_HandleMessageReceivedEvent(void)
     else if (message_info.type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE)
     {
         __game_client.is_connected = true;
-        __game_client.accept_data = NBN_AcceptData_Read(((NBN_ClientAcceptedMessage *)message_info.data)->data); 
+
+        memcpy(__game_client.server_connection->accept_data,
+               ((NBN_ClientAcceptedMessage *)message_info.data)->data,
+               NBN_ACCEPT_DATA_MAX_SIZE);
 
         ret = NBN_CONNECTED;
     }
@@ -4741,7 +4634,12 @@ int NBN_GameServer_BroadcastReliableMessage(NBN_OutgoingMessage *outgoing_msg)
     return NBN_GameServer_BroadcastMessage(outgoing_msg, NBN_CHANNEL_RESERVED_RELIABLE);
 }
 
-int NBN_GameServer_AcceptIncomingConnection(NBN_AcceptData *accept_data)
+NBN_Stream *NBN_GameServer_GetConnectionAcceptDataWriteStream(NBN_Connection *client)
+{
+    return (NBN_Stream *)&client->accept_data_w_stream;
+}
+
+int NBN_GameServer_AcceptIncomingConnection(void)
 {
     assert(server_last_event.type == NBN_NEW_CONNECTION);
     assert(server_last_event.data.connection != NULL);
@@ -4751,14 +4649,9 @@ int NBN_GameServer_AcceptIncomingConnection(NBN_AcceptData *accept_data)
 
     assert(msg != NULL);
 
-    if (accept_data != NULL)
-    {
-        int ret = NBN_WriteStream_Flush(&accept_data->write_stream);
+    NBN_WriteStream_Flush(&client->accept_data_w_stream);
 
-        assert(ret == 0);
-
-        memcpy(msg->data, accept_data->buffer, NBN_ACCEPT_DATA_MAX_SIZE);
-    }
+    memcpy(msg->data, client->accept_data, NBN_ACCEPT_DATA_MAX_SIZE);
 
     NBN_OutgoingMessage *outgoing_msg = NBN_GameServer_CreateMessage(NBN_CLIENT_ACCEPTED_MESSAGE_TYPE, msg);
 
@@ -4769,9 +4662,6 @@ int NBN_GameServer_AcceptIncomingConnection(NBN_AcceptData *accept_data)
         return NBN_ERROR;
 
     client->is_accepted = true;
-
-    if (accept_data != NULL)
-        NBN_AcceptData_Destroy(accept_data);
 
     NBN_LogTrace("Client %d has been accepted", client->id);
 
