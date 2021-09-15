@@ -125,7 +125,7 @@ typedef uint32_t Word;
 #define NBN_SerializeFloat(stream, v, min, max, precision) \
     ASSERTED_SERIALIZE(stream, v, min, max, stream->serialize_float_func(stream, &(v), min, max, precision))
 #define NBN_SerializeBool(stream, v) ASSERTED_SERIALIZE(stream, v, 0, 1, stream->serialize_bool_func(stream, &(v)))
-#define NBN_SerializeString(stream, v, length) NBN_SerializeBytes(v, length)
+#define NBN_SerializeString(stream, v, length) NBN_SerializeBytes(stream, v, length)
 #define NBN_SerializeBytes(stream, v, length) stream->serialize_bytes_func(stream, (uint8_t *)v, length)
 #define NBN_SerializePadding(stream) stream->serialize_padding_func(stream)
 
