@@ -1,20 +1,22 @@
 const loggerFactory = require('../logger.js')
 
-function SignalingClient(protocol_id) {
+function SignalingClient(protocol_id, options) {
     this.protocol = protocol_id.toString()
     this.logger = loggerFactory.createLogger('StandaloneSignalingClient')
     this.connected = false
+    this.options = options
 }
 
 SignalingClient.prototype.connect = function(host, port) {
     return new Promise((resolve, reject) => {
-        const uri = `ws://${host}:${port}`
+        const uri = this.options['https'] ? `wss://${host}:${port}` : `ws://${host}:${port}`
 
+        this.logger.info(this.options['https'])
         this.logger.info(`Connecting to ${uri} (protocol: %s)...`, this.protocol)
 
         const WebSocket = require('websocket').w3cwebsocket
 
-        this.ws = new WebSocket(uri, this.protocol, `http://${host}:${port}`)
+        this.ws = new WebSocket(uri, this.protocol)
 
         this.ws.onclose = (ev) => {
             if (this.connected) {

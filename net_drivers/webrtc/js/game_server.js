@@ -32,7 +32,11 @@ function GameServer(signalingServer) {
 }
 
 GameServer.prototype.start = function(port) {
-    this.logger.info('Starting...')
+    if (this.signalingServer.isSecure()) {
+        this.logger.info('Starting (HTTPS is enabled)...')
+    } else {
+        this.logger.info('Starting (HTTPS is disabled)...')
+    }
 
     return new Promise((resolve, reject) => {
         this.signalingServer.onConnection = (connection) => { handleConnection(this, connection) }

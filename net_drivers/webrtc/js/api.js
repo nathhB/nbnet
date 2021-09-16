@@ -26,9 +26,13 @@ mergeInto(LibraryManager.library, {
     __js_game_server_send_packet_to__proxy: 'sync',
     __js_game_server_dequeue_packet__proxy: 'sync', 
 
-    __js_game_server_init: function (protocol_id) {
+    __js_game_server_init: function (protocol_id, use_https, key_pem, cert_pem) {
         const nbnet = require('nbnet')
-        const signalingServer = new nbnet.Standalone.SignalingServer(protocol_id)
+
+        const signalingServer = new nbnet.Standalone.SignalingServer(
+            protocol_id,
+            use_https ? { https: true, key: UTF8ToString(key_pem), cert: UTF8ToString(cert_pem) } : {}
+        )
 
         this.gameServer = new nbnet.GameServer(signalingServer)
     },
@@ -83,7 +87,7 @@ mergeInto(LibraryManager.library, {
     __js_game_client_send_packet__proxy: 'sync',
     __js_game_client_dequeue_packet__proxy: 'sync',
 
-    __js_game_client_init: function(protocol_id) {
+    __js_game_client_init: function(protocol_id, use_https) {
         let nbnet
 
         if (typeof window === 'undefined') {
@@ -93,7 +97,8 @@ mergeInto(LibraryManager.library, {
             // we are running in a web browser so we used to "browserified" nbnet (see nbnet.js)
             nbnet = Module.nbnet
         }
-        const signalingClient = new nbnet.Standalone.SignalingClient(protocol_id)
+
+        const signalingClient = new nbnet.Standalone.SignalingClient(protocol_id, { https: use_https })
 
         this.gameClient = new nbnet.GameClient(signalingClient)
     },

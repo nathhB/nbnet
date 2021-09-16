@@ -46,7 +46,7 @@ freely, subject to the following restrictions:
 
 /* --- JS API --- */
 
-NBN_EXTERN void __js_game_server_init(uint32_t);
+NBN_EXTERN void __js_game_server_init(uint32_t, bool, const char *, const char *);
 NBN_EXTERN int __js_game_server_start(uint16_t);
 NBN_EXTERN uint8_t *__js_game_server_dequeue_packet(uint32_t *, unsigned int *);
 NBN_EXTERN int __js_game_server_send_packet_to(uint8_t *, unsigned int, uint32_t);
@@ -57,7 +57,19 @@ NBN_EXTERN void __js_game_server_stop(void);
 
 int NBN_Driver_GServ_Start(uint32_t protocol_id, uint16_t port)
 {
-    __js_game_server_init(protocol_id);
+#ifdef NBN_USE_HTTPS
+
+#ifndef NBN_HTTPS_KEY_PEM
+#define NBN_HTTPS_KEY_PEM "key.pem"
+#endif
+
+#ifndef NBN_HTTPS_CERT_PEM
+#define NBN_HTTPS_CERT_PEM "cert.pem"
+#endif
+    __js_game_server_init(protocol_id, true, NBN_HTTPS_KEY_PEM, NBN_HTTPS_CERT_PEM);
+#else
+    __js_game_server_init(protocol_id, false, NULL, NULL);
+#endif // NBN_USE_HTTPS
     
     if (__js_game_server_start(port) < 0)
         return -1;
@@ -118,7 +130,7 @@ int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, NBN_Connection *conn)
 
 /* --- JS API --- */
 
-NBN_EXTERN void __js_game_client_init(uint32_t);
+NBN_EXTERN void __js_game_client_init(uint32_t, bool);
 NBN_EXTERN int __js_game_client_start(const char *, uint16_t);
 NBN_EXTERN uint8_t *__js_game_client_dequeue_packet(unsigned int *);
 NBN_EXTERN int __js_game_client_send_packet(uint8_t *, unsigned int);
@@ -131,7 +143,11 @@ static bool is_connected_to_server = false;
 
 int NBN_Driver_GCli_Start(uint32_t protocol_id, const char *host, uint16_t port)
 {
-    __js_game_client_init(protocol_id);
+#ifdef NBN_USE_HTTPS
+    __js_game_client_init(protocol_id, true);
+#else
+    __js_game_client_init(protocol_id, false);
+#endif // NBN_USE_HTTPS
 
     server = NBN_GameClient_CreateServerConnection(NULL);
 
