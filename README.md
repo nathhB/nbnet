@@ -31,13 +31,25 @@ nbnet encryption and packet authentication would not have been possible without 
 - [tiny-AES](https://github.com/kokke/tiny-AES-c)
 - [poly1305-donna](https://github.com/floodyberry/poly1305-donna)
 
-## Projects using nbnet
+## Made with nbnet
+
+### Boomshakalaka
+
+A fun action game that runs into a web browser, by Duncan Stead (@duncanstead86).
+
+[See on YouTube](https://www.youtube.com/watch?v=SJHvXV03uwQ).
+
+### nbBR
+
+A WIP battle royal game playable in a web browser.
+
+[See on YouTube](https://youtube.com/playlist?list=PLgcJGzE_fX4criMxQAw3pm24RQYMYRLEI)
 
 ### nb_tanks
 
-A little online tank game showcasing the library.
+A little online tank game prototype.
 
-https://github.com/nathhB/nb_tanks
+[See on GitHub](https://github.com/nathhB/nb_tanks)
 
 ## Drivers
 
