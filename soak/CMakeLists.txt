@@ -8,7 +8,7 @@ add_executable(server server.c soak.c logging.c)
 target_link_libraries(client pthread m)
 target_link_libraries(server pthread m)
 
-add_compile_options(-Wall -Wextra)
+add_compile_options(-Wall -Wextra -Wpedantic)
 
 target_compile_definitions(client PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR SOAK_CLIENT)
 target_compile_definitions(server PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR SOAK_SERVER)
