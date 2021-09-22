@@ -608,11 +608,9 @@ int NBN_PublicCryptoInfoMessage_Serialize(NBN_PublicCryptoInfoMessage *, NBN_Str
 
 #define NBN_START_ENCRYPT_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 6) /* Reserved message type */
 
-typedef struct {} NBN_StartEncryptMessage;
-
-NBN_StartEncryptMessage *NBN_StartEncryptMessage_Create(void);
-void NBN_StartEncryptMessage_Destroy(NBN_StartEncryptMessage *);
-int NBN_StartEncryptMessage_Serialize(NBN_StartEncryptMessage *, NBN_Stream *);
+void *NBN_StartEncryptMessage_Create(void);
+void NBN_StartEncryptMessage_Destroy(void *);
+int NBN_StartEncryptMessage_Serialize(void *, NBN_Stream *);
 
 #pragma endregion /* NBN_StartEncryptMessage */
 
@@ -620,11 +618,9 @@ int NBN_StartEncryptMessage_Serialize(NBN_StartEncryptMessage *, NBN_Stream *);
 
 #define NBN_DISCONNECTION_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 7) /* Reserved message type */
 
-typedef struct {} NBN_DisconnectMessage;
-
-NBN_DisconnectMessage *NBN_DisconnectionMessage_Create(void);
-void NBN_DisconnectionMessage_Destroy(NBN_DisconnectMessage *);
-int NBN_DisconnectionMessage_Serialize(NBN_DisconnectMessage *, NBN_Stream *);
+void *NBN_DisconnectionMessage_Create(void);
+void NBN_DisconnectionMessage_Destroy(void *);
+int NBN_DisconnectionMessage_Serialize(void *, NBN_Stream *);
 
 #pragma endregion /* NBN_DisconnectMessage */
 
@@ -2196,7 +2192,7 @@ NBN_ClientClosedMessage *NBN_ClientClosedMessage_Create(void)
 
 void NBN_ClientClosedMessage_Destroy(NBN_ClientClosedMessage *msg)
 {
-    return NBN_Deallocator(msg);
+    NBN_Deallocator(msg);
 }
 
 int NBN_ClientClosedMessage_Serialize(NBN_ClientClosedMessage *msg, NBN_Stream *stream)
@@ -2217,7 +2213,7 @@ NBN_ClientAcceptedMessage *NBN_ClientAcceptedMessage_Create(void)
 
 void NBN_ClientAcceptedMessage_Destroy(NBN_ClientAcceptedMessage *msg)
 {
-    return NBN_Deallocator(msg);
+    NBN_Deallocator(msg);
 }
 
 int NBN_ClientAcceptedMessage_Serialize(NBN_ClientAcceptedMessage *msg, NBN_Stream *stream)
@@ -2260,7 +2256,7 @@ NBN_PublicCryptoInfoMessage *NBN_PublicCryptoInfoMessage_Create(void)
 
 void NBN_PublicCryptoInfoMessage_Destroy(NBN_PublicCryptoInfoMessage *msg)
 {
-    return NBN_Deallocator(msg);
+    NBN_Deallocator(msg);
 }
 
 int NBN_PublicCryptoInfoMessage_Serialize(NBN_PublicCryptoInfoMessage *msg, NBN_Stream *stream)
@@ -2277,17 +2273,17 @@ int NBN_PublicCryptoInfoMessage_Serialize(NBN_PublicCryptoInfoMessage *msg, NBN_
 
 #pragma region NBN_StartEncryptMessage
 
-NBN_StartEncryptMessage *NBN_StartEncryptMessage_Create(void)
+void *NBN_StartEncryptMessage_Create(void)
 {
-    return (NBN_StartEncryptMessage*)NBN_Allocator(sizeof(NBN_StartEncryptMessage));
+    return NULL;
 }
 
-void NBN_StartEncryptMessage_Destroy(NBN_StartEncryptMessage *msg)
+void NBN_StartEncryptMessage_Destroy(void *msg)
 {
-    return NBN_Deallocator(msg);
+    (void)msg;
 }
 
-int NBN_StartEncryptMessage_Serialize(NBN_StartEncryptMessage *msg, NBN_Stream *stream)
+int NBN_StartEncryptMessage_Serialize(void *msg, NBN_Stream *stream)
 {
     (void)msg;
     (void)stream;
@@ -2299,17 +2295,17 @@ int NBN_StartEncryptMessage_Serialize(NBN_StartEncryptMessage *msg, NBN_Stream *
 
 #pragma region NBN_DisconnectMessage
 
-NBN_DisconnectMessage *NBN_DisconnectionMessage_Create(void)
+void *NBN_DisconnectionMessage_Create(void)
 {
-    return (NBN_DisconnectMessage *)NBN_Allocator(sizeof(NBN_DisconnectMessage));
+    return NULL;
 }
 
-void NBN_DisconnectionMessage_Destroy(NBN_DisconnectMessage *msg)
+void NBN_DisconnectionMessage_Destroy(void *msg)
 {
     NBN_Deallocator(msg);
 }
 
-int NBN_DisconnectionMessage_Serialize(NBN_DisconnectMessage *msg, NBN_Stream *stream)
+int NBN_DisconnectionMessage_Serialize(void *msg, NBN_Stream *stream)
 {
     (void)msg;
     (void)stream;
@@ -2767,7 +2763,7 @@ static void Connection_InitOutgoingPacket(
 static NBN_PacketEntry *Connection_InsertOutgoingPacketEntry(NBN_Connection *connection, uint16_t seq_number)
 {
     uint16_t index = seq_number % NBN_MAX_PACKET_ENTRIES;
-    NBN_PacketEntry entry = { false, 0, {}, 0 };
+    NBN_PacketEntry entry = { .acked = false, .messages_count = 0, .send_time = 0 };
 
     connection->packet_send_seq_buffer[index] = seq_number;
     connection->packet_send_buffer[index] = entry;
@@ -3899,12 +3895,7 @@ int NBN_GameClient_Disconnect(void)
         return 0;
     }
 
-    NBN_DisconnectMessage *msg = NBN_DisconnectionMessage_Create();
-
-    if (msg == NULL)
-        return NBN_ERROR;
-
-    NBN_OutgoingMessage *outgoing_msg = NBN_GameClient_CreateMessage(NBN_DISCONNECTION_MESSAGE_TYPE, msg);
+    NBN_OutgoingMessage *outgoing_msg = NBN_GameClient_CreateMessage(NBN_DISCONNECTION_MESSAGE_TYPE, NULL);
 
     if (outgoing_msg == NULL)
         return NBN_ERROR;
