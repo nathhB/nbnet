@@ -45,6 +45,12 @@ A WIP battle royal game playable in a web browser.
 
 [See on YouTube](https://youtube.com/playlist?list=PLgcJGzE_fX4criMxQAw3pm24RQYMYRLEI)
 
+### Llamageddon
+
+An online multiplayer RTS made for the Ludum Dare 49.
+
+https://ldjam.com/events/ludum-dare/49/llamageddon
+
 ### nb_tanks
 
 A little online tank game prototype.
