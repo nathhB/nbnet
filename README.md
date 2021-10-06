@@ -69,9 +69,7 @@ nbnet is developed with portability in mind. I tested (and will continue to do s
 - Windows
 - OSX
 - Linux
-- Web (Chrome/Microsoft Edge/Brave)*
-
-* at some point it should work on Firefox as well, there are some issues that need to be addressed.
+- Web (Chrome/Firefox/Microsoft Edge/Brave)
 
 ## How to use
 
