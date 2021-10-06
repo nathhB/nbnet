@@ -32,6 +32,7 @@ function Peer(id, connection) {
     this.peerConnection = new RTCPeerConnection({ 'iceServers': [{ 'urls': 'stun:stun01.sipphone.com' }] })
     this.channel = this.peerConnection.createDataChannel('unreliable',
         { negotiated: true, id: 0, maxRetransmits: 0, ordered: false })
+    this.channel.binaryType = 'arraybuffer'
 
     // peer connection event listeners
     this.peerConnection.addEventListener('icecandidate', ({ candidate }) => { onIceCandidate(this, candidate) })
@@ -162,13 +163,15 @@ function onRemoteDescriptionSet(peer) {
 }
 
 function handleCandidate(peer, candidate) {
-    peer.logger.info('Got candidate')
+    peer.logger.info(`Got candidate: ${JSON.stringify(candidate)}`)
 
-    peer.peerConnection.addIceCandidate(candidate).then(() => {
-        peer.logger.info('Candidate added')
-    }).catch((err) => {
-        raiseError(peer, `addIceCandidate: ${err}`)
-    })
+    if (candidate.candidate) {
+        peer.peerConnection.addIceCandidate(candidate).then(() => {
+            peer.logger.info('Candidate added')
+        }).catch((err) => {
+            raiseError(peer, `addIceCandidate: ${err}`)
+        })
+    }
 }
 
 function createAnswer(peer) {
