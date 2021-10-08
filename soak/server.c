@@ -81,12 +81,16 @@ static void HandleNewConnection(void)
     soak_client->recved_messages_count = 0;
     soak_client->last_recved_message_id = 0;
     soak_client->error = false;
-    soak_client->echo_queue = (EchoMessageQueue){ 0, 0, 0 };
     soak_client->connection = connection;
 
-    memset(soak_client->echo_queue.messages, 0, sizeof(soak_client->echo_queue.messages));
-
     clients[client_count++] = soak_client;
+
+    // init the soak message queue
+
+    soak_client->echo_queue.head = 0;
+    soak_client->echo_queue.tail = 0;
+    soak_client->echo_queue.count = 0;
+    memset(soak_client->echo_queue.messages, 0, sizeof(soak_client->echo_queue.messages));
 
     Soak_LogInfo("Client has connected (ID: %d)", soak_client->id);
 }

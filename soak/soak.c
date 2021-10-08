@@ -27,6 +27,8 @@
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
+#elif defined(_WIN32) || defined(_WIN64)
+#include <synchapi.h>
 #else
 #include <time.h>
 #endif
@@ -173,6 +175,8 @@ int Soak_MainLoop(int (*Tick)(void))
 
 #ifdef __EMSCRIPTEN__
         emscripten_sleep(SOAK_TICK_DT * 1000);
+#elif defined(_WIN32) || defined(_WIN64)
+        Sleep(SOAK_TICK_DT * 1000);
 #else
         long nanos = SOAK_TICK_DT * 1e9;
         struct timespec t = { .tv_sec = nanos / 999999999, .tv_nsec = nanos % 999999999 };
