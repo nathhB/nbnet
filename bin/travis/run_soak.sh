@@ -12,9 +12,12 @@ fi
 echo "Starting soak server..."
 
 ./server &> soak_serv_out &
+SERV_PID=$!
 sleep 3
 
-echo "OK."
+echo "Server started (PID: $SERV_PID)"
 echo "Running soak test..."
 
 ./client --message_count=100 &> soak_cli_out
+
+kill $SERV_PID
