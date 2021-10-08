@@ -24,24 +24,16 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
-#include <getopt.h>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
-#else
+#elif !defined(_WIN32) && !defined(_WIN64)
+// we are on unix or osx
 #include <time.h>
 #endif
 
 #include "soak.h"
-
-enum
-{
-    OPT_MESSAGES_COUNT,
-    OPT_PACKET_LOSS,
-    OPT_PACKET_DUPLICATION,
-    OPT_PING,
-    OPT_JITTER
-};
+#include "cargs.h"
 
 static bool running = true;
 static SoakOptions soak_options = {0};
@@ -56,6 +48,11 @@ int Soak_Init(int argc, char *argv[])
 
     if (Soak_ReadCommandLine(argc, argv) < 0)
         return -1;
+
+    SoakOptions options = Soak_GetOptions();
+
+    Soak_LogInfo("Soak test initialized (Packet loss: %f, Packet duplication: %f, Ping: %f, Jitter: %f)",
+        options.packet_loss, options.packet_duplication, options.ping, options.jitter);
 
 #ifdef SOAK_CLIENT
 
@@ -118,49 +115,45 @@ int Soak_ReadCommandLine(int argc, char *argv[])
 
         return -1;
     }
+#endif // SOAK_CLIENT
+
+    struct cag_option options[] = {
+#ifdef SOAK_CLIENT
+        {'m', NULL, "message_count", "VALUE", "Number of messages to send"},
 #endif
-
-    int opt;
-    int option_index;
-    struct option long_options[] = {
-        { "message_count", required_argument, NULL, OPT_MESSAGES_COUNT },
-        { "packet_loss", required_argument, NULL, OPT_PACKET_LOSS },
-        { "packet_duplication", required_argument, NULL, OPT_PACKET_DUPLICATION },
-        { "ping", required_argument, NULL, OPT_PING },
-        { "jitter", required_argument, NULL, OPT_JITTER }
+        {'l', NULL, "packet_loss", "VALUE", "Packet loss frenquency (0-1)"},
+        {'d', NULL, "packet_duplication", "VALUE", "Packet duplication frequency (0-1)"},
+        {'p', NULL, "ping", "VALUE", "Ping in seconds"},
+        {'j', NULL, "jitter", "VALUE", "Jitter in seconds"}
     };
+    cag_option_context context;
 
-    while ((opt = getopt_long(argc, argv, "", long_options, &option_index)) != -1)
+    cag_option_prepare(&context, options, CAG_ARRAY_SIZE(options), argc, argv);
+
+    while (cag_option_fetch(&context))
     {
-        switch (opt)
+        switch (cag_option_get(&context))
         {
 #ifdef SOAK_CLIENT
-            case OPT_MESSAGES_COUNT:
-                soak_options.message_count = atoi(optarg);
-                break;
+        case 'm':
+            soak_options.message_count = atoi(cag_option_get_value(&context));
+            break;
 #endif
+        case 'l':
+            soak_options.packet_loss = atof(cag_option_get_value(&context));
+            break;
 
-            case OPT_PACKET_LOSS:
-                soak_options.packet_loss = atof(optarg);
-                break;
+        case 'd':
+            soak_options.packet_duplication = atof(cag_option_get_value(&context));
+            break;
 
-            case OPT_PACKET_DUPLICATION:
-                soak_options.packet_duplication = atof(optarg);
-                break;
+        case 'p':
+            soak_options.ping = atof(cag_option_get_value(&context));
+            break;
 
-            case OPT_PING:
-                soak_options.ping = atof(optarg);
-                break;
-
-            case OPT_JITTER:
-                soak_options.jitter = atof(optarg);
-                break;
-
-            case '?':
-                return -1;
-
-            default:
-                return -1;
+        case 'j':
+            soak_options.jitter = atof(cag_option_get_value(&context));
+            break;
         }
     }
 
@@ -181,6 +174,8 @@ int Soak_MainLoop(int (*Tick)(void))
 
 #ifdef __EMSCRIPTEN__
         emscripten_sleep(SOAK_TICK_DT * 1000);
+#elif defined(_WIN32) || defined(_WIN64)
+        Sleep(SOAK_TICK_DT * 1000);
 #else
         long nanos = SOAK_TICK_DT * 1e9;
         struct timespec t = { .tv_sec = nanos / 999999999, .tv_nsec = nanos % 999999999 };
@@ -208,7 +203,7 @@ void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *conn, NBN_Message *msg)
 {
     if (msg->header.type == NBN_MESSAGE_CHUNK_TYPE)
     {
-        NBN_MessageChunk *chunk = msg->data;
+        NBN_MessageChunk *chunk = (NBN_MessageChunk *)msg->data;
 
         Soak_LogDebug("Soak message chunk added to recv queue (chunk id: %d, chunk total: %d)",
                 chunk->id, chunk->total);
@@ -244,7 +239,7 @@ unsigned int Soak_GetDestroyedIncomingSoakMessageCount(void)
 
 SoakMessage *SoakMessage_CreateIncoming(void)
 {
-    SoakMessage *msg = malloc(sizeof(SoakMessage));
+    SoakMessage *msg = (SoakMessage *)malloc(sizeof(SoakMessage));
 
     msg->outgoing = false;
 
@@ -255,7 +250,7 @@ SoakMessage *SoakMessage_CreateIncoming(void)
 
 SoakMessage *SoakMessage_CreateOutgoing(void)
 {
-    SoakMessage *msg = malloc(sizeof(SoakMessage));
+    SoakMessage *msg = (SoakMessage *)malloc(sizeof(SoakMessage));
 
     msg->outgoing = true;
 

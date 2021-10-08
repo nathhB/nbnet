@@ -23,6 +23,7 @@
 */
 
 #include <signal.h>
+#include <string.h>
 
 #define NBNET_IMPL
 
@@ -38,10 +39,10 @@
 
 typedef struct
 {
-    SoakMessage *messages[SOAK_CLIENT_MAX_PENDING_MESSAGES];
     unsigned int head;
     unsigned int tail;
     unsigned int count;
+    SoakMessage *messages[SOAK_CLIENT_MAX_PENDING_MESSAGES];
 } EchoMessageQueue;
 
 typedef struct
@@ -74,16 +75,22 @@ static void HandleNewConnection(void)
 
     NBN_GameServer_AcceptIncomingConnection();
 
-    SoakClient *soak_client = malloc(sizeof(SoakClient));
+    SoakClient *soak_client = (SoakClient *)malloc(sizeof(SoakClient));
 
     soak_client->id = connection->id;
     soak_client->recved_messages_count = 0;
     soak_client->last_recved_message_id = 0;
     soak_client->error = false;
-    soak_client->echo_queue = (EchoMessageQueue){ .messages = { NULL }, .head = 0, .tail = 0, .count = 0 };
     soak_client->connection = connection;
 
     clients[client_count++] = soak_client;
+
+    // init the soak message queue
+
+    soak_client->echo_queue.head = 0;
+    soak_client->echo_queue.tail = 0;
+    soak_client->echo_queue.count = 0;
+    memset(soak_client->echo_queue.messages, 0, sizeof(soak_client->echo_queue.messages));
 
     Soak_LogInfo("Client has connected (ID: %d)", soak_client->id);
 }
@@ -269,7 +276,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    NBN_GameServer_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, Soak_Debug_PrintAddedToRecvQueue);
+    NBN_GameServer_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue);
 
     if (NBN_GameServer_Start())
     {
@@ -283,7 +290,10 @@ int main(int argc, char *argv[])
     int ret = Soak_MainLoop(Tick);
 
     NBN_GameServer_Stop();
-    NBN_GameServer_Deinit();
+
+    // FIXME: causes a segfault
+    // NBN_GameServer_Deinit();
+
     Soak_Deinit();
 
     return ret;

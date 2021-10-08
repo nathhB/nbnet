@@ -758,8 +758,8 @@ typedef struct
 {
     bool acked;
     unsigned int messages_count;
-    NBN_MessageEntry messages[NBN_MAX_MESSAGES_PER_PACKET];
     double send_time;
+    NBN_MessageEntry messages[NBN_MAX_MESSAGES_PER_PACKET];
 } NBN_PacketEntry;
 
 typedef struct
@@ -2763,7 +2763,7 @@ static void Connection_InitOutgoingPacket(
 static NBN_PacketEntry *Connection_InsertOutgoingPacketEntry(NBN_Connection *connection, uint16_t seq_number)
 {
     uint16_t index = seq_number % NBN_MAX_PACKET_ENTRIES;
-    NBN_PacketEntry entry = { .acked = false, .messages_count = 0, .send_time = 0 };
+    NBN_PacketEntry entry = { false, 0, 0 };
 
     connection->packet_send_seq_buffer[index] = seq_number;
     connection->packet_send_buffer[index] = entry;
@@ -5171,7 +5171,7 @@ int NBN_PacketSimulator_EnqueuePacket(
     jitter = (jitter > 0) ? (rand() % (jitter * 2)) - jitter : 0;
 
 
-    NBN_PacketSimulatorEntry *entry = MemoryManager_Alloc(NBN_MEM_PACKET_SIMULATOR_ENTRY);
+    NBN_PacketSimulatorEntry *entry = (NBN_PacketSimulatorEntry *)MemoryManager_Alloc(NBN_MEM_PACKET_SIMULATOR_ENTRY);
 
     entry->delay = packet_simulator->ping + jitter / 1000; /* and converted back to seconds */
     entry->receiver = receiver;
@@ -5240,7 +5240,7 @@ DWORD WINAPI PacketSimulator_Routine(LPVOID arg)
 static void *PacketSimulator_Routine(void *arg)
 #endif
 {
-    NBN_PacketSimulator *packet_simulator = arg;
+    NBN_PacketSimulator *packet_simulator = (NBN_PacketSimulator *)arg;
 
     while (packet_simulator->running)
     {

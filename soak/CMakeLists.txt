@@ -1,12 +1,19 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(soak C)
+project(soak)
 
-add_executable(client client.c soak.c logging.c)
-add_executable(server server.c soak.c logging.c)
+option(CPP_COMPILE OFF)
 
-target_link_libraries(client pthread m)
-target_link_libraries(server pthread m)
+# allow to compile as cpp
+if (CPP_COMPILE)
+  file(GLOB_RECURSE CFILES "${CMAKE_SOURCE_DIR}/*.c")
+  SET_SOURCE_FILES_PROPERTIES(${CFILES} PROPERTIES LANGUAGE CXX)
+endif (CPP_COMPILE)
+
+unset(CPP_COMPILE)
+
+add_executable(client client.c soak.c logging.c cargs.c)
+add_executable(server server.c soak.c logging.c cargs.c)
 
 add_compile_options(-Wall -Wextra -Wpedantic)
 
@@ -25,12 +32,22 @@ endif(ENCRYPTION_ENABLED)
 unset(ENCRYPTION_ENABLED)
 
 if(WIN32)
-    target_link_libraries(client wsock32 ws2_32)
-    target_link_libraries(server wsock32 ws2_32)
-endif()
+  target_link_libraries(client wsock32 ws2_32)
+  target_link_libraries(server wsock32 ws2_32)
+else()
+  # link with pthread when we are not on windows
+  target_link_libraries(client pthread)
+  target_link_libraries(server pthread)
+endif(WIN32)
+
+if (UNIX)
+  # link with libm on unix
+  target_link_libraries(client m)
+  target_link_libraries(server m)
+endif (UNIX)
 
 if (EMSCRIPTEN)
-    set(ASYNCIFY_IMPORTS "[\"__js_game_server_start\", \"__js_game_client_start\", \"__js_game_client_close\"]")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s ALLOW_MEMORY_GROWTH=1 -s TOTAL_MEMORY=30MB -s USE_PTHREADS=1 -s PTHREAD_POOL_SIZE=4 -s EXIT_RUNTIME=1 -s ASSERTIONS=1 -s ASYNCIFY -s ASYNCIFY_IMPORTS=\"${ASYNCIFY_IMPORTS}\"")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --js-library ${CMAKE_CURRENT_SOURCE_DIR}/../net_drivers/webrtc/js/api.js")
+  set(ASYNCIFY_IMPORTS "[\"__js_game_server_start\", \"__js_game_client_start\", \"__js_game_client_close\"]")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s ALLOW_MEMORY_GROWTH=1 -s TOTAL_MEMORY=30MB -s USE_PTHREADS=1 -s PTHREAD_POOL_SIZE=4 -s EXIT_RUNTIME=1 -s ASSERTIONS=1 -s ASYNCIFY -s ASYNCIFY_IMPORTS=\"${ASYNCIFY_IMPORTS}\"")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --js-library ${CMAKE_CURRENT_SOURCE_DIR}/../net_drivers/webrtc/js/api.js")
 endif()

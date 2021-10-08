@@ -1,0 +1,91 @@
+matrix:
+  include:
+    - language: c
+      name: "C/Linux"
+      os: linux
+      install:
+        - chmod +x ./bin/travis/compile_soak.sh 
+        - chmod +x ./bin/travis/run_soak.sh
+      script:
+        - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
+
+    - language: c
+      name: "C/OSX"
+      os: osx
+      install:
+        - chmod +x ./bin/travis/compile_soak.sh 
+        - chmod +x ./bin/travis/run_soak.sh
+      script:
+        - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
+
+    - language: c
+      name: "C/Windows (MinGW)"
+      os: windows
+      env:
+        - CMAKE_GENERATOR="MinGW Makefiles"
+      install:
+        - chmod +x ./bin/travis/compile_soak.sh 
+        - chmod +x ./bin/travis/run_soak.sh
+      script:
+        - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
+
+    - language: c
+      name: "C/Windows (MSVC)"
+      os: windows
+      env:
+        - CMAKE_GENERATOR="Visual Studio 16 2019"
+      install:
+        - chmod +x ./bin/travis/compile_soak.sh 
+        - chmod +x ./bin/travis/run_soak.sh
+        - choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+      script:
+        - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
+      
+    - language: cpp 
+      name: "CPP/Linux"
+      os: linux
+      install:
+        - chmod +x ./bin/travis/compile_soak.sh 
+        - chmod +x ./bin/travis/run_soak.sh
+      script:
+        - CPP_COMPILE=ON ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
+
+    - language: cpp 
+      name: "CPP/OSX"
+      os: osx
+      install:
+        - chmod +x ./bin/travis/compile_soak.sh 
+        - chmod +x ./bin/travis/run_soak.sh
+      script:
+        - CPP_COMPILE=ON ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
+
+    - language: cpp 
+      name: "CPP/Windows (MinGW)"
+      os: windows
+      env:
+        - CMAKE_GENERATOR="MinGW Makefiles"
+      install:
+        - chmod +x ./bin/travis/compile_soak.sh 
+        - chmod +x ./bin/travis/run_soak.sh
+      script:
+        - CPP_COMPILE=ON ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
+
+    - language: cpp 
+      name: "CPP/Windows (MSVC)"
+      os: windows
+      env:
+        - CMAKE_GENERATOR="Visual Studio 16 2019"
+      install:
+        - chmod +x ./bin/travis/compile_soak.sh 
+        - chmod +x ./bin/travis/run_soak.sh
+        - choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+      script:
+        - CPP_COMPILE=ON ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
