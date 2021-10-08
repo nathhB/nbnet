@@ -1,13 +1,21 @@
-language: c
-os:
-  - osx
-  - linux
-  - windows
-script:
-  - cd soak
-  - mkdir build
-  - cd build
-  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then cmake -G "MinGW Makefiles" .. ; fi
-  - if [ "$TRAVIS_OS_NAME" != "windows" ]; then cmake .. ; fi
-  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then mingw32-make ; fi
-  - if [ "$TRAVIS_OS_NAME" != "windows" ]; then make ; fi
+jobs:
+  include:
+    - language: c
+      os:
+        - osx
+        - linux
+        - windows
+      install:
+        - chmod +x ./bin/travis/compile_soak.sh 
+      script:
+        - ./bin/travis/compile_soak.sh 
+      
+    - language: cpp
+      os:
+        - osx
+        - linux
+        - windows
+      install:
+        - chmod +x ./bin/travis/compile_soak.sh 
+      script:
+        - ./bin/travis/compile_soak.sh 
