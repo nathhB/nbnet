@@ -6,6 +6,7 @@ matrix:
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
         - chmod +x ./bin/travis/run_soak.sh
+        - sudo apt-get install -y gdb
       script:
         - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
         - ./bin/travis/run_soak.sh
