@@ -11,14 +11,14 @@ fi
 
 echo "Starting soak server..."
 
-./server &> soak_serv_out &
+./server --packet_loss=0.6 --packet_duplication=0.5 --ping=0.3 --jitter=0.2 &> soak_serv_out &
 SERV_PID=$!
 sleep 3
 
 echo "Server started (PID: $SERV_PID)"
 echo "Running soak test..."
 
-./client --message_count=100 &> soak_cli_out
+./client --message_count=500 --packet_loss=0.4 --packet_duplication=0.5 --ping=0.3 --jitter=0.2 &> soak_cli_out
 
 RESULT=$?
 
