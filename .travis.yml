@@ -13,6 +13,13 @@ matrix:
         - chmod +x ./bin/travis/compile_soak.sh 
       script:
         - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
+
+    - language: c
+      os: windows
+      install:
+        - chmod +x ./bin/travis/compile_soak.sh 
+      script:
+        - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
       
     - language: cpp 
       os: linux
@@ -23,6 +30,13 @@ matrix:
 
     - language: cpp 
       os: osx
+      install:
+        - chmod +x ./bin/travis/compile_soak.sh 
+      script:
+        - CPP_COMPILE=ON ./bin/travis/compile_soak.sh
+
+    - language: cpp 
+      os: windows
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
       script:
