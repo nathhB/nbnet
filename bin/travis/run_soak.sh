@@ -2,12 +2,19 @@
 
 cd soak/build
 
-echo "Booting soak server..."
+if [ "$TRAVIS_OS_NAME" = "windows" ] && [ "$CMAKE_GENERATOR" != "MinGW Makefiles" ]
+then
+    # MSVC
 
-./server --packet_loss=0.4 --packet_duplication=0.5 --ping=0.4 --jitter=0.2 &> soak_serv_out &
-sleep 2
+    cd Debug # go to VS Debug folder that contains client.exe and server.exe
+fi
+
+echo "Starting soak server..."
+
+./server &> soak_serv_out &
+sleep 3
 
 echo "OK."
-echo "Running soak client..."
+echo "Running soak test..."
 
-./client --message_count=100 --packet_loss=0.6 --packet_duplication=0.5 --ping=0.2 --jitter=0.1 &> soak_cli_out
+./client --message_count=100 &> soak_cli_out

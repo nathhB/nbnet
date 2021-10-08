@@ -8,6 +8,7 @@ matrix:
         - chmod +x ./bin/travis/run_soak.sh
       script:
         - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
 
     - language: c
       name: "C/OSX"
@@ -17,6 +18,7 @@ matrix:
         - chmod +x ./bin/travis/run_soak.sh
       script:
         - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
 
     - language: c
       name: "C/Windows (MinGW)"
@@ -26,6 +28,7 @@ matrix:
         - chmod +x ./bin/travis/run_soak.sh
       script:
         - CPP_COMPILE=OFF CMAKE_GENERATOR="MinGW Makefiles" ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
 
     - language: c
       name: "C/Windows (MSVC)"
@@ -36,6 +39,7 @@ matrix:
         - choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
       script:
         - CPP_COMPILE=OFF CMAKE_GENERATOR="Visual Studio 16 2019" ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
       
     - language: cpp 
       name: "CPP/Linux"
@@ -45,6 +49,7 @@ matrix:
         - chmod +x ./bin/travis/run_soak.sh
       script:
         - CPP_COMPILE=ON ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
 
     - language: cpp 
       name: "CPP/OSX"
@@ -54,6 +59,7 @@ matrix:
         - chmod +x ./bin/travis/run_soak.sh
       script:
         - CPP_COMPILE=ON ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
 
     - language: cpp 
       name: "CPP/Windows (MinGW)"
@@ -63,6 +69,7 @@ matrix:
         - chmod +x ./bin/travis/run_soak.sh
       script:
         - CPP_COMPILE=ON CMAKE_GENERATOR="MinGW Makefiles" ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
 
     - language: cpp 
       name: "CPP/Windows (MSVC)"
@@ -73,3 +80,4 @@ matrix:
         - choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
       script:
         - CPP_COMPILE=ON CMAKE_GENERATOR="Visual Studio 16 2019" ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
