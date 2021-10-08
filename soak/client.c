@@ -252,7 +252,7 @@ int main(int argc, char *argv[])
     for (int i = 0; i < SOAK_CLIENT_MAX_PENDING_MESSAGES; i++)
         messages[i].free = true;
 
-    NBN_GameClient_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, Soak_Debug_PrintAddedToRecvQueue);
+    NBN_GameClient_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue);
 
     if (NBN_GameClient_Start() < 0)
     {

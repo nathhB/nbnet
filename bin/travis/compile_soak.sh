@@ -6,9 +6,9 @@ cd build
 
 if [ "$TRAVIS_OS_NAME" = "windows" ]
 then
-    cmake -G "MinGW Makefiles" ..
+    cmake -G "MinGW Makefiles" -DCPP_COMPILE=$CPP_COMPILE ..
 else
-    cmake ..
+    cmake -DCPP_COMPILE=$CPP_COMPILE ..
 fi
 
 if [ "$TRAVIS_OS_NAME" = "windows" ]

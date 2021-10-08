@@ -5171,7 +5171,7 @@ int NBN_PacketSimulator_EnqueuePacket(
     jitter = (jitter > 0) ? (rand() % (jitter * 2)) - jitter : 0;
 
 
-    NBN_PacketSimulatorEntry *entry = MemoryManager_Alloc(NBN_MEM_PACKET_SIMULATOR_ENTRY);
+    NBN_PacketSimulatorEntry *entry = (NBN_PacketSimulatorEntry *)MemoryManager_Alloc(NBN_MEM_PACKET_SIMULATOR_ENTRY);
 
     entry->delay = packet_simulator->ping + jitter / 1000; /* and converted back to seconds */
     entry->receiver = receiver;
@@ -5240,7 +5240,7 @@ DWORD WINAPI PacketSimulator_Routine(LPVOID arg)
 static void *PacketSimulator_Routine(void *arg)
 #endif
 {
-    NBN_PacketSimulator *packet_simulator = arg;
+    NBN_PacketSimulator *packet_simulator = (NBN_PacketSimulator *)arg;
 
     while (packet_simulator->running)
     {

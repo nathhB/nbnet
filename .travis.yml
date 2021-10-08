@@ -1,18 +1,13 @@
-os:
-  - osx
-  - linux
-  - windows
-
-jobs:
+matrix:
   include:
     - language: c
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
       script:
-        - ./bin/travis/compile_soak.sh 
+        - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
       
     - language: cpp 
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
       script:
-        - ./bin/travis/compile_soak.sh 
+        - CPP_COMPILE=ON ./bin/travis/compile_soak.sh

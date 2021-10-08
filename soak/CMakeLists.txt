@@ -1,6 +1,16 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(soak C)
+project(soak)
+
+option(CPP_COMPILE OFF)
+
+# allow to compile as cpp
+if (CPP_COMPILE)
+  file(GLOB_RECURSE CFILES "${CMAKE_SOURCE_DIR}/*.c")
+  SET_SOURCE_FILES_PROPERTIES(${CFILES} PROPERTIES LANGUAGE CXX)
+endif (CPP_COMPILE)
+
+unset(CPP_COMPILE)
 
 add_executable(client client.c soak.c logging.c)
 add_executable(server server.c soak.c logging.c)

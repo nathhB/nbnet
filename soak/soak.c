@@ -208,7 +208,7 @@ void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *conn, NBN_Message *msg)
 {
     if (msg->header.type == NBN_MESSAGE_CHUNK_TYPE)
     {
-        NBN_MessageChunk *chunk = msg->data;
+        NBN_MessageChunk *chunk = (NBN_MessageChunk *)msg->data;
 
         Soak_LogDebug("Soak message chunk added to recv queue (chunk id: %d, chunk total: %d)",
                 chunk->id, chunk->total);
@@ -244,7 +244,7 @@ unsigned int Soak_GetDestroyedIncomingSoakMessageCount(void)
 
 SoakMessage *SoakMessage_CreateIncoming(void)
 {
-    SoakMessage *msg = malloc(sizeof(SoakMessage));
+    SoakMessage *msg = (SoakMessage *)malloc(sizeof(SoakMessage));
 
     msg->outgoing = false;
 
@@ -255,7 +255,7 @@ SoakMessage *SoakMessage_CreateIncoming(void)
 
 SoakMessage *SoakMessage_CreateOutgoing(void)
 {
-    SoakMessage *msg = malloc(sizeof(SoakMessage));
+    SoakMessage *msg = (SoakMessage *)malloc(sizeof(SoakMessage));
 
     msg->outgoing = true;
 

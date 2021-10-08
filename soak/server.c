@@ -74,7 +74,7 @@ static void HandleNewConnection(void)
 
     NBN_GameServer_AcceptIncomingConnection();
 
-    SoakClient *soak_client = malloc(sizeof(SoakClient));
+    SoakClient *soak_client = (SoakClient *)malloc(sizeof(SoakClient));
 
     soak_client->id = connection->id;
     soak_client->recved_messages_count = 0;
@@ -269,7 +269,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    NBN_GameServer_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, Soak_Debug_PrintAddedToRecvQueue);
+    NBN_GameServer_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue);
 
     if (NBN_GameServer_Start())
     {
