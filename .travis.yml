@@ -1,20 +1,17 @@
+os:
+  - osx
+  - linux
+  - windows
+
 jobs:
   include:
     - language: c
-      os:
-        - osx
-        - linux
-        - windows
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
       script:
         - ./bin/travis/compile_soak.sh 
       
-    - language: cpp
-      os:
-        - osx
-        - linux
-        - windows
+    - language: cpp 
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
       script:
