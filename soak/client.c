@@ -270,7 +270,9 @@ int main(int argc, char *argv[])
     int ret = Soak_MainLoop(Tick);
 
     NBN_GameClient_Stop();
-    NBN_GameClient_Deinit();
+
+    // FIXME: causes a segfault
+    // NBN_GameClient_Deinit();
 
     Soak_LogInfo("Outgoing soak messages created: %d", Soak_GetCreatedOutgoingSoakMessageCount());
     Soak_LogInfo("Outgoing soak messages destroyed: %d", Soak_GetDestroyedOutgoingSoakMessageCount());

@@ -290,7 +290,10 @@ int main(int argc, char *argv[])
     int ret = Soak_MainLoop(Tick);
 
     NBN_GameServer_Stop();
-    NBN_GameServer_Deinit();
+
+    // FIXME: causes a segfault
+    // NBN_GameServer_Deinit();
+
     Soak_Deinit();
 
     return ret;
