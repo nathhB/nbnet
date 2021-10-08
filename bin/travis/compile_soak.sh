@@ -17,8 +17,8 @@ then
     then
         mingw32-make
     else
+        C:/Program Files\ (x86)/Microsoft\ Visual\ Studio/2019/BuildTools/MSBuild/Current/Bin/MSBuild.exe -p:Configuration=Debug soak.sln
         ls -l
-        MSBuild.exe -p:Configuration=Debug soak.sln
     fi
 else
     make
