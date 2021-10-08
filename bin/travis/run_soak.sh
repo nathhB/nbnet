@@ -4,7 +4,7 @@ cd soak/build
 
 echo "Booting soak server..."
 
-./server --packet_loss=0.4 --packet_duplication=0.5 --ping=0.4 --jitter=0.2 &
+./server --packet_loss=0.4 --packet_duplication=0.5 --ping=0.4 --jitter=0.2 &> soak_serv_out &
 sleep 2
 
 echo "OK."
