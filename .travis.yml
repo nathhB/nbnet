@@ -23,22 +23,26 @@ matrix:
     - language: c
       name: "C/Windows (MinGW)"
       os: windows
+      env:
+        - CMAKE_GENERATOR="MinGW Makefiles"
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
         - chmod +x ./bin/travis/run_soak.sh
       script:
-        - CPP_COMPILE=OFF CMAKE_GENERATOR="MinGW Makefiles" ./bin/travis/compile_soak.sh
+        - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
         - ./bin/travis/run_soak.sh
 
     - language: c
       name: "C/Windows (MSVC)"
       os: windows
+      env:
+        - CMAKE_GENERATOR="Visual Studio 16 2019"
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
         - chmod +x ./bin/travis/run_soak.sh
         - choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
       script:
-        - CPP_COMPILE=OFF CMAKE_GENERATOR="Visual Studio 16 2019" ./bin/travis/compile_soak.sh
+        - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
         - ./bin/travis/run_soak.sh
       
     - language: cpp 
@@ -64,20 +68,24 @@ matrix:
     - language: cpp 
       name: "CPP/Windows (MinGW)"
       os: windows
+      env:
+        - CMAKE_GENERATOR="MinGW Makefiles"
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
         - chmod +x ./bin/travis/run_soak.sh
       script:
-        - CPP_COMPILE=ON CMAKE_GENERATOR="MinGW Makefiles" ./bin/travis/compile_soak.sh
+        - CPP_COMPILE=ON ./bin/travis/compile_soak.sh
         - ./bin/travis/run_soak.sh
 
     - language: cpp 
       name: "CPP/Windows (MSVC)"
       os: windows
+      env:
+        - CMAKE_GENERATOR="Visual Studio 16 2019"
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
         - chmod +x ./bin/travis/run_soak.sh
         - choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
       script:
-        - CPP_COMPILE=ON CMAKE_GENERATOR="Visual Studio 16 2019" ./bin/travis/compile_soak.sh
+        - CPP_COMPILE=ON ./bin/travis/compile_soak.sh
         - ./bin/travis/run_soak.sh

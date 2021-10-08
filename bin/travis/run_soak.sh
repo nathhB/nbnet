@@ -2,14 +2,11 @@
 
 cd soak/build
 
-if [ "$TRAVIS_OS_NAME" = "windows" ]
+if [ "$TRAVIS_OS_NAME" = "windows" ] && [ "$CMAKE_GENERATOR" != "MinGW Makefiles" ]
 then
-    if [ "$CMAKE_GENERATOR" != "MinGW Makefiles" ]
-    then
-        # MSVC
+    # MSVC
 
-        cd Debug # go to VS Debug folder that contains client.exe and server.exe
-    fi
+    cd Debug # go to VS Debug folder that contains client.exe and server.exe
 fi
 
 echo "Starting soak server..."
