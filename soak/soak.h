@@ -46,7 +46,7 @@
 #include "../nbnet.h"
 
 #define SOAK_PROTOCOL_NAME "nbnet_soak"
-#define SOAK_PORT 42042
+#define SOAK_PORT 42043
 #define SOAK_TICK_RATE 60
 #define SOAK_TICK_DT (1.0 / SOAK_TICK_RATE)
 #define SOAK_MESSAGE_MIN_DATA_LENGTH 50

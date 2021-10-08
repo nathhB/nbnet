@@ -12,8 +12,8 @@ endif (CPP_COMPILE)
 
 unset(CPP_COMPILE)
 
-add_executable(client client.c soak.c logging.c)
-add_executable(server server.c soak.c logging.c)
+add_executable(client client.c soak.c logging.c cargs.c)
+add_executable(server server.c soak.c logging.c cargs.c)
 
 target_link_libraries(client pthread m)
 target_link_libraries(server pthread m)
