@@ -8,4 +8,5 @@ script:
   - mkdir build
   - cd build
   - cmake ..
-  - make
+  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then mingw32-make ; fi
+  - if [ "$TRAVIS_OS_NAME" != "windows" ]; then make ; fi
