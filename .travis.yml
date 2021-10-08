@@ -1,0 +1,10 @@
+language: c
+os:
+  - osx
+  - linux
+script:
+  - cd soak
+  - mkdir build
+  - cd build
+  - cmake ..
+  - make
