@@ -13,7 +13,13 @@ fi
 
 if [ "$TRAVIS_OS_NAME" = "windows" ]
 then
-    mingw32-make
+    if [ "$CMAKE_GENERATOR" = "MinGW Makefiles" ]
+    then
+        mingw32-make
+    else
+        ls -l
+        MSBuild.exe -p:Configuration=Debug soak.sln
+    fi
 else
     make
 fi
