@@ -7,6 +7,7 @@ script:
   - cd soak
   - mkdir build
   - cd build
-  - cmake ..
+  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then cmake -G "MinGW Makefiles" .. ; fi
+  - if [ "$TRAVIS_OS_NAME" != "windows" ]; then cmake .. ; fi
   - if [ "$TRAVIS_OS_NAME" = "windows" ]; then mingw32-make ; fi
   - if [ "$TRAVIS_OS_NAME" != "windows" ]; then make ; fi
