@@ -758,8 +758,8 @@ typedef struct
 {
     bool acked;
     unsigned int messages_count;
-    NBN_MessageEntry messages[NBN_MAX_MESSAGES_PER_PACKET];
     double send_time;
+    NBN_MessageEntry messages[NBN_MAX_MESSAGES_PER_PACKET];
 } NBN_PacketEntry;
 
 typedef struct
