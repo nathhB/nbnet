@@ -15,9 +15,6 @@ unset(CPP_COMPILE)
 add_executable(client client.c soak.c logging.c cargs.c)
 add_executable(server server.c soak.c logging.c cargs.c)
 
-target_link_libraries(client m)
-target_link_libraries(server m)
-
 add_compile_options(-Wall -Wextra -Wpedantic)
 
 target_compile_definitions(client PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR SOAK_CLIENT)
