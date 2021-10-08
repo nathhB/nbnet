@@ -1,5 +1,7 @@
 # nbnet
 
+[![Build Status](https://app.travis-ci.com/nathhB/nbnet.svg?branch=master)](https://app.travis-ci.com/nathhB/nbnet)
+
 nbnet is a single header C (C99) library to implement client-server network code for games. It is more precisely designed for fast-paced action games.
 
 nbnet is based on this [great series of articles](https://gafferongames.com/) by Glenn Fiedler.
