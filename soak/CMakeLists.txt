@@ -35,10 +35,16 @@ if(WIN32)
   target_link_libraries(client wsock32 ws2_32)
   target_link_libraries(server wsock32 ws2_32)
 else()
-  # link pthread when we are not on windows
+  # link with pthread when we are not on windows
   target_link_libraries(client pthread)
   target_link_libraries(server pthread)
 endif(WIN32)
+
+if (UNIX)
+  # link with libm on unix
+  target_link_libraries(client m)
+  target_link_libraries(server m)
+endif (UNIX)
 
 if (EMSCRIPTEN)
   set(ASYNCIFY_IMPORTS "[\"__js_game_server_start\", \"__js_game_client_start\", \"__js_game_client_close\"]")
