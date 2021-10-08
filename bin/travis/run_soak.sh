@@ -20,8 +20,17 @@ echo "Running soak test..."
 
 ./client --message_count=100 &> soak_cli_out
 
-echo "Printing end of client logs..."
+RESULT=$?
 
-cat soak_cli_out | grep -A10 -B10 "Received all soak message echoes"
+if [ $RESULT -eq 0 ]; then
+    echo "Soak test completed with success!"
+    echo "Printing the end of client logs..."
+
+    cat soak_cli_out | grep -A10 -B10 "Received all soak message echoes"
+else
+    echo "Soak test failed!"
+fi
 
 kill $SERV_PID
+
+exit $RESULT
