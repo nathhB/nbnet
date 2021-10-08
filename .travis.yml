@@ -4,40 +4,52 @@ matrix:
       os: linux
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
+        - chmod +x ./bin/travis/run_soak.sh
       script:
         - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
 
     - language: c
       os: osx
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
+        - chmod +x ./bin/travis/run_soak.sh
       script:
         - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
 
     - language: c
       os: windows
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
+        - chmod +x ./bin/travis/run_soak.sh
       script:
         - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
       
     - language: cpp 
       os: linux
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
+        - chmod +x ./bin/travis/run_soak.sh
       script:
         - CPP_COMPILE=ON ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
 
     - language: cpp 
       os: osx
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
+        - chmod +x ./bin/travis/run_soak.sh
       script:
         - CPP_COMPILE=ON ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
 
     - language: cpp 
       os: windows
       install:
         - chmod +x ./bin/travis/compile_soak.sh 
+        - chmod +x ./bin/travis/run_soak.sh
       script:
         - CPP_COMPILE=ON ./bin/travis/compile_soak.sh
+        - ./bin/travis/run_soak.sh
