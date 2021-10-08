@@ -5,9 +5,9 @@ messages it receives.
 
 Here is how to compile it with gcc:
 
-`gcc client.c shared.c -o client`
+`gcc client.c shared.c -lm -o client`
 
-`gcc server.c shared.c -o server`
+`gcc server.c shared.c -lm -o server`
 
 To run the server simply do:
 
