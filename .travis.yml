@@ -92,3 +92,15 @@ matrix:
       script:
         - CPP_COMPILE=ON ./bin/travis/compile_soak.sh
         - ./bin/travis/run_soak.sh
+
+    - language: node_js
+      name: "C/Emscripten"
+      node_js:
+        - node
+      sudo: required
+      services:
+        - docker
+      before_install:
+        - docker run -dit --name emscripten -v $(pwd):/src trzeci/emscripten:sdk-incoming-64bit bash
+      script:
+        - docker exec -it emscripten EMSCRIPTEN=1 CPP_COMPILE=OFF ./bin/travis/compile_soak.sh

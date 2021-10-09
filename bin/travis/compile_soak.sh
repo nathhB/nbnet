@@ -7,6 +7,9 @@ cd build
 if [ "$TRAVIS_OS_NAME" = "windows" ]
 then
     cmake -G "$CMAKE_GENERATOR" -DCPP_COMPILE=$CPP_COMPILE -DCMAKE_BUILD_TYPE=Debug ..
+elif [ -v $EMSCRIPTEN ]
+then
+    emcmake cmake -DCPP_COMPILE=$CPP_COMPILE -DCMAKE_BUILD_TYPE=Debug ..
 else
     cmake -DCPP_COMPILE=$CPP_COMPILE -DCMAKE_BUILD_TYPE=Debug ..
 fi
