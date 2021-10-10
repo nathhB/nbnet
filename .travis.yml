@@ -46,7 +46,7 @@ matrix:
         - choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
       script:
         - CPP_COMPILE=OFF ./bin/travis/compile_soak.sh
-        - ./bin/travis/run_soak.sh
+        # - ./bin/travis/run_soak.sh
       
     - language: cpp 
       name: "CPP/Linux"
@@ -91,7 +91,7 @@ matrix:
         - choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
       script:
         - CPP_COMPILE=ON ./bin/travis/compile_soak.sh
-        - ./bin/travis/run_soak.sh
+        # - ./bin/travis/run_soak.sh
 
     - language: node_js
       name: "C/Emscripten"
@@ -101,6 +101,6 @@ matrix:
       services:
         - docker
       before_install:
-        - docker run -dit --name emscripten -v $(pwd):/src trzeci/emscripten:sdk-incoming-64bit bash
+        - docker run -dit --name emscripten -v $(pwd):/nbnet trzeci/emscripten:latest bash
       script:
-        - docker exec -it -e EMSCRIPTEN=1 -e CPP_COMPILE=OFF emscripten ./bin/travis/compile_soak.sh
+        - docker exec -it -e EMSCRIPTEN=1 -e CPP_COMPILE=OFF emscripten /nbnet/bin/travis/compile_soak.sh

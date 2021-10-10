@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [ -n "$EMSCRIPTEN" ]
+then
+    cd /nbnet
+fi
+
 cd soak
 mkdir build
 cd build
