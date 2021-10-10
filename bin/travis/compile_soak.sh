@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [ -n "$EMSCRIPTEN" ]
+then
+    cd /nbnet
+fi
+
 cd soak
 mkdir build
 cd build
@@ -7,6 +12,9 @@ cd build
 if [ "$TRAVIS_OS_NAME" = "windows" ]
 then
     cmake -G "$CMAKE_GENERATOR" -DCPP_COMPILE=$CPP_COMPILE -DCMAKE_BUILD_TYPE=Debug ..
+elif [ -n "$EMSCRIPTEN" ]
+then
+    emcmake cmake -DCPP_COMPILE=$CPP_COMPILE -DCMAKE_BUILD_TYPE=Debug ..
 else
     cmake -DCPP_COMPILE=$CPP_COMPILE -DCMAKE_BUILD_TYPE=Debug ..
 fi
