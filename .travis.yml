@@ -104,3 +104,4 @@ matrix:
         - docker run -dit --name emscripten -v $(pwd):/nbnet trzeci/emscripten:latest bash
       script:
         - docker exec -it -e EMSCRIPTEN=1 -e CPP_COMPILE=OFF emscripten /nbnet/bin/travis/compile_soak.sh
+        - docker exec -it -e EMSCRIPTEN=1 -e CPP_COMPILE=OFF emscripten /nbnet/bin/travis/run_soak.sh
