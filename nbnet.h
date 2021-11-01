@@ -3866,10 +3866,10 @@ void NBN_GameClient_Init(const char *protocol_name, const char *ip_address, uint
 
 void NBN_GameClient_Deinit(void)
 {
-    NBN_Endpoint_Deinit(&__game_client.endpoint);
-
     if (__game_client.server_connection)
         NBN_Connection_Destroy(__game_client.server_connection);
+
+    NBN_Endpoint_Deinit(&__game_client.endpoint);
 }
 
 int NBN_GameClient_Start(void)
