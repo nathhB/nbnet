@@ -2,6 +2,7 @@
 
 [![Build Status](https://app.travis-ci.com/nathhB/nbnet.svg?branch=master)](https://app.travis-ci.com/nathhB/nbnet)
 [![CodeFactor](https://www.codefactor.io/repository/github/nathhb/nbnet/badge/master)](https://www.codefactor.io/repository/github/nathhb/nbnet/overview/master)
+[![Documentation](https://img.shields.io/badge/docs-docsforge-blue)](http://nbnet.docsforge.com/)
 [![Support Server](https://img.shields.io/discord/591914197219016707.svg?color=7289da&label=nbnet&logo=discord&style=flat-square)](https://discord.gg/esR8FSyPnF)
 
 nbnet is a single header C (C99) library to implement client-server network code for games. It is more precisely designed for fast-paced action games.
@@ -15,6 +16,12 @@ nbnet aims to be as easy to use as possible. nbnet's API is *friendly* and goes 
 You can see nbnet in action [in this video](https://www.youtube.com/watch?v=BJl_XN3QJhQ&ab_channel=NathanBIAGINI).
 
 If you want to discuss the library, you can join the [nbnet's discord server](https://discord.gg/esR8FSyPnF).
+
+## Documentation
+
+At the moment I think the best way to learn how to use nbnet is to go through the [examples](https://github.com/nathhB/nbnet/tree/master/examples).
+
+You can also take a look at the official [documentation](https://nbnet.docsforge.com/) (**WIP**).
 
 ## Features
 
