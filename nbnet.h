@@ -253,7 +253,7 @@ void NBN_MeasureStream_Reset(NBN_MeasureStream *);
 
 #pragma region NBN_Message
 
-#define NBN_MAX_CHANNELS 8 /* Maximum value of uint8_t, see message header */
+#define NBN_MAX_CHANNELS 32 /* Maximum value of uint8_t, see message header */
 #define NBN_MAX_MESSAGE_TYPES 255 /* Maximum value of uint8_t, see message header */
 #define NBN_MESSAGE_RESEND_DELAY 0.1 /* Number of seconds before a message is resent (reliable messages redundancy) */
 
@@ -290,13 +290,22 @@ typedef struct
     void *data;
 } NBN_Message;
 
-/*
- * Used in user code to hold information about a received message.
+/**
+ * Information about a received message.
  */
 typedef struct
 {
+    /** User defined message's type */
     uint8_t type;
+
+    /** Message's data */
     void *data;
+
+    /**
+     * Message's sender.
+     * 
+     * On the client side, it will always be NULL (all received messages come from the game server).
+    */
     NBN_Connection *sender;
 } NBN_MessageInfo;
 
@@ -1033,30 +1042,210 @@ typedef struct
 
 extern NBN_GameClient __game_client;
 
-void NBN_GameClient_Init(const char *, const char *, uint16_t);
+/**
+ * Init the game client.
+ * 
+ * @param protocol_name A unique protocol name, the clients and the server must use the same one or they won't be able to communicate
+ * @param ip_address IP address to connect to
+ * @param port Port to connect to
+ */
+void NBN_GameClient_Init(const char *protocol_name, const char *ip_address, uint16_t port);
+
+/**
+ * Deinit the game client and release memory.
+ */
 void NBN_GameClient_Deinit(void);
+
+/**
+ * Start the game client.
+ * 
+ * Call this function after NBN_GameClient_Init.
+ * 
+ * @return 0 when successully started, -1 otherwise
+ */
 int NBN_GameClient_Start(void);
+
+/**
+ * Disconnect from the server.
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
 int NBN_GameClient_Disconnect(void);
+
+/**
+ * Stop the game client.
+ */
 void NBN_GameClient_Stop(void);
-void NBN_GameClient_RegisterMessage(uint8_t, NBN_MessageBuilder, NBN_MessageDestructor, NBN_MessageSerializer);
-void NBN_GameClient_RegisterChannel(uint8_t, uint8_t);
-void NBN_GameClient_AddTime(double);
+
+/**
+ * Register a type of message on the game client.
+ * 
+ * 
+ * @param msg_type A user defined message type, can be any value from 0 to 245 (245 to 255 are reserved by nbnet).
+ * @param msg_builder The function responsible for building the message
+ * @param msg_destructor The function responsible for destroying the message (and releasing memory)
+ * @param msg_serializer The function responsible for serializing the message
+ */
+void NBN_GameClient_RegisterMessage(
+    uint8_t msg_type,
+    NBN_MessageBuilder msg_builder,
+    NBN_MessageDestructor msg_destructor,
+    NBN_MessageSerializer msg_serializer);
+
+/**
+ * Create a new channel on the game client.
+ * 
+ * The channel must be created on both the client and the server.
+ * 
+ * @param type The channel type, can be either NBN_CHANNEL_TYPE_UNRELIABLE_ORDERED or NBN_CHANNEL_TYPE_RELIABLE_ORDERED
+ * @param id A unique ID between 0 and 25 (26 to 31 are reserved by nbnet, 32 is the maximum number of channels)
+ */
+void NBN_GameClient_RegisterChannel(uint8_t type, uint8_t id);
+
+/**
+ * Add time (in seconds) to nbnet game client's clock.
+ * 
+ * This function should be called once every tick with the number of seconds
+ * since the previous call.
+ * 
+ * @param time The number of seconds to add to the clock
+ */
+void NBN_GameClient_AddTime(double time);
+
+/**
+ * Poll game client events.
+ * 
+ * This function should be called in a loop until it returns NBN_NO_EVENT.
+ * 
+ * @return The code of the polled event or NBN_NO_EVENT when there is no more events.
+ */
 int NBN_GameClient_Poll(void);
+
+/**
+ * Pack all enqueued messages into packets and send them.
+ * 
+ * This should be called at a relatively high frequency, probably at the end of
+ * every game tick.
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
 int NBN_GameClient_SendPackets(void);
-void NBN_GameClient_SetContext(void *);
+
+/**
+ * Set game client's context.
+ * 
+ * @param context
+ */
+void NBN_GameClient_SetContext(void *context);
+
+/**
+ * Get game client's context.
+ * 
+ * @return The context or NULL if no context was set.
+ */
 void *NBN_GameClient_GetContext(void);
-NBN_OutgoingMessage *NBN_GameClient_CreateMessage(uint8_t, void *);
-NBN_OutgoingMessage *NBN_GameClient_CreateByteArrayMessage(uint8_t *, unsigned int);
-int NBN_GameClient_SendMessage(NBN_OutgoingMessage *, uint8_t);
-int NBN_GameClient_SendUnreliableMessage(NBN_OutgoingMessage *);
-int NBN_GameClient_SendReliableMessage(NBN_OutgoingMessage *);
+
+/**
+ * Create a new outgoing message.
+ * 
+ * @param msg_type The type of message to send; it needs to be registered (see NBN_GameClient_RegisterMessage)
+ * @param msg_data A pointer to the message to send
+ * 
+ * @return A pointer to a freshly created outgoing message when successful, NULL otherwise
+ */
+NBN_OutgoingMessage *NBN_GameClient_CreateMessage(uint8_t msg_type, void *msg_data);
+
+/**
+ * Create a new byte array outgoing message.
+ * 
+ * @param bytes The byte array to send
+ * @param length The length of the byte array to send
+ * 
+ * @return A pointer to a freshly created outgoing message when successful, NULL otherwise
+ */
+NBN_OutgoingMessage *NBN_GameClient_CreateByteArrayMessage(uint8_t *bytes, unsigned int length);
+
+/**
+ * Send a message to the server on a given channel.
+ * 
+ * It's recommended to use NBN_GameClient_SendUnreliableMessage or NBN_GameClient_SendReliableMessage
+ * unless you really want to use a specific channel.
+ * 
+ * @param outgoing_msg The message to send
+ * @param channel The ID of the channel to send the message on
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
+int NBN_GameClient_SendMessage(NBN_OutgoingMessage *outgoing_msg, uint8_t channel_id);
+
+/**
+ * Send a message to the server, unreliably.
+ * 
+ * @param outgoing_msg The message to send
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
+int NBN_GameClient_SendUnreliableMessage(NBN_OutgoingMessage *outgoing_msg);
+
+/**
+ * Send a message to the server, reliably.
+ * 
+ * @param outgoing_msg The message to send
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
+int NBN_GameClient_SendReliableMessage(NBN_OutgoingMessage *outgoing_msg);
+
 NBN_Connection *NBN_GameClient_CreateServerConnection(void *);
+
+/**
+ * Retrieve the info about the last received message.
+ * 
+ * Call this function when receiveing a NBN_MESSAGE_RECEIVED event to access
+ * information about the message.
+ * 
+ * @return A structure containing information about the received message
+ */
 NBN_MessageInfo NBN_GameClient_GetMessageInfo(void);
+
+/**
+ * Retrieve network stats about the game client.
+ * 
+ * @return A structure containing network related stats about the game client
+ */
 NBN_ConnectionStats NBN_GameClient_GetStats(void);
+
+/**
+ * Retrieve the code sent by the server when closing the connection.
+ * 
+ * Call this function when receiving a NBN_DISCONNECTED event.
+ * 
+ * @return The code used by the server when closing the connection or -1 (the default code)
+ */
 int NBN_GameClient_GetServerCloseCode(void);
+
+/**
+ * Retrieve a stream to read data sent by the server upon accepting the connection.
+ * 
+ * @return A stream to read data from
+ */
 NBN_Stream *NBN_GameClient_GetAcceptDataReadStream(void);
+
+/**
+ * @return true if connected, false otherwise
+ */
 bool NBN_GameClient_IsConnected(void);
+
+/**
+ * @return true if packet encryption is enabled, false otherwise
+ */
 bool NBN_GameClient_IsEncryptionEnabled(void);
+
+/**
+ * Enabled packet encryption.
+ * 
+ * This must be called after NBN_GameClient_Init and before NBN_GameClient_Start.
+ */
 void NBN_GameClient_EnableEncryption(void);
 
 #ifdef NBN_DEBUG
@@ -1100,38 +1289,291 @@ typedef struct
 
 extern NBN_GameServer __game_server;
 
-void NBN_GameServer_Init(const char *, uint16_t);
+/**
+ * Init the game server.
+ * 
+ * @param protocol_name A unique protocol name, the clients and the server must use the same one or they won't be able to communicate
+ * @param port The server's port
+ */
+void NBN_GameServer_Init(const char *protocol_name, uint16_t port);
+
+/**
+ * Deinit the game server and release memory.
+ */
 void NBN_GameServer_Deinit(void);
+
+/**
+ * Start the game server.
+ * 
+ * Call this function after NBN_GameServer_Init.
+ * 
+ * @return 0 when successully started, -1 otherwise
+ */
 int NBN_GameServer_Start(void);
+
+/**
+ * Stop the game server.
+ */
 void NBN_GameServer_Stop(void);
-void NBN_GameServer_RegisterMessage(uint8_t, NBN_MessageBuilder, NBN_MessageDestructor, NBN_MessageSerializer);
-void NBN_GameServer_RegisterChannel(uint8_t, uint8_t);
-void NBN_GameServer_AddTime(double);
+
+/**
+ * Register a type of message on the game server.
+ * 
+ * 
+ * @param msg_type A user defined message type, can be any value from 0 to 245 (245 to 255 are reserved by nbnet).
+ * @param msg_builder The function responsible for building the message
+ * @param msg_destructor The function responsible for destroying the message (and releasing memory)
+ * @param msg_serializer The function responsible for serializing the message
+ */
+void NBN_GameServer_RegisterMessage(
+    uint8_t msg_type, NBN_MessageBuilder msg_builder, NBN_MessageDestructor msg_destructor, NBN_MessageSerializer msg_serializer);
+
+/**
+ * Create a new channel on the game server.
+ * 
+ * The channel must be created on both the client and the server.
+ * 
+ * @param type The channel type, can be either NBN_CHANNEL_TYPE_UNRELIABLE_ORDERED or NBN_CHANNEL_TYPE_RELIABLE_ORDERED
+ * @param id A unique ID between 0 and 25 (26 to 31 are reserved by nbnet, 32 is the maximum number of channels)
+ */
+void NBN_GameServer_RegisterChannel(uint8_t type, uint8_t id);
+
+/**
+ * Add time (in seconds) to nbnet game server's clock.
+ * 
+ * This function should be called once every tick with the number of seconds
+ * since the previous call.
+ * 
+ * @param time The number of seconds to add to the clock
+ */
+void NBN_GameServer_AddTime(double time);
+
+/**
+ * Poll game server events.
+ * 
+ * This function should be called in a loop until it returns NBN_NO_EVENT.
+ * 
+ * @return The code of the polled event or NBN_NO_EVENT when there is no more events.
+ */
 int NBN_GameServer_Poll(void);
+
+/**
+ * Pack all enqueued messages into packets and send them.
+ * 
+ * This should be called at a relatively high frequency, probably at the end of
+ * every game tick.
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
 int NBN_GameServer_SendPackets(void);
-void NBN_GameServer_SetContext(void *);
+
+/**
+ * Set game server's context.
+ * 
+ * @param context
+ */
+void NBN_GameServer_SetContext(void *context);
+
+/**
+ * Get game server's context.
+ * 
+ * @return The context or NULL if no context was set.
+ */
 void *NBN_GameServer_GetContext(void);
+
 NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t, void *);
-int NBN_GameServer_CloseClient(NBN_Connection *);
-int NBN_GameServer_CloseClientWithCode(NBN_Connection *, int);
-NBN_OutgoingMessage *NBN_GameServer_CreateMessage(uint8_t, void *);
-NBN_OutgoingMessage *NBN_GameServer_CreateByteArrayMessage(uint8_t *, unsigned int);
-int NBN_GameServer_SendMessageTo(NBN_Connection *, NBN_OutgoingMessage *, uint8_t);
-int NBN_GameServer_SendUnreliableMessageTo(NBN_Connection *, NBN_OutgoingMessage *);
-int NBN_GameServer_SendReliableMessageTo(NBN_Connection *, NBN_OutgoingMessage *);
-int NBN_GameServer_BroadcastMessage(NBN_OutgoingMessage *, uint8_t);
-int NBN_GameServer_BroadcastUnreliableMessage(NBN_OutgoingMessage *);
-int NBN_GameServer_BroadcastReliableMessage(NBN_OutgoingMessage *);
-NBN_Stream *NBN_GameServer_GetConnectionAcceptDataWriteStream(NBN_Connection *);
+
+/**
+ * Close a client's connection without a specific code (default code is -1)
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
+int NBN_GameServer_CloseClient(NBN_Connection *client);
+
+/**
+ * Close a client's connection with a specific code.
+ * 
+ * The code is an arbitrary integer to let the client knows
+ * why his connection was closed.
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
+int NBN_GameServer_CloseClientWithCode(NBN_Connection *client, int code);
+
+/**
+ * Create a new outgoing message.
+ * 
+ * @param msg_type The type of message to send; it needs to be registered (see NBN_GameServer_RegisterMessage)
+ * @param msg_data A pointer to the message to send
+ * 
+ * @return A pointer to a freshly created outgoing message when successful, NULL otherwise
+ */
+NBN_OutgoingMessage *NBN_GameServer_CreateMessage(uint8_t msg_type, void *msg_data);
+
+/**
+ * Create a new byte array outgoing message.
+ * 
+ * @param bytes The byte array to send
+ * @param length The length of the byte array to send
+ * 
+ * @return A pointer to a freshly created outgoing message when successful, NULL otherwise
+ */
+NBN_OutgoingMessage *NBN_GameServer_CreateByteArrayMessage(uint8_t *bytes, unsigned int length);
+
+/**
+ * Send a message to a client on a given channel.
+ * 
+ * It's recommended to use NBN_GameServer_SendUnreliableMessageTo or NBN_GameServer_SendReliableMessageTo
+ * unless you really want to use a specific channel.
+ * 
+ * @param client The receiver
+ * @param outgoing_msg The message to send
+ * @param channel_id The ID of the channel to send the message on
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
+int NBN_GameServer_SendMessageTo(NBN_Connection *client, NBN_OutgoingMessage *outgoing_msg, uint8_t channel_id);
+
+/**
+ * Send a message to a client, unreliably.
+ * 
+ * @param client The receiver
+ * @param outgoing_msg The message to send
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
+int NBN_GameServer_SendUnreliableMessageTo(NBN_Connection *client, NBN_OutgoingMessage *outgoing_msg);
+
+/**
+ * Send a message to a client, reliably.
+ * 
+ * @param client The receiver
+ * @param outgoing_msg The message to send
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
+int NBN_GameServer_SendReliableMessageTo(NBN_Connection *client, NBN_OutgoingMessage *outgoing_msg);
+
+/**
+ * Broadcast a message to all clients on a given channel.
+ * 
+ * It's recommended to use NBN_GameServer_BroadcastUnreliableMessage or NBN_GameServer_BroadcastReliableMessage
+ * unless you really want to use a specific channel.
+ * 
+ * @param outgoing_msg The message to broadcast
+ * @param channel_id The ID of the channel to send the message on
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
+int NBN_GameServer_BroadcastMessage(NBN_OutgoingMessage *outgoing_msg, uint8_t channel_id);
+
+/**
+ * Broadcast a message to all clients, unreliably.
+ * 
+ * @param outgoing_msg The message to broadcast
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
+int NBN_GameServer_BroadcastUnreliableMessage(NBN_OutgoingMessage *outgoing_msg);
+
+/**
+ * Broadcast a message to all clients, reliably.
+ * 
+ * @param outgoing_msg The message to broadcast
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
+int NBN_GameServer_BroadcastReliableMessage(NBN_OutgoingMessage *outgoing_msg);
+
+/**
+ * Retrieve a stream to write data that will be send to the client upon accepting its connection.
+ * 
+ * Data should be written before accepting the connection (before calling NBN_GameServer_AcceptIncomingConnection).
+ */
+NBN_Stream *NBN_GameServer_GetConnectionAcceptDataWriteStream(NBN_Connection *client);
+
+/**
+ * Accept the last client connection request.
+ * 
+ * Call this function after receiving a NBN_NEW_CONNECTION.
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
 int NBN_GameServer_AcceptIncomingConnection(void);
-int NBN_GameServer_RejectIncomingConnectionWithCode(int);
+
+/**
+ * Reject the last client connection request with a specific code.
+ * 
+ * The code is an arbitrary integer to let the client knows why his connection
+ * was rejected.
+ * 
+ * Call this function after receiving a NBN_NEW_CONNECTION event.
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
+int NBN_GameServer_RejectIncomingConnectionWithCode(int code);
+
+/**
+ * Reject the last client connection request without any specific code (default code is -1)
+ * 
+ * Call this function after receiving a NBN_NEW_CONNECTION event.
+ * 
+ * @return 0 when successful, -1 otherwise
+ */
 int NBN_GameServer_RejectIncomingConnection(void);
+
+/**
+ * Retrieve the last connection.
+ * 
+ * Call this function after receiving a NBN_NEW_CONNECTION event.
+ * 
+ * @return A connection
+ */
 NBN_Connection *NBN_GameServer_GetIncomingConnection(void);
+
+/**
+ * Retrieve the last disconnected connection.
+ * 
+ * Call this function after receiving a NBN_CLIENT_DISCONNECTED event.
+ * 
+ * @return A connection
+ */
 NBN_Connection *NBN_GameServer_GetDisconnectedClient(void);
-NBN_Connection *NBN_GameServer_FindClientById(uint32_t);
+
+/**
+ * Retrieve a connection by ID.
+ * 
+ * @return The connection matching the given ID, NULL if it does not exist
+ */
+NBN_Connection *NBN_GameServer_FindClientById(uint32_t client_id);
+
+/**
+ * Retrieve the info about the last received message.
+ * 
+ * Call this function when receiveing a NBN_CLIENT_MESSAGE_RECEIVED event to access
+ * information about the message.
+ * 
+ * @return A structure containing information about the received message
+ */
 NBN_MessageInfo NBN_GameServer_GetMessageInfo(void);
+
+/**
+ * Retrieve network stats about the game server.
+ * 
+ * @return A structure containing network related stats about the game server
+ */
 NBN_GameServerStats NBN_GameServer_GetStats(void);
+
+/**
+ * Enabled packet encryption.
+ * 
+ * This must be called after NBN_GameServer_Init and before NBN_GameServer_Start.
+ */
 void NBN_GameServer_EnableEncryption(void);
+
+/**
+ * @return true if packet encryption is enabled, false otherwise
+ */
 bool NBN_GameServer_IsEncryptionEnabled(void);
 
 #ifdef NBN_DEBUG
