@@ -115,31 +115,11 @@ int main(int argc, char *argv[])
 #endif
     }
 
-    // Init client with a protocol name (must be the same than the one used by the server), the server ip address
+    // Start the client with a protocol name (must be the same than the one used by the server), the server ip address
     // and port
-    NBN_GameClient_Init(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT);
-
-    if (NBN_GameClient_Start() < 0)
+    if (NBN_GameClient_Start(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT, false, NULL) < 0)
     {
         Log(LOG_ERROR, "Failed to start client");
-
-        // Deinit the client
-        NBN_GameClient_Deinit();
-
-// Error, quit the client application
-#ifdef __EMSCRIPTEN__
-        emscripten_force_exit(1);
-#else
-        return 1;
-#endif 
-    }
-
-    if (NBN_GameClient_Connect() < 0)
-    {
-        Log(LOG_ERROR, "Failed to send connection request");
-
-        // Deinit the client
-        NBN_GameClient_Deinit();
 
 // Error, quit the client application
 #ifdef __EMSCRIPTEN__
@@ -221,9 +201,6 @@ int main(int argc, char *argv[])
 
     // Stop the client
     NBN_GameClient_Stop();
-
-    // Deinit the client
-    NBN_GameClient_Deinit();
 
 #ifdef __EMSCRIPTEN__
     emscripten_force_exit(0);

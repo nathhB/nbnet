@@ -517,15 +517,21 @@ int main(int argc, char *argv[])
     SetTargetFPS(TARGET_FPS);
 #endif
 
-    // Init client with a protocol name (must be the same than the one used by the server), the server ip address
+    // Start the client with a protocol name (must be the same than the one used by the server), the server ip address
     // and port
-    NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT);
 
 #ifdef EXAMPLE_ENCRYPTION
-    NBN_GameClient_EnableEncryption();
+    if (NBN_GameClient_Start(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, true, NULL) < 0)
+#else
+    if (NBN_GameClient_Start(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, false, NULL) < 0)
 #endif
+    {
+        TraceLog(LOG_WARNING, "Game client failed to start. Exit");
 
-    // Register messages, have to be done after NBN_GameClient_Init and before NBN_GameClient_Start
+        return 1;
+    }
+
+    // Register messages, have to be done after NBN_GameClient_Start
     // Messages need to be registered on both client and server side
     NBN_GameClient_RegisterMessage(
         CHANGE_COLOR_MESSAGE,
@@ -547,27 +553,7 @@ int main(int argc, char *argv[])
     NBN_GameClient_SetPing(GetOptions().ping);
     NBN_GameClient_SetJitter(GetOptions().jitter);
     NBN_GameClient_SetPacketLoss(GetOptions().packet_loss);
-    NBN_GameClient_SetPacketDuplication(GetOptions().packet_duplication);
-
-    if (NBN_GameClient_Start() < 0)
-    {
-        TraceLog(LOG_WARNING, "Game client failed to start. Exit");
-
-        // Deinit the client
-        NBN_GameClient_Deinit();
-
-        return 1;
-    }
-
-    if (NBN_GameClient_Connect() < 0)
-    {
-        TraceLog(LOG_WARNING, "Game client failed to connect. Exit");
-
-        // Deinit the client
-        NBN_GameClient_Deinit();
-
-        return 1;
-    }
+    NBN_GameClient_SetPacketDuplication(GetOptions().packet_duplication); 
 
     // Main loop
 #ifdef __EMSCRIPTEN__
@@ -593,9 +579,6 @@ int main(int argc, char *argv[])
 
     // Stop the client
     NBN_GameClient_Stop();
-
-    // Deinit the client
-    NBN_GameClient_Deinit();
 
     CloseWindow();
 

@@ -285,12 +285,17 @@ int main(int argc, char *argv[])
     // Even though we do not display anything we still use raylib logging capacibilities
     SetTraceLogLevel(LOG_DEBUG);
 
-    // Init server with a protocol name and a port, must be done first
-    NBN_GameServer_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT);
-
+    // Start server with a protocol name and a port, must be done first
 #ifdef EXAMPLE_ENCRYPTION
-    NBN_GameServer_EnableEncryption();
+    if (NBN_GameServer_Start(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT, true) < 0)
+#else
+    if (NBN_GameServer_Start(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT, false) < 0)
 #endif
+    {
+        TraceLog(LOG_ERROR, "Game client failed to start. Exit");
+
+        return 1;
+    }
 
     // Register messages, have to be done after NBN_GameServer_Init and before NBN_GameServer_Start
     NBN_GameServer_RegisterMessage(
@@ -313,18 +318,7 @@ int main(int argc, char *argv[])
     NBN_GameServer_SetPing(GetOptions().ping);
     NBN_GameServer_SetJitter(GetOptions().jitter);
     NBN_GameServer_SetPacketLoss(GetOptions().packet_loss);
-    NBN_GameServer_SetPacketDuplication(GetOptions().packet_duplication);
-
-    // Start the server
-    if (NBN_GameServer_Start() < 0)
-    {
-        TraceLog(LOG_ERROR, "Game client failed to start. Exit");
-
-        // Deinit the server
-        NBN_GameServer_Deinit();
-
-        return 1;
-    }
+    NBN_GameServer_SetPacketDuplication(GetOptions().packet_duplication); 
 
     float tick_dt = 1.f / TICK_RATE; // Tick delta time
 
@@ -384,9 +378,6 @@ int main(int argc, char *argv[])
 
     // Stop the server
     NBN_GameServer_Stop();
-
-    // Deinit the server
-    NBN_GameServer_Deinit();
 
     return 0;
 }

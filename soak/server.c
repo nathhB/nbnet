@@ -264,25 +264,20 @@ int main(int argc, char *argv[])
 {
     signal(SIGINT, SigintHandler);
 
-    Soak_SetLogLevel(LOG_TRACE);
+    Soak_SetLogLevel(LOG_TRACE); 
 
-    NBN_GameServer_Init(SOAK_PROTOCOL_NAME, SOAK_PORT);
-
-    if (Soak_Init(argc, argv) < 0)
+    if (NBN_GameServer_Start(SOAK_PROTOCOL_NAME, SOAK_PORT, false))
     {
-        NBN_GameServer_Deinit();
-        NBN_GameServer_Stop();
+        Soak_LogError("Failed to start game server");
 
         return 1;
     }
 
     NBN_GameServer_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue);
 
-    if (NBN_GameServer_Start())
+    if (Soak_Init(argc, argv) < 0)
     {
-        Soak_LogError("Failed to start game server");
-
-        NBN_GameServer_Deinit();
+        NBN_GameServer_Stop();
 
         return 1;
     }
@@ -290,10 +285,6 @@ int main(int argc, char *argv[])
     int ret = Soak_MainLoop(Tick);
 
     NBN_GameServer_Stop();
-
-    // FIXME: causes a segfault
-    // NBN_GameServer_Deinit();
-
     Soak_Deinit();
 
     return ret;

@@ -69,26 +69,14 @@ static bool error = false;
 
 int main(void)
 {
-    // Init server with a protocol name and a port, must be done first
-    NBN_GameServer_Init(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT);
-
+    // Start the server with a protocol name and a port, must be done first
 #ifdef NBN_ENCRYPTION
-    NBN_GameServer_EnableEncryption();
+    if (NBN_GameServer_Start(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, true) < 0)
+#else
+    if (NBN_GameServer_Start(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, false) < 0)
 #endif
-
-    // Registering messages, have to be done after NBN_GameServer_Init and before NBN_GameServer_Start
-    NBN_GameServer_RegisterMessage(ECHO_MESSAGE_TYPE,
-            (NBN_MessageBuilder)EchoMessage_Create,
-            (NBN_MessageDestructor)EchoMessage_Destroy,
-            (NBN_MessageSerializer)EchoMessage_Serialize);
-
-    // Start the server
-    if (NBN_GameServer_Start() < 0)
     {
         Log(LOG_ERROR, "Failed to start the server");
-
-        // Deinit server
-        NBN_GameServer_Deinit();
 
         // Error, quit the server application
 #ifdef __EMSCRIPTEN__
@@ -97,6 +85,12 @@ int main(void)
         return 1;
 #endif
     }
+
+    // Registering messages, have to be done after NBN_GameServer_Init and before NBN_GameServer_Start
+    NBN_GameServer_RegisterMessage(ECHO_MESSAGE_TYPE,
+            (NBN_MessageBuilder)EchoMessage_Create,
+            (NBN_MessageDestructor)EchoMessage_Destroy,
+            (NBN_MessageSerializer)EchoMessage_Serialize); 
 
     // Number of seconds between server ticks
     double dt = 1.0 / ECHO_TICK_RATE;
@@ -174,9 +168,6 @@ int main(void)
 
     // Stop the server
     NBN_GameServer_Stop();
-
-    // Deinit server
-    NBN_GameServer_Deinit();
 
     int ret = error ? 1 : 0;
 

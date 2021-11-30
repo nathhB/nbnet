@@ -63,16 +63,10 @@ static bool error = false;
 
 int main(void)
 {
-    // Init server with a protocol name and a port, must be done first
-    NBN_GameServer_Init(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT);
-
-    // Start the server
-    if (NBN_GameServer_Start() < 0)
+    // Start the server with a protocol name and a port, must be done first
+    if (NBN_GameServer_Start(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, false) < 0)
     {
         Log(LOG_ERROR, "Failed to start the server");
-
-        // Deinit server
-        NBN_GameServer_Deinit();
 
         // Error, quit the server application
 #ifdef __EMSCRIPTEN__
@@ -158,9 +152,6 @@ int main(void)
 
     // Stop the server
     NBN_GameServer_Stop();
-
-    // Deinit server
-    NBN_GameServer_Deinit();
 
     int ret = error ? 1 : 0;
 

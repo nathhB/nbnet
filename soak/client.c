@@ -240,52 +240,28 @@ int main(int argc, char *argv[])
 {
     Soak_SetLogLevel(LOG_TRACE);
 
-    NBN_GameClient_Init(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT);
+    if (NBN_GameClient_Start(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT, false, NULL) < 0)
+    {
+        Soak_LogError("Failed to start game client. Exit");
+
+#ifdef __EMSCRIPTEN__
+        emscripten_force_exit(1);
+#else
+        return 1;
+#endif
+    }
 
     if (Soak_Init(argc, argv) < 0)
-    {
-        NBN_GameClient_Deinit();
-
         return 1;
-    }
 
     for (int i = 0; i < SOAK_CLIENT_MAX_PENDING_MESSAGES; i++)
         messages[i].free = true;
 
-    NBN_GameClient_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue);
-
-    if (NBN_GameClient_Start() < 0)
-    {
-        Soak_LogError("Failed to start game client. Exit");
-
-        NBN_GameClient_Deinit();
-
-#ifdef __EMSCRIPTEN__
-        emscripten_force_exit(1);
-#else
-        return 1;
-#endif
-    }
-
-    if (NBN_GameClient_Connect() < 0)
-    {
-        Soak_LogError("Failed to send the connection request. Exit");
-
-        NBN_GameClient_Deinit();
-
-#ifdef __EMSCRIPTEN__
-        emscripten_force_exit(1);
-#else
-        return 1;
-#endif
-    }
+    NBN_GameClient_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue); 
 
     int ret = Soak_MainLoop(Tick);
 
     NBN_GameClient_Stop();
-
-    // FIXME: causes a segfault
-    // NBN_GameClient_Deinit();
 
     Soak_LogInfo("Outgoing soak messages created: %d", Soak_GetCreatedOutgoingSoakMessageCount());
     Soak_LogInfo("Outgoing soak messages destroyed: %d", Soak_GetDestroyedOutgoingSoakMessageCount());

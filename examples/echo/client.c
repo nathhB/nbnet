@@ -124,50 +124,30 @@ int main(int argc, char *argv[])
 #endif
     }
 
-    // Init client with a protocol name (must be the same than the one used by the server), the server ip address
+    // Start the client with a protocol name (must be the same than the one used by the server), the server ip address
     // and port
-    NBN_GameClient_Init(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT);
-
 #ifdef NBN_ENCRYPTION
-    NBN_GameClient_EnableEncryption();
+    if (NBN_GameClient_Start(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT, true, NULL) < 0)
+#else
+    if (NBN_GameClient_Start(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT, false, NULL) < 0)
 #endif
+    {
+        Log(LOG_ERROR, "Failed to start client");
+
+// Error, quit the client application
+#ifdef __EMSCRIPTEN__
+        emscripten_force_exit(1);
+#else
+        return 1;
+#endif 
+    }
 
     // Registering messages, have to be done after NBN_GameClient_Init and before NBN_GameClient_Start
     // Messages need to be registered on both client and server side
     NBN_GameClient_RegisterMessage(ECHO_MESSAGE_TYPE,
             (NBN_MessageBuilder)EchoMessage_Create,
             (NBN_MessageDestructor)EchoMessage_Destroy,
-            (NBN_MessageSerializer)EchoMessage_Serialize);
-
-    if (NBN_GameClient_Start() < 0)
-    {
-        Log(LOG_ERROR, "Failed to start client");
-
-        // Deinit the client
-        NBN_GameClient_Deinit();
-
-// Error, quit the client application
-#ifdef __EMSCRIPTEN__
-        emscripten_force_exit(1);
-#else
-        return 1;
-#endif 
-    }
-
-    if (NBN_GameClient_Connect() < 0)
-    {
-        Log(LOG_ERROR, "Failed to send connection request");
-
-        // Deinit the client
-        NBN_GameClient_Deinit();
-
-// Error, quit the client application
-#ifdef __EMSCRIPTEN__
-        emscripten_force_exit(1);
-#else
-        return 1;
-#endif 
-    }
+            (NBN_MessageSerializer)EchoMessage_Serialize); 
 
     // Number of seconds between client ticks
     double dt = 1.0 / ECHO_TICK_RATE;
@@ -241,9 +221,6 @@ int main(int argc, char *argv[])
 
     // Stop the client
     NBN_GameClient_Stop();
-
-    // Deinit the client
-    NBN_GameClient_Deinit();
 
 #ifdef __EMSCRIPTEN__
     emscripten_force_exit(0);
