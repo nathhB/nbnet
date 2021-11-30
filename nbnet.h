@@ -1089,7 +1089,7 @@ int NBN_GameClient_Start(void);
  * Send a connection request to the server.
  * 
  * After calling this function, the client application is expected
- * to perform a "network loop" calling NBN_GameClient_PollEvents and NBN_GameClient_SendPackets.
+ * to perform a "network loop" calling NBN_GameClient_Poll and NBN_GameClient_SendPackets.
  */
 int NBN_GameClient_Connect(void);
 
