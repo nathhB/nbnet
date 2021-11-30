@@ -265,7 +265,20 @@ int main(int argc, char *argv[])
 #else
         return 1;
 #endif
-    } 
+    }
+
+    if (NBN_GameClient_Connect() < 0)
+    {
+        Soak_LogError("Failed to send the connection request. Exit");
+
+        NBN_GameClient_Deinit();
+
+#ifdef __EMSCRIPTEN__
+        emscripten_force_exit(1);
+#else
+        return 1;
+#endif
+    }
 
     int ret = Soak_MainLoop(Tick);
 

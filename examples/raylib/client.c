@@ -559,6 +559,16 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    if (NBN_GameClient_Connect() < 0)
+    {
+        TraceLog(LOG_WARNING, "Game client failed to connect. Exit");
+
+        // Deinit the client
+        NBN_GameClient_Deinit();
+
+        return 1;
+    }
+
     // Main loop
 #ifdef __EMSCRIPTEN__
     while (true)

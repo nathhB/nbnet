@@ -134,6 +134,21 @@ int main(int argc, char *argv[])
 #endif 
     }
 
+    if (NBN_GameClient_Connect() < 0)
+    {
+        Log(LOG_ERROR, "Failed to send connection request");
+
+        // Deinit the client
+        NBN_GameClient_Deinit();
+
+// Error, quit the client application
+#ifdef __EMSCRIPTEN__
+        emscripten_force_exit(1);
+#else
+        return 1;
+#endif 
+    }
+
     // Number of seconds between client ticks
     double dt = 1.0 / ECHO_TICK_RATE;
 
