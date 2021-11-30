@@ -1,3 +1,0 @@
-/Users/nathb/Dev/GameDev/nbnet/examples/rooms/ping_pong/build/CMakeFiles/rebuild_cache.dir
-/Users/nathb/Dev/GameDev/nbnet/examples/rooms/ping_pong/build/CMakeFiles/edit_cache.dir
-/Users/nathb/Dev/GameDev/nbnet/examples/rooms/ping_pong/build/CMakeFiles/ping_pong.dir

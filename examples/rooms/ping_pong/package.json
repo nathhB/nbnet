@@ -1,9 +1,0 @@
-{
-    "scripts": {
-        "host": "node --experimental-wasm-threads --experimental-wasm-bulk-memory build/ping_pong.js",
-        "client": "node --experimental-wasm-threads --experimental-wasm-bulk-memory build/ping_pong.js"
-    },
-    "dependencies": {
-        "nbnet": "file:../../../net_drivers/webrtc"
-    }
-}
