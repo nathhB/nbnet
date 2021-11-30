@@ -566,6 +566,7 @@ int NBN_ClientClosedMessage_Serialize(NBN_ClientClosedMessage *, NBN_Stream *);
 
 #define NBN_CLIENT_ACCEPTED_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 3) /* Reserved message type */
 #define NBN_ACCEPT_DATA_MAX_SIZE 4096
+#define NBN_CONNECTION_DATA_MAX_SIZE 512
 
 typedef struct
 {
@@ -632,6 +633,21 @@ void NBN_DisconnectionMessage_Destroy(void *);
 int NBN_DisconnectionMessage_Serialize(void *, NBN_Stream *);
 
 #pragma endregion /* NBN_DisconnectMessage */
+
+#pragma region NBN_PublicCryptoInfoMessage
+
+#define NBN_CONNECTION_REQUEST_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 8) /* Reserved message type */
+
+typedef struct
+{
+    uint8_t data[NBN_CONNECTION_DATA_MAX_SIZE];
+} NBN_ConnectionRequestMessage;
+
+NBN_ConnectionRequestMessage *NBN_ConnectionRequestMessage_Create(void);
+void NBN_ConnectionRequestMessage_Destroy(NBN_ConnectionRequestMessage *);
+int NBN_ConnectionRequestMessage_Serialize(NBN_ConnectionRequestMessage *, NBN_Stream *);
+
+#pragma endregion /* NBN_PublicCryptoInfoMessage */
 
 #pragma region NBN_Channel
 
@@ -811,7 +827,9 @@ struct __NBN_Connection
     NBN_ConnectionStats stats;
     void *driver_data; /* Data attached to the connection by the underlying driver */
     void *user_data; /* Used to attach data from the user code */
-    uint8_t *accept_data[NBN_ACCEPT_DATA_MAX_SIZE]; /* Accept data */
+    uint8_t connection_data[NBN_CONNECTION_DATA_MAX_SIZE]; /* Connection data */
+    uint8_t accept_data[NBN_ACCEPT_DATA_MAX_SIZE]; /* Accept data */
+    NBN_ReadStream connection_data_r_stream; /* Used to read connection data */
     NBN_WriteStream accept_data_w_stream; /* Used by the game server to write accept data */
     NBN_ReadStream accept_data_r_stream; /* Used by the client to read accept data */
 
@@ -984,7 +1002,7 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 #define NBN_IsReservedMessage(type) (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE \
 || type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || type == NBN_BYTE_ARRAY_MESSAGE_TYPE \
 || type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE || type == NBN_START_ENCRYPT_MESSAGE_TYPE \
-|| type == NBN_DISCONNECTION_MESSAGE_TYPE)
+|| type == NBN_DISCONNECTION_MESSAGE_TYPE || type == NBN_CONNECTION_REQUEST_MESSAGE_TYPE)
 
 struct __NBN_Endpoint
 {
@@ -1038,6 +1056,8 @@ typedef struct
     NBN_Connection *server_connection;
     bool is_connected;
     void *context;
+    NBN_WriteStream connection_data_w_stream;
+    uint8_t connection_data[NBN_CONNECTION_DATA_MAX_SIZE];
 } NBN_GameClient;
 
 extern NBN_GameClient __game_client;
@@ -1064,6 +1084,14 @@ void NBN_GameClient_Deinit(void);
  * @return 0 when successully started, -1 otherwise
  */
 int NBN_GameClient_Start(void);
+
+/**
+ * Send a connection request to the server.
+ * 
+ * After calling this function, the client application is expected
+ * to perform a "network loop" calling NBN_GameClient_PollEvents and NBN_GameClient_SendPackets.
+ */
+int NBN_GameClient_Connect(void);
 
 /**
  * Disconnect from the server.
@@ -1230,6 +1258,15 @@ int NBN_GameClient_GetServerCloseCode(void);
  * @return A stream to read data from
  */
 NBN_Stream *NBN_GameClient_GetAcceptDataReadStream(void);
+
+/**
+ * Retrieve a stream to write data sent on the server during the connection
+ * request phase. This data can be used by the server to determine if the connection
+ * should be accepted or rejected.
+ * 
+ * @return A stream to write data on
+ */
+NBN_Stream *NBN_GameClient_GetConnectionDataWriteStream(void);
 
 /**
  * @return true if connected, false otherwise
@@ -1530,6 +1567,13 @@ int NBN_GameServer_RejectIncomingConnection(void);
  * @return A connection
  */
 NBN_Connection *NBN_GameServer_GetIncomingConnection(void);
+
+/**
+ * Read the connection data of a given client.
+ * 
+ * @return A stream to read data from
+ */
+NBN_Stream *NBN_GameServer_ReadConnectionData(NBN_Connection *client);
 
 /**
  * Retrieve the last disconnected connection.
@@ -2756,6 +2800,27 @@ int NBN_DisconnectionMessage_Serialize(void *msg, NBN_Stream *stream)
 }
 
 #pragma endregion /* NBN_DisconnectMessage */
+
+#pragma region NBN_ConnectionRequestMessage
+
+NBN_ConnectionRequestMessage *NBN_ConnectionRequestMessage_Create(void)
+{
+    return (NBN_ConnectionRequestMessage *)NBN_Allocator(sizeof(NBN_ConnectionRequestMessage));
+}
+
+void NBN_ConnectionRequestMessage_Destroy(NBN_ConnectionRequestMessage *msg)
+{
+    NBN_Deallocator(msg);
+}
+
+int NBN_ConnectionRequestMessage_Serialize(NBN_ConnectionRequestMessage *msg, NBN_Stream *stream)
+{
+    NBN_SerializeBytes(stream, msg->data, NBN_CONNECTION_DATA_MAX_SIZE);
+
+    return 0;
+}
+
+#pragma endregion /* NBN_ConnectionRequestMessage */
 
 #pragma region NBN_Connection
 
@@ -4040,6 +4105,14 @@ void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server
     NBN_Endpoint_RegisterMessageDestructor(
             endpoint, (NBN_MessageDestructor)NBN_DisconnectionMessage_Destroy, NBN_DISCONNECTION_MESSAGE_TYPE);
 
+    /* Register NBN_ConnectionRequestMessage library message */
+    NBN_Endpoint_RegisterMessageBuilder(
+            endpoint, (NBN_MessageBuilder)NBN_ConnectionRequestMessage_Create, NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
+    NBN_Endpoint_RegisterMessageSerializer(
+            endpoint, (NBN_MessageSerializer)NBN_ConnectionRequestMessage_Serialize, NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
+    NBN_Endpoint_RegisterMessageDestructor(
+            endpoint, (NBN_MessageDestructor)NBN_ConnectionRequestMessage_Destroy, NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
+
 #ifdef NBN_DEBUG
     endpoint->OnMessageAddedToRecvQueue = NULL;
 #endif
@@ -4304,6 +4377,8 @@ void NBN_GameClient_Init(const char *protocol_name, const char *ip_address, uint
 
     __game_client.server_connection = NULL;
     __game_client.is_connected = false;
+
+    NBN_WriteStream_Init(&__game_client.connection_data_w_stream, __game_client.connection_data, NBN_CONNECTION_DATA_MAX_SIZE);
 }
 
 void NBN_GameClient_Deinit(void)
@@ -4322,6 +4397,25 @@ int NBN_GameClient_Start(void)
         return NBN_ERROR;
 
     NBN_LogInfo("Started");
+
+    return 0;
+}
+
+int NBN_GameClient_Connect(void)
+{
+    NBN_ConnectionRequestMessage *msg = NBN_ConnectionRequestMessage_Create();
+
+    NBN_WriteStream_Flush(&__game_client.connection_data_w_stream);
+
+    memcpy(msg->data, __game_client.connection_data, NBN_CONNECTION_DATA_MAX_SIZE);
+
+    NBN_OutgoingMessage *outgoing_msg = NBN_GameClient_CreateMessage(NBN_CONNECTION_REQUEST_MESSAGE_TYPE, msg);
+
+    if (outgoing_msg == NULL)
+        return NBN_ERROR;
+
+    if (NBN_GameClient_SendMessage(outgoing_msg, NBN_CHANNEL_RESERVED_LIBRARY_MESSAGES) < 0)
+        return NBN_ERROR;
 
     return 0;
 }
@@ -4554,6 +4648,11 @@ int NBN_GameClient_GetServerCloseCode(void)
 NBN_Stream *NBN_GameClient_GetAcceptDataReadStream(void)
 {
     return (NBN_Stream *)&__game_client.server_connection->accept_data_r_stream;
+}
+
+NBN_Stream *NBN_GameClient_GetConnectionDataWriteStream(void)
+{
+    return (NBN_Stream *)&__game_client.connection_data_w_stream;
 }
 
 bool NBN_GameClient_IsConnected(void)
@@ -5139,6 +5238,13 @@ NBN_Connection *NBN_GameServer_GetIncomingConnection(void)
     return server_last_event.data.connection;
 }
 
+NBN_Stream *NBN_GameServer_ReadConnectionData(NBN_Connection *client)
+{
+    NBN_ReadStream_Init(&client->connection_data_r_stream, client->connection_data, NBN_CONNECTION_DATA_MAX_SIZE);
+
+    return (NBN_Stream *)&client->connection_data_r_stream;
+}
+
 NBN_Connection *NBN_GameServer_GetDisconnectedClient(void)
 {
     assert(server_last_event.type == NBN_CLIENT_DISCONNECTED);
@@ -5409,7 +5515,7 @@ static int GameServer_HandleMessageReceivedEvent(void)
     }
 
     int ret = NBN_CLIENT_MESSAGE_RECEIVED;
-
+ 
     if (NBN_GameServer_IsEncryptionEnabled() && message_info.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
     {
         ret = NBN_NO_EVENT;
@@ -5442,7 +5548,15 @@ static int GameServer_HandleMessageReceivedEvent(void)
             NBN_Abort();
         }
 
-        message_info.sender->can_decrypt = true;
+        message_info.sender->can_decrypt = true; 
+    }
+    else if (message_info.type == NBN_CONNECTION_REQUEST_MESSAGE_TYPE)
+    {
+        ret = NBN_NO_EVENT;
+
+        NBN_ConnectionRequestMessage *msg = message_info.data;
+
+        memcpy(message_info.sender->connection_data, msg->data, NBN_CONNECTION_DATA_MAX_SIZE);
 
         NBN_Event e;
 
@@ -5493,16 +5607,6 @@ static int Driver_GServ_OnClientConnected(NBN_Connection *client)
             NBN_LogError("Failed to send public key to client %d", client->id);
             NBN_Abort();
         }
-    }
-    else
-    {
-        NBN_Event e;
-
-        e.type = NBN_NEW_CONNECTION;
-        e.data.connection = client;
-
-        if (!NBN_EventQueue_Enqueue(&__game_server.endpoint.event_queue, e))
-            return NBN_ERROR;
     }
 
     return 0;
