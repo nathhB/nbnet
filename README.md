@@ -1,5 +1,7 @@
 # nbnet
 
+![logo](logo/logo.png "Logo")
+
 [![Build Status](https://app.travis-ci.com/nathhB/nbnet.svg?branch=master)](https://app.travis-ci.com/nathhB/nbnet)
 [![CodeFactor](https://www.codefactor.io/repository/github/nathhb/nbnet/badge/master)](https://www.codefactor.io/repository/github/nathhb/nbnet/overview/master)
 [![Documentation](https://img.shields.io/badge/docs-docsforge-blue)](http://nbnet.docsforge.com/)
