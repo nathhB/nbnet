@@ -5456,7 +5456,7 @@ static int GameServer_HandleMessageReceivedEvent(void)
     {
         ret = NBN_NO_EVENT;
 
-        NBN_ConnectionRequestMessage *msg = message_info.data;
+        NBN_ConnectionRequestMessage *msg = (NBN_ConnectionRequestMessage *)message_info.data;
 
         memcpy(message_info.sender->connection_data, msg->data, NBN_CONNECTION_DATA_MAX_SIZE);
 
