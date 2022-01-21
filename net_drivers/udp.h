@@ -86,10 +86,228 @@ typedef struct
 {
     uint32_t id;
     NBN_IPAddress address;
+    NBN_Connection *conn; // nbnet connection associated to this UDP connection
 } NBN_UDPConnection;
 
 static SOCKET udp_sock;
 static uint32_t protocol_id;
+
+static bool CompareIPAddresses(NBN_IPAddress ip_addr1, NBN_IPAddress ip_addr2);
+
+#pragma region Hashtable
+
+#define HTABLE_DEFAULT_INITIAL_CAPACITY 32
+#define HTABLE_LOAD_FACTOR_THRESHOLD 0.75
+
+typedef struct
+{
+    NBN_IPAddress ip_addr;
+    NBN_UDPConnection *conn;
+    unsigned int slot;
+} HTableEntry;
+
+typedef struct
+{
+    HTableEntry **internal_array;
+    unsigned int capacity;
+    unsigned int count;
+    float load_factor;
+} HTable;
+
+static HTable *HTable_Create();
+static HTable *HTable_CreateWithCapacity(unsigned int);
+static void HTable_Destroy(HTable *);
+static void HTable_Add(HTable *, NBN_IPAddress, NBN_UDPConnection *);
+NBN_UDPConnection *HTable_Get(HTable *, NBN_IPAddress);
+static NBN_UDPConnection *HTable_Remove(HTable *, NBN_IPAddress);
+static void HTable_InsertEntry(HTable *, HTableEntry *);
+static void HTable_RemoveEntry(HTable *, HTableEntry *);
+static unsigned int HTable_FindFreeSlot(HTable *, HTableEntry *, bool *);
+static HTableEntry *HTable_FindEntry(HTable *htable, NBN_IPAddress ip_addr);
+static void HTable_Grow(HTable *);
+static unsigned long HTable_HashSDBM(NBN_IPAddress ip_addr);
+
+HTable *HTable_Create()
+{
+    return HTable_CreateWithCapacity(HTABLE_DEFAULT_INITIAL_CAPACITY);
+}
+
+HTable *HTable_CreateWithCapacity(unsigned int capacity)
+{
+    HTable *htable = NBN_Allocator(sizeof(HTable));
+
+    htable->internal_array = NBN_Allocator(sizeof(HTableEntry *) * capacity);
+    htable->capacity = capacity;
+    htable->count = 0;
+    htable->load_factor = 0;
+
+    for (unsigned int i = 0; i < htable->capacity; i++)
+        htable->internal_array[i] = NULL;
+
+    return htable;
+}
+
+void HTable_Destroy(HTable *htable)
+{
+    for (unsigned int i = 0; i < htable->capacity; i++)
+    {
+        HTableEntry *entry = htable->internal_array[i];
+
+        if (entry)
+            NBN_Deallocator(entry);
+    }
+
+    NBN_Deallocator(htable->internal_array);
+    NBN_Deallocator(htable);
+}
+
+static void HTable_Add(HTable *htable, NBN_IPAddress ip_addr, NBN_UDPConnection *conn)
+{
+    HTableEntry *entry = NBN_Allocator(sizeof(HTableEntry));
+
+    entry->ip_addr = ip_addr;
+    entry->conn = conn;
+
+    HTable_InsertEntry(htable, entry);
+
+    if (htable->load_factor >= HTABLE_LOAD_FACTOR_THRESHOLD)
+        HTable_Grow(htable);
+}
+
+NBN_UDPConnection *HTable_Get(HTable *htable, NBN_IPAddress ip_addr)
+{
+    HTableEntry *entry = HTable_FindEntry(htable, ip_addr);
+
+    return entry ? entry->conn : NULL;
+}
+
+static NBN_UDPConnection *HTable_Remove(HTable *htable, NBN_IPAddress ip_addr)
+{
+    HTableEntry *entry = HTable_FindEntry(htable, ip_addr);
+
+    if (entry)
+    {
+        HTable_RemoveEntry(htable, entry);
+
+        return entry->conn;
+    }
+
+    return NULL;
+}
+
+static void HTable_InsertEntry(HTable *htable, HTableEntry *entry)
+{
+    bool use_existing_slot = false;
+    unsigned int slot = HTable_FindFreeSlot(htable, entry, &use_existing_slot);
+
+    entry->slot = slot;
+    htable->internal_array[slot] = entry;
+
+    if (!use_existing_slot)
+    {
+        htable->count++;
+        htable->load_factor = (float)htable->count / htable->capacity;
+    }
+}
+
+static void HTable_RemoveEntry(HTable *htable, HTableEntry *entry)
+{
+    htable->internal_array[entry->slot] = NULL;
+
+    NBN_Deallocator(entry);
+
+    htable->count--;
+    htable->load_factor = htable->count / htable->capacity;
+}
+
+static unsigned int HTable_FindFreeSlot(HTable *htable, HTableEntry *entry, bool *use_existing_slot)
+{
+    unsigned long hash = HTable_HashSDBM(entry->ip_addr);
+    unsigned int slot;
+
+    // quadratic probing
+
+    HTableEntry *current_entry;
+    unsigned int i = 0;
+
+    do
+    {
+        slot = (hash + (int)pow(i, 2)) % htable->capacity;
+        current_entry = htable->internal_array[slot];
+
+        i++;
+    } while (current_entry != NULL && !CompareIPAddresses(current_entry->ip_addr, entry->ip_addr));
+
+    if (current_entry != NULL) // it means the current entry as the same key as the inserted entry
+    {
+        *use_existing_slot = true;
+
+        NBN_Deallocator(current_entry);
+    }
+    
+    return slot;
+}
+
+static HTableEntry *HTable_FindEntry(HTable *htable, NBN_IPAddress ip_addr)
+{
+    unsigned long hash = HTable_HashSDBM(ip_addr);
+    unsigned int slot;
+
+    //quadratic probing
+
+    HTableEntry *current_entry;
+    unsigned int i = 0;
+
+    do
+    {
+        slot = (hash + (int)pow(i, 2)) % htable->capacity;
+        current_entry = htable->internal_array[slot];
+
+        if (current_entry != NULL && CompareIPAddresses(current_entry->ip_addr, ip_addr))
+        {
+            return current_entry;
+        }
+
+        i++;
+    } while (i < htable->capacity);
+    
+    return NULL;
+}
+
+static void HTable_Grow(HTable *htable)
+{
+    unsigned int old_capacity = htable->capacity;
+    unsigned int new_capacity = old_capacity * 2;
+    HTableEntry** old_internal_array = htable->internal_array;
+    HTableEntry** new_internal_array = NBN_Allocator(sizeof(HTableEntry*) * new_capacity);
+
+    for (unsigned int i = 0; i < new_capacity; i++)
+    {
+        new_internal_array[i] = NULL;
+    }
+
+    htable->internal_array = new_internal_array;
+    htable->capacity = new_capacity;
+    htable->count = 0;
+    htable->load_factor = 0;
+
+    // rehash
+
+    for (unsigned int i = 0; i < old_capacity; i++)
+    {
+        if (old_internal_array[i])
+            HTable_InsertEntry(htable, old_internal_array[i]);
+    }
+
+    NBN_Deallocator(old_internal_array);
+}
+
+static unsigned long HTable_HashSDBM(NBN_IPAddress ip_addr)
+{
+    return ip_addr.host ^ ip_addr.port;
+}
+
+#pragma endregion // Hashtable
 
 #pragma region Socket functions
 
@@ -194,7 +412,7 @@ static int ResolveIpAddress(const char *host, uint16_t port, NBN_IPAddress *addr
     address->host = (arr[0] << 24) | (arr[1] << 16) | (arr[2] << 8) | arr[3];
     address->port = port;
 
-    free(dup_host);
+    NBN_Deallocator(dup_host);
 
     return 0;
 }
@@ -214,14 +432,15 @@ static char *GetLastErrorMessage(void)
 
 #pragma region Game server
 
+static HTable *__clients = NULL;
 static uint32_t next_conn_id = 0;
 
 static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress);
-static NBN_Connection *FindClientConnectionByAddress(NBN_IPAddress);
 
 int NBN_Driver_GServ_Start(uint32_t proto_id, uint16_t port)
 {
     protocol_id = proto_id;
+    __clients = HTable_Create();
 
     if (InitSocket() < 0)
         return -1;
@@ -234,6 +453,7 @@ int NBN_Driver_GServ_Start(uint32_t proto_id, uint16_t port)
 
 void NBN_Driver_GServ_Stop(void)
 {
+    HTable_Destroy(__clients);
     DeinitSocket();
 }
 
@@ -282,13 +502,18 @@ int NBN_Driver_GServ_RecvPackets(void)
     return 0;
 }
 
-void NBN_Driver_GServ_DestroyClientConnection(NBN_Connection *connection)
+void NBN_Driver_GServ_RemoveClientConnection(NBN_Connection *connection)
 {
     assert(connection != NULL);
 
-    NBN_LogDebug("Destroy UDP connection %d", connection->id);
+    NBN_UDPConnection *udp_conn = HTable_Remove(__clients, ((NBN_UDPConnection *)connection->driver_data)->address);
 
-    NBN_Deallocator(connection->driver_data);
+    if (udp_conn)
+    {
+        NBN_LogDebug("Destroyed UDP connection %d", connection->id);
+
+        NBN_Deallocator(udp_conn);
+    }
 }
 
 int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, NBN_Connection *connection)
@@ -313,22 +538,21 @@ int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, NBN_Connection *connection
 
 static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress address)
 {
-    NBN_Connection *conn = FindClientConnectionByAddress(address);
+    NBN_UDPConnection *udp_conn = HTable_Get(__clients, address);
 
-    if (conn == NULL && GameServer_GetClientCount() < NBN_MAX_CLIENTS)
+    if (udp_conn == NULL && GameServer_GetClientCount() < NBN_MAX_CLIENTS)
     {
         /* this is a new connection */
 
-        NBN_UDPConnection *udp_conn = (NBN_UDPConnection*)NBN_Allocator(sizeof(NBN_UDPConnection));
+        udp_conn = (NBN_UDPConnection*)NBN_Allocator(sizeof(NBN_UDPConnection));
 
         udp_conn->id = next_conn_id++;
         udp_conn->address = address;
-
-        conn = NBN_GameServer_CreateClientConnection(udp_conn->id, udp_conn);
+        udp_conn->conn = NBN_GameServer_CreateClientConnection(udp_conn->id);
 
         NBN_LogDebug("New UDP connection (id: %d)", udp_conn->id);
 
-        if (NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_CONNECTED, conn) < 0)
+        if (NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_CONNECTED, udp_conn->conn) < 0)
         {
             NBN_LogError("Failed to raise game server event");
 
@@ -336,25 +560,12 @@ static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress addre
         }
     }
 
-    return conn;
+    return udp_conn->conn;
 }
 
-static NBN_Connection *FindClientConnectionByAddress(NBN_IPAddress address)
+static bool CompareIPAddresses(NBN_IPAddress ip_addr1, NBN_IPAddress ip_addr2)
 {
-    for (int i = 0; i < NBN_MAX_CLIENTS; i++)
-    {
-        NBN_Connection *connection = __game_server.clients[i];
-
-        if (connection)
-        {
-            NBN_UDPConnection *udp_conn = (NBN_UDPConnection*)connection->driver_data;
-
-            if (udp_conn->address.host == address.host && udp_conn->address.port == address.port)
-                return connection;
-        }
-    }
-
-    return NULL;
+    return ip_addr1.host == ip_addr2.host && ip_addr1.port == ip_addr2.port;
 }
 
 #pragma endregion /* Game server */
@@ -385,7 +596,7 @@ int NBN_Driver_GCli_Start(uint32_t proto_id, const char *host, uint16_t port)
     if (BindSocket(0) < 0)
         return -1;
 
-    server_connection = NBN_GameClient_CreateServerConnection(udp_conn);
+    server_connection = NBN_GameClient_CreateServerConnection();
 
     return 0;
 }
@@ -442,7 +653,7 @@ int NBN_Driver_GCli_RecvPackets(void)
 
 int NBN_Driver_GCli_SendPacket(NBN_Packet *packet)
 {
-    NBN_UDPConnection *udp_conn = (NBN_UDPConnection*)server_connection->driver_data;
+    NBN_UDPConnection *udp_conn = (NBN_UDPConnection *)server_connection->driver_data;
     SOCKADDR_IN dest_addr;
 
     dest_addr.sin_addr.s_addr = htonl(udp_conn->address.host);

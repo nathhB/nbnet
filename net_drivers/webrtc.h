@@ -114,7 +114,7 @@ int NBN_Driver_GServ_RecvPackets(void)
     return 0;
 }
 
-void NBN_Driver_GServ_DestroyClientConnection(NBN_Connection *conn)
+void NBN_Driver_GServ_RemoveClientConnection(NBN_Connection *conn)
 {
     __js_game_server_close_client_peer(conn->id);
 }
