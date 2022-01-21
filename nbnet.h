@@ -883,7 +883,7 @@ struct __NBN_Connection
     bool can_encrypt;
 };
 
-NBN_Connection *NBN_Connection_Create(uint32_t, uint32_t, NBN_Endpoint *);
+NBN_Connection *NBN_Connection_Create(uint32_t, uint32_t, NBN_Endpoint *, void *driver_data);
 void NBN_Connection_Destroy(NBN_Connection *);
 int NBN_Connection_ProcessReceivedPacket(NBN_Connection *, NBN_Packet *);
 int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *, NBN_Channel *, NBN_Message *);
@@ -1051,7 +1051,7 @@ void NBN_Endpoint_RegisterMessageBuilder(NBN_Endpoint *, NBN_MessageBuilder, uin
 void NBN_Endpoint_RegisterMessageDestructor(NBN_Endpoint *, NBN_MessageDestructor, uint8_t);
 void NBN_Endpoint_RegisterMessageSerializer(NBN_Endpoint *, NBN_MessageSerializer, uint8_t);
 void NBN_Endpoint_RegisterChannel(NBN_Endpoint *, NBN_ChannelType, uint8_t);
-NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *, uint32_t);
+NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *, uint32_t, void *);
 
 #pragma endregion /* NBN_Endpoint */
 
@@ -1223,7 +1223,7 @@ int NBN_GameClient_SendUnreliableMessage(NBN_OutgoingMessage *outgoing_msg);
  */
 int NBN_GameClient_SendReliableMessage(NBN_OutgoingMessage *outgoing_msg);
 
-NBN_Connection *NBN_GameClient_CreateServerConnection(void);
+NBN_Connection *NBN_GameClient_CreateServerConnection(void *driver_data);
 
 /**
  * Retrieve the info about the last received message.
@@ -1389,7 +1389,7 @@ void NBN_GameServer_SetContext(void *context);
  */
 void *NBN_GameServer_GetContext(void);
 
-NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t);
+NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t, void *);
 
 /**
  * Close a client's connection without a specific code (default code is -1)
@@ -2973,7 +2973,7 @@ static CSPRNG csprng_create();
 static CSPRNG csprng_destroy(CSPRNG object);
 static int csprng_get(CSPRNG, void*, unsigned long long);
 
-NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_Endpoint *endpoint)
+NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_Endpoint *endpoint, void *driver_data)
 {
     NBN_Connection *connection = (NBN_Connection*)MemoryManager_Alloc(NBN_MEM_CONNECTION);
 
@@ -3004,6 +3004,7 @@ NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_End
     NBN_ConnectionStats stats = { 0 };
 
     connection->stats = stats;
+    connection->driver_data = driver_data;
     connection->can_decrypt = false;
     connection->can_encrypt = false;
 
@@ -4272,10 +4273,10 @@ void NBN_Endpoint_RegisterChannel(NBN_Endpoint *endpoint, NBN_ChannelType type, 
     endpoint->channels[id] = type;
 }
 
-NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_t id)
+NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_t id, void *driver_data)
 {
     NBN_Connection *connection = NBN_Connection_Create(
-            id, Endpoint_BuildProtocolId(endpoint->config.protocol_name), endpoint);
+            id, Endpoint_BuildProtocolId(endpoint->config.protocol_name), endpoint, driver_data);
 
     for (int chan_id = 0; chan_id < NBN_MAX_CHANNELS; chan_id++)
     {
@@ -4715,9 +4716,9 @@ int NBN_GameClient_SendReliableMessage(NBN_OutgoingMessage *outgoing_msg)
     return NBN_GameClient_SendMessage(outgoing_msg, NBN_CHANNEL_RESERVED_RELIABLE);
 }
 
-NBN_Connection *NBN_GameClient_CreateServerConnection(void)
+NBN_Connection *NBN_GameClient_CreateServerConnection(void *driver_data)
 {
-    NBN_Connection *server_connection = NBN_Endpoint_CreateConnection(&__game_client.endpoint, 0);
+    NBN_Connection *server_connection = NBN_Endpoint_CreateConnection(&__game_client.endpoint, 0, driver_data);
 
 #ifdef NBN_DEBUG
     server_connection->OnMessageAddedToRecvQueue = __game_client.endpoint.OnMessageAddedToRecvQueue;
@@ -5155,9 +5156,9 @@ void *NBN_GameServer_GetContext(void)
     return __game_server.context;
 }
 
-NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t id)
+NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t id, void *driver_data)
 {
-    NBN_Connection *client = NBN_Endpoint_CreateConnection(&__game_server.endpoint, id);
+    NBN_Connection *client = NBN_Endpoint_CreateConnection(&__game_server.endpoint, id, driver_data);
 
 #ifdef NBN_DEBUG
     client->OnMessageAddedToRecvQueue = __game_server.endpoint.OnMessageAddedToRecvQueue;

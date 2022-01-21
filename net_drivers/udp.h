@@ -118,7 +118,7 @@ static HTable *HTable_Create();
 static HTable *HTable_CreateWithCapacity(unsigned int);
 static void HTable_Destroy(HTable *);
 static void HTable_Add(HTable *, NBN_IPAddress, NBN_UDPConnection *);
-NBN_UDPConnection *HTable_Get(HTable *, NBN_IPAddress);
+static NBN_UDPConnection *HTable_Get(HTable *, NBN_IPAddress);
 static NBN_UDPConnection *HTable_Remove(HTable *, NBN_IPAddress);
 static void HTable_InsertEntry(HTable *, HTableEntry *);
 static void HTable_RemoveEntry(HTable *, HTableEntry *);
@@ -548,7 +548,9 @@ static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress addre
 
         udp_conn->id = next_conn_id++;
         udp_conn->address = address;
-        udp_conn->conn = NBN_GameServer_CreateClientConnection(udp_conn->id);
+        udp_conn->conn = NBN_GameServer_CreateClientConnection(udp_conn->id, udp_conn);
+
+        HTable_Add(__clients, address, udp_conn);
 
         NBN_LogDebug("New UDP connection (id: %d)", udp_conn->id);
 
@@ -596,7 +598,7 @@ int NBN_Driver_GCli_Start(uint32_t proto_id, const char *host, uint16_t port)
     if (BindSocket(0) < 0)
         return -1;
 
-    server_connection = NBN_GameClient_CreateServerConnection();
+    server_connection = NBN_GameClient_CreateServerConnection(udp_conn);
 
     return 0;
 }
