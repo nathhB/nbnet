@@ -123,9 +123,9 @@ static NBN_UDPConnection *HTable_Remove(HTable *, NBN_IPAddress);
 static void HTable_InsertEntry(HTable *, HTableEntry *);
 static void HTable_RemoveEntry(HTable *, HTableEntry *);
 static unsigned int HTable_FindFreeSlot(HTable *, HTableEntry *, bool *);
-static HTableEntry *HTable_FindEntry(HTable *htable, NBN_IPAddress ip_addr);
+static HTableEntry *HTable_FindEntry(HTable *, NBN_IPAddress);
 static void HTable_Grow(HTable *);
-static unsigned long HTable_HashSDBM(NBN_IPAddress ip_addr);
+static unsigned long HTable_HashSDBM(NBN_IPAddress);
 
 HTable *HTable_Create()
 {
@@ -544,7 +544,7 @@ static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress addre
     {
         /* this is a new connection */
 
-        udp_conn = (NBN_UDPConnection*)NBN_Allocator(sizeof(NBN_UDPConnection));
+        udp_conn = (NBN_UDPConnection *)NBN_Allocator(sizeof(NBN_UDPConnection));
 
         udp_conn->id = next_conn_id++;
         udp_conn->address = address;
