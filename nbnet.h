@@ -1657,8 +1657,6 @@ static NBN_List *List_Create();
 static void List_Destroy(NBN_List *, bool, List_FreeItemFunc);
 static void List_PushBack(NBN_List *, void *);
 static void *List_Remove(NBN_List *, void *);
-static void *List_RemoveAt(NBN_List *, int);
-static void *List_RemoveLast(NBN_List *list);
 static NBN_ListNode *List_CreateNode(void *data);
 static void *List_RemoveNodeFromList(NBN_List *list, NBN_ListNode *node);
 
@@ -1734,26 +1732,6 @@ static void *List_Remove(NBN_List *list, void *data)
     }
 
     return NULL;
-}
-
-static void *List_RemoveAt(NBN_List *list, int index)
-{
-    NBN_ListNode *current_node = list->head;
-
-    for (int i = 0; current_node != NULL && i < index; i++)
-        current_node = current_node->next;
-
-    if (current_node != NULL)
-    {
-        return List_RemoveNodeFromList(list, current_node);
-    }
-
-    return NULL;
-}
-
-static void *List_RemoveLast(NBN_List *list)
-{
-    return List_RemoveAt(list, list->count - 1);
 }
 
 static NBN_ListNode *List_CreateNode(void *data)
