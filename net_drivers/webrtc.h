@@ -316,6 +316,9 @@ int NBN_Driver_GServ_RecvPackets(void)
 
         if (peer == NULL)
         {
+            if (GameServer_GetClientCount() >= NBN_MAX_CLIENTS)
+                continue;
+
             NBN_LogTrace("Peer %d has connected", peer_id);
 
             peer = (NBN_Peer *)NBN_Allocator(sizeof(NBN_Peer));

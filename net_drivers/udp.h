@@ -480,11 +480,7 @@ int NBN_Driver_GServ_RecvPackets(void)
         NBN_Connection *conn = FindOrCreateClientConnectionByAddress(ip_address);
 
         if (conn == NULL)
-        {
-            NBN_LogError("Failed to retrieve udp connection");
-
-            return NBN_ERROR;
-        }
+            continue; // skip the connection
 
         NBN_Packet packet;
 
@@ -540,9 +536,12 @@ static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress addre
 {
     NBN_UDPConnection *udp_conn = HTable_Get(__clients, address);
 
-    if (udp_conn == NULL && GameServer_GetClientCount() < NBN_MAX_CLIENTS)
+    if (udp_conn == NULL)
     {
         /* this is a new connection */
+
+        if (GameServer_GetClientCount() >= NBN_MAX_CLIENTS)
+            return NULL;
 
         udp_conn = (NBN_UDPConnection *)NBN_Allocator(sizeof(NBN_UDPConnection));
 
