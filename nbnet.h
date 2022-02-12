@@ -1724,6 +1724,7 @@ static void MemPool_Init(NBN_MemPool *pool, size_t block_size, unsigned int init
     pool->block_idx = 0;
     pool->block_count = 0;
     pool->free = NULL;
+    pool->blocks = NULL;
 
     MemPool_Grow(pool, initial_block_count);
 }
