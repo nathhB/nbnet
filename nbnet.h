@@ -53,25 +53,20 @@
 
 #define NBN_ERROR -1
 
-#pragma region List
+typedef struct __NBN_Endpoint NBN_Endpoint;
+typedef struct __NBN_Connection NBN_Connection;
+typedef struct __NBN_Channel NBN_Channel;
 
-typedef struct NBN_ListNode
-{
-    void *data;
-    struct NBN_ListNode *next;
-    struct NBN_ListNode *prev;
-} NBN_ListNode;
+#pragma region NBN_ConnectionVector
 
 typedef struct
 {
-    NBN_ListNode *head;
-    NBN_ListNode *tail;
+    NBN_Connection **connections;
     unsigned int count;
-} NBN_List;
+    unsigned int capacity;
+} NBN_ConnectionVector;
 
-typedef void (*List_FreeItemFunc)(void *);
-
-#pragma endregion // List
+#pragma endregion // NBN_ConnectionVector
 
 #pragma region Memory management
 
@@ -287,10 +282,6 @@ typedef struct
     uint8_t type;
     uint8_t channel_id;
 } NBN_MessageHeader;
-
-typedef struct __NBN_Endpoint NBN_Endpoint;
-typedef struct __NBN_Connection NBN_Connection;
-typedef struct __NBN_Channel NBN_Channel;
 
 /*
  * Holds the user message's data as well as a reference count for message recycling
@@ -1279,6 +1270,7 @@ void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
 #pragma region NBN_GameServer
 
 #define NBN_MAX_CLIENTS 1024
+#define NBN_CONNECTION_VECTOR_INITIAL_CAPACITY 32
 
 enum
 {
@@ -1301,7 +1293,7 @@ typedef struct
 typedef struct
 {
     NBN_Endpoint endpoint;
-    NBN_List *clients;
+    NBN_ConnectionVector *clients;
     NBN_GameServerStats stats;
     void *context;
 } NBN_GameServer;
@@ -1651,146 +1643,81 @@ int NBN_Driver_GServ_RaiseEvent(NBN_Driver_GServ_EventType, void *);
 
 #ifdef NBNET_IMPL
 
-#pragma region List
+#pragma region NBN_ConnectionVector
 
-static NBN_List *List_Create();
-static void List_Destroy(NBN_List *, bool, List_FreeItemFunc);
-static void List_PushBack(NBN_List *, void *);
-static void *List_Remove(NBN_List *, void *);
-static NBN_ListNode *List_CreateNode(void *data);
-static void *List_RemoveNodeFromList(NBN_List *list, NBN_ListNode *node);
+static int NBN_ConnectionVector_Grow(NBN_ConnectionVector *vector, unsigned int new_capacity);
 
-static NBN_List *List_Create()
+static NBN_ConnectionVector *NBN_ConnectionVector_Create(void)
 {
-    NBN_List *list = NBN_Allocator(sizeof(NBN_List));
+    NBN_ConnectionVector *vector = NBN_Allocator(sizeof(NBN_ConnectionVector));
 
-    list->head = NULL;
-    list->tail = NULL;
-    list->count = 0;
+    vector->connections = NULL;
+    vector->capacity = 0;
+    vector->count = 0;
 
-    return list;
+    if (NBN_ConnectionVector_Grow(vector, NBN_CONNECTION_VECTOR_INITIAL_CAPACITY) < 0)
+        return NULL;
+
+    return vector;
 }
 
-static void List_Destroy(NBN_List *list, bool free_items, List_FreeItemFunc free_item_func)
+static void NBN_ConnectionVector_Destroy(NBN_ConnectionVector *vector)
 {
-    NBN_ListNode *current_node = list->head;
+    for (unsigned int i = 0; i < vector->count; i++)
+        NBN_Connection_Destroy(vector->connections[i]);
 
-    while (current_node != NULL)
-    {
-        NBN_ListNode *next_node = current_node->next;
-
-        if (free_items)
-        {
-            if (free_item_func)
-                free_item_func(current_node->data);
-            else
-                NBN_Deallocator(current_node->data);
-        }
-
-        NBN_Deallocator(current_node);
-
-        current_node = next_node;
-    }
-
-    NBN_Deallocator(list);
+    NBN_Deallocator(vector->connections);
+    NBN_Deallocator(vector);
 }
 
-static void List_PushBack(NBN_List *list, void *data)
+static int NBN_ConnectionVector_Add(NBN_ConnectionVector *vector, NBN_Connection *conn)
 {
-    NBN_ListNode *node = List_CreateNode(data);
-
-    if (list->count == 0)
+    if (vector->count >= vector->capacity)
     {
-        node->next = NULL;
-        node->prev = NULL;
-
-        list->head = node;
-        list->tail = node;
-    }
-    else
-    {
-        node->next = NULL;
-        node->prev = list->tail;
-
-        list->tail->next = node;
-        list->tail = node;
+        if (NBN_ConnectionVector_Grow(vector, vector->capacity * 2) < 0)
+            return NBN_ERROR;
     }
 
-    list->count++;
+    if (vector->connections[vector->count])
+        return NBN_ERROR;
+
+    vector->connections[vector->count] = conn;
+    vector->count++;
+
+    return 0;
 }
 
-static void *List_Remove(NBN_List *list, void *data)
+static void NBN_ConnectionVector_Remove(NBN_ConnectionVector *vector, NBN_Connection *conn)
 {
-    NBN_ListNode *current_node = list->head;
+    unsigned int idx = 0;
 
-    for (int i = 0; current_node != NULL && current_node->data != data; i++)
-        current_node = current_node->next;
+    for (; idx < vector->count && vector->connections[idx] != conn; idx++);
 
-    if (current_node != NULL)
-    {
-        return List_RemoveNodeFromList(list, current_node);
-    }
+    if (idx == vector->count) return; // not found
 
-    return NULL;
+    for (unsigned int i = idx; i < vector->count - 1; i++)
+        vector->connections[i] = vector->connections[i + 1];
+
+    vector->connections[vector->count - 1] = NULL;
+    vector->count--;
 }
 
-static NBN_ListNode *List_CreateNode(void *data)
+static int NBN_ConnectionVector_Grow(NBN_ConnectionVector *vector, unsigned int new_capacity)
 {
-    NBN_ListNode *node = NBN_Allocator(sizeof(NBN_ListNode));
+    vector->connections = NBN_Reallocator(vector->connections, sizeof(NBN_Connection *) * new_capacity);
 
-    node->data = data;
+    if (vector->connections == NULL)
+        return NBN_ERROR;
 
-    return node;
+    for (unsigned int i = vector->capacity; i < new_capacity - vector->capacity; i++)
+        vector->connections[i] = NULL;
+
+    vector->capacity = new_capacity;
+
+    return 0;
 }
 
-static void *List_RemoveNodeFromList(NBN_List *list, NBN_ListNode *node)
-{
-    if (node == list->head)
-    {
-        NBN_ListNode *new_head = node->next;
-
-        if (new_head != NULL)
-            new_head->prev = NULL;
-        else
-            list->tail = NULL;
-
-        list->head = new_head;
-
-        void *data = node->data;
-
-        NBN_Deallocator(node);
-        list->count--;
-
-        return data;
-    }
-
-    if (node == list->tail)
-    {
-        NBN_ListNode *new_tail = node->prev;
-
-        new_tail->next = NULL;
-        list->tail = new_tail;
-
-        void *data = node->data;
-
-        NBN_Deallocator(node);
-        list->count--;
-
-        return data;
-    }
-
-    node->prev->next = node->next;
-    node->next->prev = node->prev;
-
-    void *data = node->data;
-
-    NBN_Deallocator(node);
-    list->count--;
-
-    return data;
-}
-
-#pragma endregion // List
+#pragma endregion // NBN_ConnectionVector
 
 #pragma region Memory management
 
@@ -4960,7 +4887,6 @@ static int GameServer_HandleEvent(void);
 static int GameServer_HandleMessageReceivedEvent(void);
 static int GameServer_SendCryptoPublicInfoTo(NBN_Connection *);
 static int GameServer_StartEncryption(NBN_Connection *);
-static void GameServer_DestroyClientListEntry(void *);
 
 int NBN_GameServer_Start(const char *protocol_name, uint16_t port, bool encryption)
 {
@@ -4968,7 +4894,12 @@ int NBN_GameServer_Start(const char *protocol_name, uint16_t port, bool encrypti
 
     NBN_Endpoint_Init(&__game_server.endpoint, config, true);
 
-    __game_server.clients = List_Create();
+    if ((__game_server.clients = NBN_ConnectionVector_Create()) == NULL)
+    {
+        NBN_LogError("Failed to create connections vector");
+
+        return NBN_ERROR;
+    }
 
     if (NBN_Driver_GServ_Start(Endpoint_BuildProtocolId(config.protocol_name), config.port) < 0)
     {
@@ -4987,7 +4918,7 @@ void NBN_GameServer_Stop(void)
     NBN_GameServer_Poll(); /* Poll one last time to clear remaining events */
 
     NBN_Endpoint_Deinit(&__game_server.endpoint);
-    List_Destroy(__game_server.clients, true, GameServer_DestroyClientListEntry);
+    NBN_ConnectionVector_Destroy(__game_server.clients);
 
     NBN_Driver_GServ_Stop();
 
@@ -5024,14 +4955,8 @@ void NBN_GameServer_RegisterChannel(uint8_t type, uint8_t id)
 
 void NBN_GameServer_AddTime(double time)
 {
-    NBN_ListNode *current = __game_server.clients->head;
-
-    while (current)
-    {
-        NBN_Connection_AddTime(current->data, time);
-
-        current = current->next;
-    }
+    for (unsigned int i = 0; i < __game_server.clients->count; i++)
+        NBN_Connection_AddTime(__game_server.clients->connections[i], time);
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
     NBN_PacketSimulator_AddTime(&__game_server.endpoint.packet_simulator, time);
@@ -5050,11 +4975,9 @@ int NBN_GameServer_Poll(void)
 
         __game_server.stats.download_bandwidth = 0;
 
-        NBN_ListNode *current = __game_server.clients->head;
-
-        while (current)
+        for (unsigned int i = 0; i < __game_server.clients->count; i++)
         {
-            NBN_Connection *client = current->data;
+            NBN_Connection *client = __game_server.clients->connections[i];
 
             for (unsigned int i = 0; i < NBN_MAX_CHANNELS; i++)
             {
@@ -5081,8 +5004,6 @@ int NBN_GameServer_Poll(void)
 
             __game_server.stats.download_bandwidth += client->stats.download_bandwidth;
             client->last_read_packets_time = client->time;
-
-            current = current->next;
         }
 
         GameServer_RemoveClosedClientConnections();
@@ -5107,18 +5028,14 @@ int NBN_GameServer_SendPackets(void)
 {
     __game_server.stats.upload_bandwidth = 0;
 
-    NBN_ListNode *current = __game_server.clients->head;
-
-    while (current)
+    for (unsigned int i = 0; i < __game_server.clients->count; i++)
     {
-        NBN_Connection *client = current->data;
+        NBN_Connection *client = __game_server.clients->connections[i];
 
         if (!client->is_stale && NBN_Connection_FlushSendQueue(client) < 0)
             return NBN_ERROR;
 
         __game_server.stats.upload_bandwidth += client->stats.upload_bandwidth;
-
-        current = current->next;
     }
 
     return 0;
@@ -5213,19 +5130,15 @@ int NBN_GameServer_SendReliableMessageTo(NBN_Connection *client, NBN_OutgoingMes
 
 int NBN_GameServer_BroadcastMessage(NBN_OutgoingMessage *outgoing_msg, uint8_t channel_id)
 {
-    NBN_ListNode *current = __game_server.clients->head;
-
-    while (current)
+    for (unsigned int i = 0; i < __game_server.clients->count; i++)
     {
-        NBN_Connection *client = current->data;
+        NBN_Connection *client = __game_server.clients->connections[i];
 
         if (!client->is_closed && !client->is_stale && client->is_accepted)
         {
             if (NBN_GameServer_SendMessageTo(client, outgoing_msg, channel_id) < 0)
                 return NBN_ERROR;
         }
-
-        current = current->next;
     }
 
     return 0;
@@ -5344,7 +5257,8 @@ static int GameServer_AddClient(NBN_Connection *client)
     if (__game_server.clients->count >= NBN_MAX_CLIENTS)
         return NBN_ERROR;
 
-    List_PushBack(__game_server.clients, client);
+    if (NBN_ConnectionVector_Add(__game_server.clients, client) < 0)
+        return NBN_ERROR;
 
     return 0;
 }
@@ -5441,11 +5355,9 @@ static int GameServer_ProcessReceivedMessage(NBN_Message *message, NBN_Connectio
 
 static int GameServer_CloseStaleClientConnections(void)
 {
-    NBN_ListNode *current = __game_server.clients->head;
-
-    while (current)
+    for (unsigned int i = 0; i < __game_server.clients->count; i++)
     {
-        NBN_Connection *client = current->data;
+        NBN_Connection *client = __game_server.clients->connections[i];
 
         if (!client->is_closed && !client->is_stale && NBN_Connection_CheckIfStale(client))
         {
@@ -5456,8 +5368,6 @@ static int GameServer_CloseStaleClientConnections(void)
             if (GameServer_CloseClientWithCode(client, -1, false) < 0)
                 return NBN_ERROR;
         }
-
-        current = current->next;
     }
 
     return 0;
@@ -5465,22 +5375,17 @@ static int GameServer_CloseStaleClientConnections(void)
 
 static void GameServer_RemoveClosedClientConnections(void)
 {
-    NBN_ListNode *current = __game_server.clients->head;
-
-    while (current)
+    for (unsigned int i = 0; i < __game_server.clients->count; i++)
     {
-        NBN_Connection *client = current->data;
-        NBN_ListNode *next = current->next;
+        NBN_Connection *client = __game_server.clients->connections[i];
 
         if (client->is_closed && client->is_stale)
         {
             NBN_LogDebug("Remove closed client connection (ID: %d)", client->id);
 
             NBN_Driver_GServ_RemoveClientConnection(client);
-            List_Remove(__game_server.clients, client); // actually destroying the connection should be done in user code
+            NBN_ConnectionVector_Remove(__game_server.clients, client); // actually destroying the connection should be done in user code
         }
-
-        current = next;
     }
 }
 
@@ -5671,11 +5576,6 @@ static int GameServer_StartEncryption(NBN_Connection *client)
         return NBN_ERROR;
 
     return 0;
-}
-
-static void GameServer_DestroyClientListEntry(void *entry)
-{
-    NBN_Connection_Destroy(entry);
 }
 
 #pragma endregion /* Game server driver */
