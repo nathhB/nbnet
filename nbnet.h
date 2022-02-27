@@ -1270,7 +1270,7 @@ void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
 #pragma region NBN_GameServer
 
 #define NBN_MAX_CLIENTS 1024
-#define NBN_CONNECTION_VECTOR_INITIAL_CAPACITY 32
+#define NBN_CONNECTION_VECTOR_INITIAL_CAPACITY 1
 
 enum
 {
@@ -1709,8 +1709,8 @@ static int NBN_ConnectionVector_Grow(NBN_ConnectionVector *vector, unsigned int 
     if (vector->connections == NULL)
         return NBN_ERROR;
 
-    for (unsigned int i = vector->capacity; i < new_capacity - vector->capacity; i++)
-        vector->connections[i] = NULL;
+    for (unsigned int i = 0; i < new_capacity - vector->capacity; i++)
+        vector->connections[vector->capacity + i] = NULL;
 
     vector->capacity = new_capacity;
 
@@ -5375,11 +5375,13 @@ static int GameServer_CloseStaleClientConnections(void)
 
 static void GameServer_RemoveClosedClientConnections(void)
 {
-    for (unsigned int i = 0; i < __game_server.clients->count; i++)
+    unsigned int count = __game_server.clients->count;
+
+    for (unsigned int i = 0; i < count; i++)
     {
         NBN_Connection *client = __game_server.clients->connections[i];
 
-        if (client->is_closed && client->is_stale)
+        if (client && client->is_closed && client->is_stale)
         {
             NBN_LogDebug("Remove closed client connection (ID: %d)", client->id);
 
