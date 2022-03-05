@@ -42,6 +42,221 @@ freely, subject to the following restrictions:
 
 #include <emscripten/emscripten.h>
 
+typedef struct
+{
+    uint32_t id;
+    NBN_Connection *conn;
+} NBN_Peer;
+
+#pragma region Hashtable
+
+#define HTABLE_DEFAULT_INITIAL_CAPACITY 32
+#define HTABLE_LOAD_FACTOR_THRESHOLD 0.75
+
+typedef struct
+{
+    uint32_t peer_id;
+    NBN_Peer *peer;
+    unsigned int slot;
+} HTableEntry;
+
+typedef struct
+{
+    HTableEntry **internal_array;
+    unsigned int capacity;
+    unsigned int count;
+    float load_factor;
+} HTable;
+
+static HTable *HTable_Create();
+static HTable *HTable_CreateWithCapacity(unsigned int);
+static void HTable_Destroy(HTable *);
+static void HTable_Add(HTable *, uint32_t, NBN_Peer *);
+static NBN_Peer *HTable_Get(HTable *, uint32_t);
+static NBN_Peer *HTable_Remove(HTable *, uint32_t);
+static void HTable_InsertEntry(HTable *, HTableEntry *);
+static void HTable_RemoveEntry(HTable *, HTableEntry *);
+static unsigned int HTable_FindFreeSlot(HTable *, HTableEntry *, bool *);
+static HTableEntry *HTable_FindEntry(HTable *, uint32_t);
+static void HTable_Grow(HTable *);
+
+HTable *HTable_Create()
+{
+    return HTable_CreateWithCapacity(HTABLE_DEFAULT_INITIAL_CAPACITY);
+}
+
+HTable *HTable_CreateWithCapacity(unsigned int capacity)
+{
+    HTable *htable = NBN_Allocator(sizeof(HTable));
+
+    htable->internal_array = NBN_Allocator(sizeof(HTableEntry *) * capacity);
+    htable->capacity = capacity;
+    htable->count = 0;
+    htable->load_factor = 0;
+
+    for (unsigned int i = 0; i < htable->capacity; i++)
+        htable->internal_array[i] = NULL;
+
+    return htable;
+}
+
+void HTable_Destroy(HTable *htable)
+{
+    for (unsigned int i = 0; i < htable->capacity; i++)
+    {
+        HTableEntry *entry = htable->internal_array[i];
+
+        if (entry)
+            NBN_Deallocator(entry);
+    }
+
+    NBN_Deallocator(htable->internal_array);
+    NBN_Deallocator(htable);
+}
+
+static void HTable_Add(HTable *htable, uint32_t peer_id, NBN_Peer *peer)
+{
+    HTableEntry *entry = NBN_Allocator(sizeof(HTableEntry));
+
+    entry->peer_id = peer_id;
+    entry->peer = peer;
+
+    HTable_InsertEntry(htable, entry);
+
+    if (htable->load_factor >= HTABLE_LOAD_FACTOR_THRESHOLD)
+        HTable_Grow(htable);
+}
+
+NBN_Peer *HTable_Get(HTable *htable, uint32_t peer_id)
+{
+    HTableEntry *entry = HTable_FindEntry(htable, peer_id);
+
+    return entry ? entry->peer : NULL;
+}
+
+static NBN_Peer *HTable_Remove(HTable *htable, uint32_t peer_id)
+{
+    HTableEntry *entry = HTable_FindEntry(htable, peer_id);
+
+    if (entry)
+    {
+        HTable_RemoveEntry(htable, entry);
+
+        return entry->peer;
+    }
+
+    return NULL;
+}
+
+static void HTable_InsertEntry(HTable *htable, HTableEntry *entry)
+{
+    bool use_existing_slot = false;
+    unsigned int slot = HTable_FindFreeSlot(htable, entry, &use_existing_slot);
+
+    entry->slot = slot;
+    htable->internal_array[slot] = entry;
+
+    if (!use_existing_slot)
+    {
+        htable->count++;
+        htable->load_factor = (float)htable->count / htable->capacity;
+    }
+}
+
+static void HTable_RemoveEntry(HTable *htable, HTableEntry *entry)
+{
+    htable->internal_array[entry->slot] = NULL;
+
+    NBN_Deallocator(entry);
+
+    htable->count--;
+    htable->load_factor = htable->count / htable->capacity;
+}
+
+static unsigned int HTable_FindFreeSlot(HTable *htable, HTableEntry *entry, bool *use_existing_slot)
+{
+    unsigned long hash = entry->peer_id;
+    unsigned int slot;
+
+    // quadratic probing
+
+    HTableEntry *current_entry;
+    unsigned int i = 0;
+
+    do
+    {
+        slot = (hash + (int)pow(i, 2)) % htable->capacity;
+        current_entry = htable->internal_array[slot];
+
+        i++;
+    } while (current_entry != NULL && current_entry->peer_id != entry->peer_id);
+
+    if (current_entry != NULL) // it means the current entry as the same key as the inserted entry
+    {
+        *use_existing_slot = true;
+
+        NBN_Deallocator(current_entry);
+    }
+    
+    return slot;
+}
+
+static HTableEntry *HTable_FindEntry(HTable *htable, uint32_t peer_id)
+{
+    unsigned long hash = peer_id;
+    unsigned int slot;
+
+    //quadratic probing
+
+    HTableEntry *current_entry;
+    unsigned int i = 0;
+
+    do
+    {
+        slot = (hash + (int)pow(i, 2)) % htable->capacity;
+        current_entry = htable->internal_array[slot];
+
+        if (current_entry != NULL && current_entry->peer_id == peer_id)
+        {
+            return current_entry;
+        }
+
+        i++;
+    } while (i < htable->capacity);
+    
+    return NULL;
+}
+
+static void HTable_Grow(HTable *htable)
+{
+    unsigned int old_capacity = htable->capacity;
+    unsigned int new_capacity = old_capacity * 2;
+    HTableEntry** old_internal_array = htable->internal_array;
+    HTableEntry** new_internal_array = NBN_Allocator(sizeof(HTableEntry*) * new_capacity);
+
+    for (unsigned int i = 0; i < new_capacity; i++)
+    {
+        new_internal_array[i] = NULL;
+    }
+
+    htable->internal_array = new_internal_array;
+    htable->capacity = new_capacity;
+    htable->count = 0;
+    htable->load_factor = 0;
+
+    // rehash
+
+    for (unsigned int i = 0; i < old_capacity; i++)
+    {
+        if (old_internal_array[i])
+            HTable_InsertEntry(htable, old_internal_array[i]);
+    }
+
+    NBN_Deallocator(old_internal_array);
+}
+
+#pragma endregion // Hashtable
+
 #pragma region Game server
 
 /* --- JS API --- */
@@ -54,6 +269,8 @@ NBN_EXTERN void __js_game_server_close_client_peer(unsigned int);
 NBN_EXTERN void __js_game_server_stop(void);
 
 /* --- Driver implementation --- */
+
+static HTable *__peers = NULL;
 
 int NBN_Driver_GServ_Start(uint32_t protocol_id, uint16_t port)
 {
@@ -74,12 +291,15 @@ int NBN_Driver_GServ_Start(uint32_t protocol_id, uint16_t port)
     if (__js_game_server_start(port) < 0)
         return -1;
 
+    __peers = HTable_Create();
+
     return 0;
 }
 
 void NBN_Driver_GServ_Stop(void)
 {
     __js_game_server_stop();
+    HTable_Destroy(__peers);
 }
 
 int NBN_Driver_GServ_RecvPackets(void)
@@ -92,21 +312,29 @@ int NBN_Driver_GServ_RecvPackets(void)
     {
         NBN_Packet packet;
 
-        NBN_Connection *cli = NBN_GameServer_FindClientById(peer_id);
+        NBN_Peer *peer = HTable_Get(__peers, peer_id);
 
-        if (cli == NULL)
+        if (peer == NULL)
         {
+            if (GameServer_GetClientCount() >= NBN_MAX_CLIENTS)
+                continue;
+
             NBN_LogTrace("Peer %d has connected", peer_id);
 
-            cli = NBN_GameServer_CreateClientConnection(peer_id, NULL);
+            peer = (NBN_Peer *)NBN_Allocator(sizeof(NBN_Peer));
 
-            NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_CONNECTED, cli);
+            peer->id = peer_id; 
+            peer->conn = NBN_GameServer_CreateClientConnection(peer_id, peer);
+
+            HTable_Add(__peers, peer_id, peer);
+
+            NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_CONNECTED, peer->conn);
         }
 
-        if (NBN_Packet_InitRead(&packet, cli, data, len) < 0)
+        if (NBN_Packet_InitRead(&packet, peer->conn, data, len) < 0)
             continue;
 
-        packet.sender = cli;
+        packet.sender = peer->conn;
 
         NBN_Driver_GServ_RaiseEvent(NBN_DRIVER_GSERV_CLIENT_PACKET_RECEIVED, &packet);
     }
@@ -114,9 +342,20 @@ int NBN_Driver_GServ_RecvPackets(void)
     return 0;
 }
 
-void NBN_Driver_GServ_DestroyClientConnection(NBN_Connection *conn)
+void NBN_Driver_GServ_RemoveClientConnection(NBN_Connection *conn)
 {
+    assert(conn != NULL);
+
     __js_game_server_close_client_peer(conn->id);
+
+    NBN_Peer *peer = HTable_Remove(__peers, ((NBN_Peer *)conn->driver_data)->id);
+
+    if (peer)
+    {
+        NBN_LogDebug("Destroyed peer %d", peer->id);
+
+        NBN_Deallocator(peer);
+    }
 }
 
 int NBN_Driver_GServ_SendPacketTo(NBN_Packet *packet, NBN_Connection *conn)
