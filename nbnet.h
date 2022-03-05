@@ -1270,7 +1270,7 @@ void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
 #pragma region NBN_GameServer
 
 #define NBN_MAX_CLIENTS 1024
-#define NBN_CONNECTION_VECTOR_INITIAL_CAPACITY 1
+#define NBN_CONNECTION_VECTOR_INITIAL_CAPACITY 32
 
 enum
 {
