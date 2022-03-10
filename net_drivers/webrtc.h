@@ -140,9 +140,11 @@ static NBN_Peer *HTable_Remove(HTable *htable, uint32_t peer_id)
 
     if (entry)
     {
+        NBN_Peer *peer = entry->peer;
+
         HTable_RemoveEntry(htable, entry);
 
-        return entry->peer;
+        return peer;
     }
 
     return NULL;
