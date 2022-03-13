@@ -450,6 +450,48 @@ CSPRNG_TYPE;
 
 #pragma endregion /* Encryption */
 
+#pragma region RPC
+
+#define NBN_RPC_MAX_PARAM_COUNT 16 /* Maximum number of parameters a RPC signature can accept */
+#define NBN_RPC_MAX 32 /* Maximum number of registered RPCs */
+
+/* Helper macros */
+#define NBN_RPC_BuildSignature(pc, ...) ((NBN_RPC_Signature){.param_count = pc, .params = {__VA_ARGS__}})
+#define NBN_RPC_Int(v) ((NBN_RPC_Param){.type = NBN_RPC_PARAM_INT, .value = {.i = v}})
+#define NBN_RPC_Float(v) ((NBN_RPC_Param){.type = NBN_RPC_PARAM_FLOAT, .value = {.f = v}})
+
+typedef enum
+{
+    NBN_RPC_PARAM_INT,
+    NBN_RPC_PARAM_FLOAT,
+    NBN_RPC_PARAM_STRING // TODO
+} NBN_RPC_ParamType;
+
+typedef struct
+{
+    NBN_RPC_ParamType type;
+
+    union
+    {
+        int i;
+        float f;
+    } value;
+} NBN_RPC_Param;
+
+typedef struct
+{
+    unsigned int param_count;
+    NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT];
+} NBN_RPC_Signature;
+
+typedef struct
+{
+    bool is_enabled;
+    NBN_RPC_Signature signature;
+} NBN_RPC;
+
+#pragma endregion /* RPC */
+
 #pragma region NBN_Packet
 
 /*  
@@ -1023,6 +1065,7 @@ struct __NBN_Endpoint
     NBN_MessageSerializer message_serializers[NBN_MAX_MESSAGE_TYPES];
     NBN_OutgoingMessage outgoing_message_buffer[NBN_ENDPOINT_OUTGOING_MESSAGE_BUFFER_SIZE];
     NBN_EventQueue event_queue;
+    NBN_RPC_Signature rpcs[NBN_RPC_MAX];
     bool is_server;
     unsigned int next_outgoing_message;
 
@@ -1043,6 +1086,7 @@ void NBN_Endpoint_RegisterMessageDestructor(NBN_Endpoint *, NBN_MessageDestructo
 void NBN_Endpoint_RegisterMessageSerializer(NBN_Endpoint *, NBN_MessageSerializer, uint8_t);
 void NBN_Endpoint_RegisterChannel(NBN_Endpoint *, NBN_ChannelType, uint8_t);
 NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *, uint32_t, void *);
+int NBN_Endpoint_RegisterRPC(NBN_Endpoint *, int id, NBN_RPC_Signature);
 
 #pragma endregion /* NBN_Endpoint */
 
@@ -1258,6 +1302,16 @@ bool NBN_GameClient_IsConnected(void);
  * @return true if packet encryption is enabled, false otherwise
  */
 bool NBN_GameClient_IsEncryptionEnabled(void);
+
+/**
+ * Register a new RPC on the game client.
+ * 
+ * @param id User defined RPC ID, must be an integer between 0 and NBN_RPC_MAX
+ * @param signature The RPC signature
+ * 
+ * @return true if packet encryption is enabled, false otherwise
+ */
+int NBN_GameClient_RegisterRPC(int id, NBN_RPC_Signature signature);
 
 #ifdef NBN_DEBUG
 
@@ -1566,6 +1620,16 @@ NBN_GameServerStats NBN_GameServer_GetStats(void);
  * @return true if packet encryption is enabled, false otherwise
  */
 bool NBN_GameServer_IsEncryptionEnabled(void);
+
+/**
+ * Register a new RPC on the game server.
+ * 
+ * @param id User defined RPC ID, must be an integer between 0 and NBN_RPC_MAX
+ * @param signature The RPC signature
+ * 
+ * @return true if packet encryption is enabled, false otherwise
+ */
+int NBN_GameServer_RegisterRPC(int id, NBN_RPC_Signature signature);
 
 #ifdef NBN_DEBUG
 
@@ -4195,6 +4259,20 @@ NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_t i
     return connection;
 }
 
+int NBN_Endpoint_RegisterRPC(NBN_Endpoint *endpoint, int id, NBN_RPC_Signature signature)
+{
+    if (id < 0 || id >= NBN_RPC_MAX)
+    {
+        NBN_LogError("Failed to register RPC, invalid ID");
+
+        return -1;
+    }
+
+    endpoint->rpcs[id] = signature;
+
+    return 0;
+}
+
 static uint32_t Endpoint_BuildProtocolId(const char *protocol_name)
 {
     uint32_t protocol_id = 2166136261;
@@ -4665,6 +4743,11 @@ bool NBN_GameClient_IsConnected(void)
 bool NBN_GameClient_IsEncryptionEnabled(void)
 {
     return __game_client.endpoint.config.is_encryption_enabled;
+}
+
+int NBN_GameClient_RegisterRPC(int id, NBN_RPC_Signature signature)
+{
+    return NBN_Endpoint_RegisterRPC(&__game_client.endpoint, id, signature);
 }
 
 #ifdef NBN_DEBUG
@@ -5237,6 +5320,11 @@ NBN_GameServerStats NBN_GameServer_GetStats(void)
 bool NBN_GameServer_IsEncryptionEnabled(void)
 {
     return __game_server.endpoint.config.is_encryption_enabled;
+}
+
+int NBN_GameServer_RegisterRPC(int id, NBN_RPC_Signature signature)
+{
+    return NBN_Endpoint_RegisterRPC(&__game_server.endpoint, id, signature);
 }
 
 #ifdef NBN_DEBUG
