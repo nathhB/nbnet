@@ -52,6 +52,8 @@ int main(void)
 #endif
     }
 
+    NBN_GameServer_RegisterRPC(0, NBN_RPC_BuildSignature(2, NBN_RPC_PARAM_INT, NBN_RPC_PARAM_FLOAT));
+
     // Number of seconds between server ticks
     double dt = 1.0 / RPC_TICK_RATE;
 

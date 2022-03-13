@@ -481,12 +481,12 @@ typedef struct
 typedef struct
 {
     unsigned int param_count;
-    NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT];
+    NBN_RPC_ParamType params[NBN_RPC_MAX_PARAM_COUNT];
 } NBN_RPC_Signature;
 
 typedef struct
 {
-    bool is_enabled;
+    int id;
     NBN_RPC_Signature signature;
 } NBN_RPC;
 
@@ -924,6 +924,7 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *);
 int NBN_Connection_CreateChannel(NBN_Connection *, NBN_ChannelType, uint8_t);
 bool NBN_Connection_CheckIfStale(NBN_Connection *);
 void NBN_Connection_AddTime(NBN_Connection *, double);
+int NBN_Connection_CallRPC(NBN_Connection *, NBN_RPC *, va_list);
 
 #pragma endregion /* NBN_Connection */
 
@@ -1065,7 +1066,7 @@ struct __NBN_Endpoint
     NBN_MessageSerializer message_serializers[NBN_MAX_MESSAGE_TYPES];
     NBN_OutgoingMessage outgoing_message_buffer[NBN_ENDPOINT_OUTGOING_MESSAGE_BUFFER_SIZE];
     NBN_EventQueue event_queue;
-    NBN_RPC_Signature rpcs[NBN_RPC_MAX];
+    NBN_RPC rpcs[NBN_RPC_MAX];
     bool is_server;
     unsigned int next_outgoing_message;
 
@@ -1312,6 +1313,13 @@ bool NBN_GameClient_IsEncryptionEnabled(void);
  * @return true if packet encryption is enabled, false otherwise
  */
 int NBN_GameClient_RegisterRPC(int id, NBN_RPC_Signature signature);
+
+/**
+ * Call a previously registered RPC on the game server.
+ * 
+ * @param id The ID of the RPC to execute on the game server (must be a registered ID)
+ */
+int NBN_GameClient_CallRPC(int id, ...);
 
 #ifdef NBN_DEBUG
 
@@ -1630,6 +1638,14 @@ bool NBN_GameServer_IsEncryptionEnabled(void);
  * @return true if packet encryption is enabled, false otherwise
  */
 int NBN_GameServer_RegisterRPC(int id, NBN_RPC_Signature signature);
+
+/**
+ * Call a previously registered RPC on a given client.
+ * 
+ * @param id The ID of the RPC to execute (must be a registered ID)
+ * @param client Client connection to execute the RPC on
+ */
+int NBN_GameServer_CallRPC(int id, NBN_Connection *client, ...);
 
 #ifdef NBN_DEBUG
 
@@ -3267,6 +3283,27 @@ void NBN_Connection_AddTime(NBN_Connection *connection, double time)
     }
 }
 
+int NBN_Connection_CallRPC(NBN_Connection *connection, NBN_RPC *rpc, va_list args)
+{
+    for (unsigned int i = 0; i < rpc->signature.param_count; i++)
+    {
+        NBN_RPC_ParamType param_type = rpc->signature.params[i];
+
+        switch (param_type)
+        {
+            case NBN_RPC_PARAM_INT:
+                int v = va_arg(args, int);
+                break;
+
+            case NBN_RPC_PARAM_FLOAT:
+                int v = va_arg(args, float);
+                break;
+        }
+    }
+
+    return 0;
+}
+
 static int Connection_DecodePacketHeader(NBN_Connection *connection, NBN_Packet *packet)
 {
     if (Connection_AckPacket(connection, packet->header.ack) < 0)
@@ -4130,6 +4167,9 @@ void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server
         endpoint->message_serializers[i] = NULL;
     }
 
+    for (int i = 0; i < NBN_RPC_MAX; i++)
+        endpoint->rpcs[i] = (NBN_RPC){.id = -1};
+
     NBN_EventQueue_Init(&endpoint->event_queue);
 
     /* Register library reserved channels */
@@ -4268,7 +4308,7 @@ int NBN_Endpoint_RegisterRPC(NBN_Endpoint *endpoint, int id, NBN_RPC_Signature s
         return -1;
     }
 
-    endpoint->rpcs[id] = signature;
+    endpoint->rpcs[id] = (NBN_RPC){.id = id, .signature = signature};
 
     return 0;
 }
@@ -4748,6 +4788,28 @@ bool NBN_GameClient_IsEncryptionEnabled(void)
 int NBN_GameClient_RegisterRPC(int id, NBN_RPC_Signature signature)
 {
     return NBN_Endpoint_RegisterRPC(&__game_client.endpoint, id, signature);
+}
+
+int NBN_GameClient_CallRPC(int id, ...)
+{
+    NBN_RPC rpc = __game_client.endpoint.rpcs[id];
+
+    if (rpc.id < 0 || rpc.id != id)
+    {
+        NBN_LogError("Cannot call invalid RPC (ID: %d)", id);
+
+        return -1;
+    }
+
+    va_list args;
+
+    va_start(args, id);
+
+    int ret = NBN_Connection_CallRPC(__game_client.server_connection, &rpc, args);
+
+    va_end(args);
+
+    return ret;
 }
 
 #ifdef NBN_DEBUG
@@ -5325,6 +5387,30 @@ bool NBN_GameServer_IsEncryptionEnabled(void)
 int NBN_GameServer_RegisterRPC(int id, NBN_RPC_Signature signature)
 {
     return NBN_Endpoint_RegisterRPC(&__game_server.endpoint, id, signature);
+}
+
+int NBN_GameServer_CallRPC(int id, NBN_Connection *client, ...)
+{
+    NBN_RPC rpc = __game_server.endpoint.rpcs[id];
+
+    if (rpc.id < 0 || rpc.id != id)
+    {
+        NBN_LogError("Cannot call invalid RPC (ID: %d)", id);
+
+        return -1;
+    }
+
+    va_list args;
+
+    va_start(args, client);
+
+    int ret = NBN_Connection_CallRPC(client, &rpc, args);
+
+    va_end(args);
+
+    return ret;
+
+    return 0;
 }
 
 #ifdef NBN_DEBUG
