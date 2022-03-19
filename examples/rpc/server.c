@@ -33,6 +33,11 @@ static NBN_Connection *client = NULL;
 
 static bool error = false;
 
+static void TestRPC(unsigned int param_count, NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT])
+{
+    Log(LOG_INFO, "TestRPC called !");
+}
+
 int main(void)
 {
     // Start the server with a protocol name and a port, must be done first
@@ -52,7 +57,11 @@ int main(void)
 #endif
     }
 
-    NBN_GameServer_RegisterRPC(0, NBN_RPC_BuildSignature(2, NBN_RPC_PARAM_INT, NBN_RPC_PARAM_FLOAT));
+    NBN_GameServer_RegisterRPC(
+        0,
+        NBN_RPC_BuildSignature(2, NBN_RPC_PARAM_INT, NBN_RPC_PARAM_FLOAT),
+        TestRPC);
+
 
     // Number of seconds between server ticks
     double dt = 1.0 / RPC_TICK_RATE;

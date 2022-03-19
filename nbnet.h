@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <string.h>
 #include <limits.h>
 #include <math.h>
@@ -484,10 +485,13 @@ typedef struct
     NBN_RPC_ParamType params[NBN_RPC_MAX_PARAM_COUNT];
 } NBN_RPC_Signature;
 
+typedef void (*NBN_RPC_Func)(unsigned int, NBN_RPC_Param[NBN_RPC_MAX_PARAM_COUNT]);
+
 typedef struct
 {
     int id;
     NBN_RPC_Signature signature;
+    NBN_RPC_Func func;
 } NBN_RPC;
 
 #pragma endregion /* RPC */
@@ -685,9 +689,9 @@ void *NBN_DisconnectionMessage_Create(void);
 void NBN_DisconnectionMessage_Destroy(void *);
 int NBN_DisconnectionMessage_Serialize(void *, NBN_Stream *);
 
-#pragma endregion /* NBN_DisconnectMessage */
+#pragma endregion /* NBN_DisconnectionMessage */
 
-#pragma region NBN_PublicCryptoInfoMessage
+#pragma region NBN_ConnectionRequestMessage
 
 #define NBN_CONNECTION_REQUEST_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 8) /* Reserved message type */
 
@@ -700,7 +704,23 @@ NBN_ConnectionRequestMessage *NBN_ConnectionRequestMessage_Create(void);
 void NBN_ConnectionRequestMessage_Destroy(NBN_ConnectionRequestMessage *);
 int NBN_ConnectionRequestMessage_Serialize(NBN_ConnectionRequestMessage *, NBN_Stream *);
 
-#pragma endregion /* NBN_PublicCryptoInfoMessage */
+#pragma endregion /* NBN_ConnectionRequestMessage */
+
+#pragma region NBN_RPC_Message
+
+#define NBN_RPC_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 9) /* Reserved message type */
+
+typedef struct
+{
+    unsigned int param_count;
+    NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT];
+} NBN_RPC_Message;
+
+void *NBN_RPC_Message_Create(void);
+void NBN_RPC_Message_Destroy(NBN_RPC_Message *);
+int NBN_RPC_Message_Serialize(NBN_RPC_Message *, NBN_Stream *);
+
+#pragma endregion /* NBN_RPC_Message */
 
 #pragma region NBN_Channel
 
@@ -1055,7 +1075,8 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 #define NBN_IsReservedMessage(type) (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE \
 || type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || type == NBN_BYTE_ARRAY_MESSAGE_TYPE \
 || type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE || type == NBN_START_ENCRYPT_MESSAGE_TYPE \
-|| type == NBN_DISCONNECTION_MESSAGE_TYPE || type == NBN_CONNECTION_REQUEST_MESSAGE_TYPE)
+|| type == NBN_DISCONNECTION_MESSAGE_TYPE || type == NBN_CONNECTION_REQUEST_MESSAGE_TYPE \
+|| type == NBN_RPC_MESSAGE_TYPE)
 
 struct __NBN_Endpoint
 {
@@ -1087,7 +1108,7 @@ void NBN_Endpoint_RegisterMessageDestructor(NBN_Endpoint *, NBN_MessageDestructo
 void NBN_Endpoint_RegisterMessageSerializer(NBN_Endpoint *, NBN_MessageSerializer, uint8_t);
 void NBN_Endpoint_RegisterChannel(NBN_Endpoint *, NBN_ChannelType, uint8_t);
 NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *, uint32_t, void *);
-int NBN_Endpoint_RegisterRPC(NBN_Endpoint *, int id, NBN_RPC_Signature);
+int NBN_Endpoint_RegisterRPC(NBN_Endpoint *, int id, NBN_RPC_Signature, NBN_RPC_Func);
 
 #pragma endregion /* NBN_Endpoint */
 
@@ -1307,12 +1328,15 @@ bool NBN_GameClient_IsEncryptionEnabled(void);
 /**
  * Register a new RPC on the game client.
  * 
+ * The same RPC must be register on both the game server and the game clients.
+ * 
  * @param id User defined RPC ID, must be an integer between 0 and NBN_RPC_MAX
  * @param signature The RPC signature
+ * @param func The function to call on the callee end (NULL on the caller end)
  * 
  * @return true if packet encryption is enabled, false otherwise
  */
-int NBN_GameClient_RegisterRPC(int id, NBN_RPC_Signature signature);
+int NBN_GameClient_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func func);
 
 /**
  * Call a previously registered RPC on the game server.
@@ -1632,12 +1656,15 @@ bool NBN_GameServer_IsEncryptionEnabled(void);
 /**
  * Register a new RPC on the game server.
  * 
+ * The same RPC must be register on both the game server and the game clients.
+ * 
  * @param id User defined RPC ID, must be an integer between 0 and NBN_RPC_MAX
  * @param signature The RPC signature
+ * @param func The function to call on the callee end (NULL on the caller end)
  * 
  * @return true if packet encryption is enabled, false otherwise
  */
-int NBN_GameServer_RegisterRPC(int id, NBN_RPC_Signature signature);
+int NBN_GameServer_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func func);
 
 /**
  * Call a previously registered RPC on a given client.
@@ -2883,7 +2910,7 @@ int NBN_StartEncryptMessage_Serialize(void *msg, NBN_Stream *stream)
 
 #pragma endregion /* NBN_StartEncryptMessage */
 
-#pragma region NBN_DisconnectMessage
+#pragma region NBN_DisconnectionMessage
 
 void *NBN_DisconnectionMessage_Create(void)
 {
@@ -2903,7 +2930,7 @@ int NBN_DisconnectionMessage_Serialize(void *msg, NBN_Stream *stream)
     return 0;
 }
 
-#pragma endregion /* NBN_DisconnectMessage */
+#pragma endregion /* NBN_DisconnectionMessage */
 
 #pragma region NBN_ConnectionRequestMessage
 
@@ -2925,6 +2952,47 @@ int NBN_ConnectionRequestMessage_Serialize(NBN_ConnectionRequestMessage *msg, NB
 }
 
 #pragma endregion /* NBN_ConnectionRequestMessage */
+
+#pragma region NBN_RPC_Message
+
+void *NBN_RPC_Message_Create(void)
+{
+    return (NBN_RPC_Message *)NBN_Allocator(sizeof(NBN_RPC_Message));
+}
+
+void NBN_RPC_Message_Destroy(NBN_RPC_Message *msg)
+{
+    NBN_Deallocator(msg);
+}
+
+int NBN_RPC_Message_Serialize(NBN_RPC_Message *msg, NBN_Stream *stream)
+{
+    NBN_SerializeUInt(stream, msg->param_count, 0, NBN_RPC_MAX_PARAM_COUNT);
+
+    for (unsigned int i = 0; i < msg->param_count; i++)
+    {
+        NBN_RPC_Param *p = &msg->params[i];
+
+        NBN_SerializeUInt(stream, p->type, 0, 8);
+
+        if (p->type == NBN_RPC_PARAM_INT)
+        {
+            NBN_SerializeBytes(stream, &p->value.i, sizeof(int));
+        }
+        else if (p->type == NBN_RPC_PARAM_FLOAT)
+        {
+            NBN_SerializeBytes(stream, &p->value.f, sizeof(float));
+        }
+        else if (p->type == NBN_RPC_PARAM_STRING)
+        {
+            // TODO
+        }
+    }
+
+    return 0;
+}
+
+#pragma endregion /* NBN_RPC_Message */
 
 #pragma region NBN_Connection
 
@@ -3285,19 +3353,30 @@ void NBN_Connection_AddTime(NBN_Connection *connection, double time)
 
 int NBN_Connection_CallRPC(NBN_Connection *connection, NBN_RPC *rpc, va_list args)
 {
+    if (rpc->signature.param_count > NBN_RPC_MAX_PARAM_COUNT)
+    {
+        NBN_LogError("Calling RPC %d with too many parameters");
+
+        return NBN_ERROR;
+    }
+
     for (unsigned int i = 0; i < rpc->signature.param_count; i++)
     {
         NBN_RPC_ParamType param_type = rpc->signature.params[i];
 
-        switch (param_type)
+        if (param_type == NBN_RPC_PARAM_INT)
         {
-            case NBN_RPC_PARAM_INT:
-                int v = va_arg(args, int);
-                break;
+            // va_arg(args, int);
+        }
+        else if (param_type == NBN_RPC_PARAM_INT)
+        {
+            // va_arg(args, double);
+        }
+        else
+        {
+            NBN_LogError("Calling RPC %d with invalid parameters on connection %d", rpc->id, connection->id);
 
-            case NBN_RPC_PARAM_FLOAT:
-                int v = va_arg(args, float);
-                break;
+            return NBN_ERROR;
         }
     }
 
@@ -4241,6 +4320,14 @@ void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server
     NBN_Endpoint_RegisterMessageDestructor(
             endpoint, (NBN_MessageDestructor)NBN_ConnectionRequestMessage_Destroy, NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
 
+    /* Register NBN_RPC_Message library message */
+    NBN_Endpoint_RegisterMessageBuilder(
+            endpoint, (NBN_MessageBuilder)NBN_RPC_Message_Create, NBN_RPC_MESSAGE_TYPE);
+    NBN_Endpoint_RegisterMessageSerializer(
+            endpoint, (NBN_MessageSerializer)NBN_RPC_Message_Serialize, NBN_RPC_MESSAGE_TYPE);
+    NBN_Endpoint_RegisterMessageDestructor(
+            endpoint, (NBN_MessageDestructor)NBN_RPC_Message_Destroy, NBN_RPC_MESSAGE_TYPE);
+
 #ifdef NBN_DEBUG
     endpoint->OnMessageAddedToRecvQueue = NULL;
 #endif
@@ -4299,16 +4386,16 @@ NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_t i
     return connection;
 }
 
-int NBN_Endpoint_RegisterRPC(NBN_Endpoint *endpoint, int id, NBN_RPC_Signature signature)
+int NBN_Endpoint_RegisterRPC(NBN_Endpoint *endpoint, int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
 {
     if (id < 0 || id >= NBN_RPC_MAX)
     {
         NBN_LogError("Failed to register RPC, invalid ID");
 
-        return -1;
+        return NBN_ERROR;
     }
 
-    endpoint->rpcs[id] = (NBN_RPC){.id = id, .signature = signature};
+    endpoint->rpcs[id] = (NBN_RPC){.id = id, .signature = signature, .func = func};
 
     return 0;
 }
@@ -4785,9 +4872,9 @@ bool NBN_GameClient_IsEncryptionEnabled(void)
     return __game_client.endpoint.config.is_encryption_enabled;
 }
 
-int NBN_GameClient_RegisterRPC(int id, NBN_RPC_Signature signature)
+int NBN_GameClient_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
 {
-    return NBN_Endpoint_RegisterRPC(&__game_client.endpoint, id, signature);
+    return NBN_Endpoint_RegisterRPC(&__game_client.endpoint, id, signature, func);
 }
 
 int NBN_GameClient_CallRPC(int id, ...)
@@ -4798,7 +4885,7 @@ int NBN_GameClient_CallRPC(int id, ...)
     {
         NBN_LogError("Cannot call invalid RPC (ID: %d)", id);
 
-        return -1;
+        return NBN_ERROR;
     }
 
     va_list args;
@@ -5384,9 +5471,9 @@ bool NBN_GameServer_IsEncryptionEnabled(void)
     return __game_server.endpoint.config.is_encryption_enabled;
 }
 
-int NBN_GameServer_RegisterRPC(int id, NBN_RPC_Signature signature)
+int NBN_GameServer_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
 {
-    return NBN_Endpoint_RegisterRPC(&__game_server.endpoint, id, signature);
+    return NBN_Endpoint_RegisterRPC(&__game_server.endpoint, id, signature, func);
 }
 
 int NBN_GameServer_CallRPC(int id, NBN_Connection *client, ...)
@@ -5397,7 +5484,7 @@ int NBN_GameServer_CallRPC(int id, NBN_Connection *client, ...)
     {
         NBN_LogError("Cannot call invalid RPC (ID: %d)", id);
 
-        return -1;
+        return NBN_ERROR;
     }
 
     va_list args;
