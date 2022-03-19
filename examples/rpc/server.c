@@ -33,9 +33,14 @@ static NBN_Connection *client = NULL;
 
 static bool error = false;
 
-static void TestRPC(unsigned int param_count, NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT])
+static void TestRPC(unsigned int param_count, NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT], NBN_Connection *sender)
 {
-    Log(LOG_INFO, "TestRPC called !");
+    Log(LOG_INFO, "TestRPC called ! (Sender: %d)", sender->id);
+    Log(LOG_INFO, "Parameter 1 (int): %d", NBN_RPC_GetInt(params, 0));
+    Log(LOG_INFO, "Parameter 2 (float): %f", NBN_RPC_GetFloat(params, 1));
+    Log(LOG_INFO, "Parameter 3 (bool): %d", NBN_RPC_GetBool(params, 2));
+
+    NBN_GameServer_CallRPC(TEST_RPC_2_ID, sender, NBN_RPC_GetInt(params, 0) * NBN_RPC_GetFloat(params, 1));
 }
 
 int main(void)
@@ -57,11 +62,13 @@ int main(void)
 #endif
     }
 
-    NBN_GameServer_RegisterRPC(
-        0,
-        NBN_RPC_BuildSignature(2, NBN_RPC_PARAM_INT, NBN_RPC_PARAM_FLOAT),
-        TestRPC);
+    int ret = NBN_GameServer_RegisterRPC(TEST_RPC_ID, TEST_RPC_SIGNATURE, TestRPC);
 
+    assert(ret == 0);
+
+    ret = NBN_GameServer_RegisterRPC(TEST_RPC_2_ID, TEST_RPC_2_SIGNATURE, NULL);
+
+    assert(ret == 0);
 
     // Number of seconds between server ticks
     double dt = 1.0 / RPC_TICK_RATE;
@@ -116,7 +123,7 @@ int main(void)
     // Stop the server
     NBN_GameServer_Stop();
 
-    int ret = error ? 1 : 0;
+    ret = error ? 1 : 0;
 
 #ifdef __EMSCRIPTEN__
     emscripten_force_exit(ret);
