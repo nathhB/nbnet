@@ -85,7 +85,7 @@ typedef struct tagMSG *LPMSG;
 #define TEST_RPC_ID 0
 #define TEST_RPC_2_ID 1
 #define TEST_RPC_SIGNATURE NBN_RPC_BuildSignature(3, NBN_RPC_PARAM_INT, NBN_RPC_PARAM_FLOAT, NBN_RPC_PARAM_BOOL)
-#define TEST_RPC_2_SIGNATURE NBN_RPC_BuildSignature(1, NBN_RPC_PARAM_FLOAT)
+#define TEST_RPC_2_SIGNATURE NBN_RPC_BuildSignature(2, NBN_RPC_PARAM_FLOAT, NBN_RPC_PARAM_STRING)
 
 // nbnet logging
 // nbnet does not implement any logging capabilities, you need to provide your own

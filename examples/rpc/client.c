@@ -37,6 +37,7 @@ static void TestRPC2(unsigned int param_count, NBN_RPC_Param params[NBN_RPC_MAX_
 {
     Log(LOG_INFO, "TestRPC2 called !");
     Log(LOG_INFO, "Parameter 1 (float): %f", NBN_RPC_GetFloat(params, 0));
+    Log(LOG_INFO, "Parameter 2 (string): %s", NBN_RPC_GetString(params, 1));
 }
 
 void OnConnected(void)

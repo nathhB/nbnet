@@ -40,7 +40,11 @@ static void TestRPC(unsigned int param_count, NBN_RPC_Param params[NBN_RPC_MAX_P
     Log(LOG_INFO, "Parameter 2 (float): %f", NBN_RPC_GetFloat(params, 1));
     Log(LOG_INFO, "Parameter 3 (bool): %d", NBN_RPC_GetBool(params, 2));
 
-    NBN_GameServer_CallRPC(TEST_RPC_2_ID, sender, NBN_RPC_GetInt(params, 0) * NBN_RPC_GetFloat(params, 1));
+    NBN_GameServer_CallRPC(
+        TEST_RPC_2_ID,
+        sender,
+        NBN_RPC_GetInt(params, 0) * NBN_RPC_GetFloat(params, 1),
+        "Some test string");
 }
 
 int main(void)
