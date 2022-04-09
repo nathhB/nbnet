@@ -503,7 +503,7 @@ typedef void (*NBN_RPC_Func)(unsigned int, NBN_RPC_Param[NBN_RPC_MAX_PARAM_COUNT
 
 typedef struct
 {
-    int id;
+    unsigned int id;
     NBN_RPC_Signature signature;
     NBN_RPC_Func func;
 } NBN_RPC;
@@ -1360,7 +1360,7 @@ int NBN_GameClient_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func
  * 
  * @param id The ID of the RPC to execute on the game server (must be a registered ID)
  */
-int NBN_GameClient_CallRPC(int id, ...);
+int NBN_GameClient_CallRPC(unsigned int id, ...);
 
 #ifdef NBN_DEBUG
 
@@ -1689,7 +1689,7 @@ int NBN_GameServer_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func
  * @param id The ID of the RPC to execute (must be a registered ID)
  * @param client Client connection to execute the RPC on
  */
-int NBN_GameServer_CallRPC(int id, NBN_Connection *client, ...);
+int NBN_GameServer_CallRPC(unsigned int id, NBN_Connection *client, ...);
 
 #ifdef NBN_DEBUG
 
@@ -3472,7 +3472,7 @@ static void Connection_InitOutgoingPacket(
 static NBN_PacketEntry *Connection_InsertOutgoingPacketEntry(NBN_Connection *connection, uint16_t seq_number)
 {
     uint16_t index = seq_number % NBN_MAX_PACKET_ENTRIES;
-    NBN_PacketEntry entry = { false, 0, 0 };
+    NBN_PacketEntry entry = { false, 0, 0, .messages = { {0, 0} } };
 
     connection->packet_send_seq_buffer[index] = seq_number;
     connection->packet_send_buffer[index] = entry;
@@ -4953,7 +4953,7 @@ int NBN_GameClient_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func
     return NBN_Endpoint_RegisterRPC(&__game_client.endpoint, id, signature, func);
 }
 
-int NBN_GameClient_CallRPC(int id, ...)
+int NBN_GameClient_CallRPC(unsigned int id, ...)
 {
     NBN_RPC rpc = __game_client.endpoint.rpcs[id];
 
@@ -5575,7 +5575,7 @@ int NBN_GameServer_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func
     return NBN_Endpoint_RegisterRPC(&__game_server.endpoint, id, signature, func);
 }
 
-int NBN_GameServer_CallRPC(int id, NBN_Connection *client, ...)
+int NBN_GameServer_CallRPC(unsigned int id, NBN_Connection *client, ...)
 {
     NBN_RPC rpc = __game_server.endpoint.rpcs[id];
 
