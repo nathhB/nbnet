@@ -3007,10 +3007,19 @@ int NBN_RPC_Message_Serialize(NBN_RPC_Message *msg, NBN_Stream *stream)
         }
         else if (p->type == NBN_RPC_PARAM_STRING)
         {
-            int length = stream->type == NBN_STREAM_READ ?
-                NBN_RPC_STRING_MAX_LENGTH :
-                strnlen(p->value.s, NBN_RPC_STRING_MAX_LENGTH);
+            int length = 0;
 
+            if (stream->type == NBN_STREAM_WRITE)
+            {
+                int l = strnlen(p->value.s, NBN_RPC_STRING_MAX_LENGTH);
+
+                assert(l < NBN_RPC_STRING_MAX_LENGTH); // make sure we have a spot for the terminating byte
+                assert(l > 0);
+
+                length = l + 1;
+            }
+
+            NBN_SerializeUInt(stream, length, 0, NBN_RPC_STRING_MAX_LENGTH);
             NBN_SerializeString(stream, p->value.s, length);
         }
     }
