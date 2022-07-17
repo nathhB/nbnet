@@ -831,10 +831,11 @@ struct __NBN_Connection
     double last_read_packets_time; /* Last time packets were read from the socket */
     double time; /* Current time */
     unsigned int downloaded_bytes; /* Keep track of bytes read from the socket (used for download bandwith calculation) */
-    bool is_accepted;
-    bool is_stale;
-    bool is_closed;
+    uint8_t is_accepted     : 1;
+    uint8_t is_stale        : 1;
+    uint8_t is_closed       : 1;
     struct __NBN_Endpoint *endpoint;
+    NBN_Channel *channels[NBN_MAX_CHANNELS]; /* Messages channeling (sending & receiving) */
     NBN_ConnectionStats stats;
     void *driver_data; /* Data attached to the connection by the underlying driver */
     void *user_data; /* Used to attach data from the user code */
@@ -858,11 +859,6 @@ struct __NBN_Connection
     uint32_t packet_recv_seq_buffer[NBN_MAX_PACKET_ENTRIES];
 
     /*
-     *  Messages channeling (sending & receiving)
-     */
-    NBN_Channel *channels[NBN_MAX_CHANNELS];
-
-    /*
      * Encryption related fields
      */
     NBN_ConnectionKeySet keys1; /* Used for message encryption */
@@ -870,8 +866,8 @@ struct __NBN_Connection
     NBN_ConnectionKeySet keys3; /* Used for poly1305 keys generation */
     uint8_t aes_iv[AES_BLOCKLEN]; /* AES IV */
 
-    bool can_decrypt;
-    bool can_encrypt;
+    uint8_t can_decrypt     : 1;
+    uint8_t can_encrypt     : 1;
 };
 
 NBN_Connection *NBN_Connection_Create(uint32_t, uint32_t, NBN_Endpoint *, void *driver_data);
