@@ -3181,7 +3181,10 @@ int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet 
         {
             NBN_LogTrace("Received message %d : discarded", message.header.id);
 
-            Connection_RecycleMessage(connection, &message);
+            if (Connection_RecycleMessage(connection, &message) == NBN_ERROR)
+            {
+                NBN_LogWarning("Failed to recycle message");
+            }
         }
     }
 
@@ -3288,7 +3291,12 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
                 packet_entry->messages[packet_entry->messages_count++] = e;
 
                 if (channel->type == NBN_CHANNEL_TYPE_UNRELIABLE_ORDERED)
-                    Connection_RecycleMessage(connection, message);
+                {
+                    if (Connection_RecycleMessage(connection, message) == NBN_ERROR)
+                    {
+                        NBN_LogWarning("Failed to recycle message");
+                    }
+                }
             }
         }
     }
@@ -3625,7 +3633,14 @@ static int Connection_ReadNextMessageFromPacket(NBN_Connection *connection, NBN_
 
 static int Connection_RecycleMessage(NBN_Connection *connection, NBN_Message *message)
 {
-    assert(message->outgoing_msg == NULL || message->outgoing_msg->ref_count > 0);
+    if (message->outgoing_msg && message->outgoing_msg->ref_count == 0)
+    {
+        NBN_LogWarning("Tried to recycle an already recycled message");
+
+        return -1;
+    }
+
+    // assert(message->outgoing_msg == NULL || message->outgoing_msg->ref_count > 0);
 
     if (message->outgoing_msg == NULL || --message->outgoing_msg->ref_count == 0)
     {
@@ -3845,12 +3860,22 @@ void NBN_Channel_Destroy(NBN_Channel *channel)
         NBN_MessageSlot *slot = &channel->recved_message_slot_buffer[i];
 
         if (!slot->free)
-            Connection_RecycleMessage(channel->connection, &slot->message);
+        {
+            if (Connection_RecycleMessage(channel->connection, &slot->message) == NBN_ERROR)
+            {
+                NBN_LogWarning("Failed to recycle message");
+            }
+        }
 
         slot = &channel->outgoing_message_slot_buffer[i];
 
         if (!slot->free)
-            Connection_RecycleMessage(channel->connection, &slot->message);
+        {
+            if (Connection_RecycleMessage(channel->connection, &slot->message) == NBN_ERROR)
+            {
+                NBN_LogWarning("Failed to recycle message");
+            }
+        }
     }
 
     NBN_Deallocator(channel);
@@ -4132,7 +4157,12 @@ static bool ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, NBN_
     NBN_MessageSlot *slot = &channel->recved_message_slot_buffer[message->header.id % NBN_CHANNEL_BUFFER_SIZE];
 
     if (!slot->free)
-        Connection_RecycleMessage(channel->connection, &slot->message);
+    {
+        if (Connection_RecycleMessage(channel->connection, &slot->message) == NBN_ERROR)
+        {
+            NBN_LogWarning("Failed to recycle message");
+        }
+    }
 
     memcpy(&slot->message, message, sizeof(NBN_Message));
 
