@@ -793,6 +793,7 @@ typedef struct
 typedef struct
 {
     bool acked;
+    bool flagged_as_lost;
     unsigned int messages_count;
     double send_time;
     NBN_MessageEntry messages[NBN_MAX_MESSAGES_PER_PACKET];
@@ -801,6 +802,7 @@ typedef struct
 typedef struct
 {
     double ping;
+    unsigned int total_lost_packets;
     float packet_loss;
     float upload_bandwidth;
     float download_bandwidth;
@@ -970,6 +972,7 @@ typedef struct
 #endif
 
     bool running;
+    unsigned int total_dropped_packets;
 
     /* Settings */
     float packet_loss_ratio;
@@ -3290,7 +3293,7 @@ static void Connection_InitOutgoingPacket(
 static NBN_PacketEntry *Connection_InsertOutgoingPacketEntry(NBN_Connection *connection, uint16_t seq_number)
 {
     uint16_t index = seq_number % NBN_MAX_PACKET_ENTRIES;
-    NBN_PacketEntry entry = { false, 0, 0 };
+    NBN_PacketEntry entry = { false, false, 0, 0, .messages = { {0, 0} } };
 
     connection->packet_send_seq_buffer[index] = seq_number;
     connection->packet_send_buffer[index] = entry;
@@ -3483,7 +3486,15 @@ static void Connection_UpdateAveragePacketLoss(NBN_Connection *connection, uint1
         NBN_PacketEntry *entry = Connection_FindSendPacketEntry(connection, s);
 
         if (entry && !entry->acked)
+        {
             lost_packet_count++;
+
+            if (!entry->flagged_as_lost)
+            {
+                entry->flagged_as_lost = true;
+                connection->stats.total_lost_packets++;
+            }
+        }
     }
 
     float packet_loss = lost_packet_count / 100.f;
@@ -5602,6 +5613,7 @@ void NBN_PacketSimulator_Init(NBN_PacketSimulator *packet_simulator)
     packet_simulator->ping = 0;
     packet_simulator->jitter = 0;
     packet_simulator->packet_loss_ratio = 0;
+    packet_simulator->total_dropped_packets = 0;
     packet_simulator->packet_duplication_ratio = 0;
     packet_simulator->head_packet = NULL;
     packet_simulator->tail_packet = NULL;
@@ -5785,7 +5797,8 @@ static int PacketSimulator_SendPacket(
 {
     if (RAND_RATIO < packet_simulator->packet_loss_ratio)
     {
-        NBN_LogDebug("Drop packet %d", packet->header.seq_number);
+        packet_simulator->total_dropped_packets++;
+        NBN_LogDebug("Drop packet %d (Total dropped packets: %d)", packet->header.seq_number, packet_simulator->total_dropped_packets);
 
         return 0;
     }
