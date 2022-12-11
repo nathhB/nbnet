@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <string.h>
 #include <limits.h>
 #include <math.h>
@@ -450,13 +451,75 @@ CSPRNG_TYPE;
 
 #pragma endregion /* Encryption */
 
+#pragma region RPC
+
+#define NBN_RPC_MAX_PARAM_COUNT 16 /* Maximum number of parameters a RPC signature can accept */
+#define NBN_RPC_MAX 32 /* Maximum number of registered RPCs */
+#define NBN_RPC_STRING_MAX_LENGTH 256 /* Maximum length of a RPC string parameter */
+
+/* Helper macros */
+#define NBN_RPC_BuildSignature(pc, ...) ((NBN_RPC_Signature){.param_count = pc, .params = {__VA_ARGS__}})
+#define NBN_RPC_Int(v) ((NBN_RPC_Param){.type = NBN_RPC_PARAM_INT, .value = {.i = v}})
+#define NBN_RPC_Float(v) ((NBN_RPC_Param){.type = NBN_RPC_PARAM_FLOAT, .value = {.f = v}})
+#define NBN_RPC_GetInt(params, idx) (params[idx].value.i)
+#define NBN_RPC_GetFloat(params, idx) (params[idx].value.f)
+#define NBN_RPC_GetBool(params, idx) (params[idx].value.b)
+#define NBN_RPC_GetString(params, idx) (params[idx].value.s)
+
+typedef enum
+{
+    NBN_RPC_PARAM_INT,
+    NBN_RPC_PARAM_FLOAT,
+    NBN_RPC_PARAM_BOOL,
+    NBN_RPC_PARAM_STRING
+} NBN_RPC_ParamType;
+
+typedef struct
+{
+    char string[NBN_RPC_STRING_MAX_LENGTH];
+    unsigned int length;
+} NBN_RPC_String;
+
+typedef struct
+{
+    NBN_RPC_ParamType type;
+
+    union
+    {
+        int i;
+        float f;
+        bool b;
+        char s[NBN_RPC_STRING_MAX_LENGTH];
+    } value;
+} NBN_RPC_Param;
+
+typedef struct
+{
+    unsigned int param_count;
+    NBN_RPC_ParamType params[NBN_RPC_MAX_PARAM_COUNT];
+} NBN_RPC_Signature;
+
+typedef void (*NBN_RPC_Func)(unsigned int, NBN_RPC_Param[NBN_RPC_MAX_PARAM_COUNT], NBN_Connection *sender);
+
+typedef struct
+{
+    unsigned int id;
+    NBN_RPC_Signature signature;
+    NBN_RPC_Func func;
+} NBN_RPC;
+
+#pragma endregion /* RPC */
+
 #pragma region NBN_Packet
 
 /*  
  * Maximum allowed packet size (including header) in bytes.
- * 1024 is an arbitrary value chosen to be below the MTU in order to avoid packet fragmentation.
+ * The 1400 value has been chosen based on this statement:
+ * 
+ * With the IPv4 header being 20 bytes and the UDP header being 8 bytes, the payload
+ * of a UDP packet should be no larger than 1500 - 20 - 8 = 1472 bytes to avoid fragmentation.
  */
-#define NBN_PACKET_MAX_SIZE 1024
+#define NBN_PACKET_MAX_SIZE 1400
 #define NBN_MAX_MESSAGES_PER_PACKET 255 /* Maximum value of uint8_t, see packet header */
 
 #define NBN_PACKET_HEADER_SIZE sizeof(NBN_PacketHeader)
@@ -643,9 +706,9 @@ void *NBN_DisconnectionMessage_Create(void);
 void NBN_DisconnectionMessage_Destroy(void *);
 int NBN_DisconnectionMessage_Serialize(void *, NBN_Stream *);
 
-#pragma endregion /* NBN_DisconnectMessage */
+#pragma endregion /* NBN_DisconnectionMessage */
 
-#pragma region NBN_PublicCryptoInfoMessage
+#pragma region NBN_ConnectionRequestMessage
 
 #define NBN_CONNECTION_REQUEST_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 8) /* Reserved message type */
 
@@ -658,7 +721,24 @@ NBN_ConnectionRequestMessage *NBN_ConnectionRequestMessage_Create(void);
 void NBN_ConnectionRequestMessage_Destroy(NBN_ConnectionRequestMessage *);
 int NBN_ConnectionRequestMessage_Serialize(NBN_ConnectionRequestMessage *, NBN_Stream *);
 
-#pragma endregion /* NBN_PublicCryptoInfoMessage */
+#pragma endregion /* NBN_ConnectionRequestMessage */
+
+#pragma region NBN_RPC_Message
+
+#define NBN_RPC_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 9) /* Reserved message type */
+
+typedef struct
+{
+    unsigned int id;
+    unsigned int param_count;
+    NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT];
+} NBN_RPC_Message;
+
+void *NBN_RPC_Message_Create(void);
+void NBN_RPC_Message_Destroy(NBN_RPC_Message *);
+int NBN_RPC_Message_Serialize(NBN_RPC_Message *, NBN_Stream *);
+
+#pragma endregion /* NBN_RPC_Message */
 
 #pragma region NBN_Channel
 
@@ -1011,7 +1091,8 @@ void NBN_PacketSimulator_AddTime(NBN_PacketSimulator *, double);
 #define NBN_IsReservedMessage(type) (type == NBN_MESSAGE_CHUNK_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE \
 || type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || type == NBN_BYTE_ARRAY_MESSAGE_TYPE \
 || type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE || type == NBN_START_ENCRYPT_MESSAGE_TYPE \
-|| type == NBN_DISCONNECTION_MESSAGE_TYPE || type == NBN_CONNECTION_REQUEST_MESSAGE_TYPE)
+|| type == NBN_DISCONNECTION_MESSAGE_TYPE || type == NBN_CONNECTION_REQUEST_MESSAGE_TYPE \
+|| type == NBN_RPC_MESSAGE_TYPE)
 
 struct __NBN_Endpoint
 {
@@ -1022,6 +1103,7 @@ struct __NBN_Endpoint
     NBN_MessageSerializer message_serializers[NBN_MAX_MESSAGE_TYPES];
     NBN_OutgoingMessage outgoing_message_buffer[NBN_ENDPOINT_OUTGOING_MESSAGE_BUFFER_SIZE];
     NBN_EventQueue event_queue;
+    NBN_RPC rpcs[NBN_RPC_MAX];
     bool is_server;
     unsigned int next_outgoing_message;
 
@@ -1042,6 +1124,7 @@ void NBN_Endpoint_RegisterMessageDestructor(NBN_Endpoint *, NBN_MessageDestructo
 void NBN_Endpoint_RegisterMessageSerializer(NBN_Endpoint *, NBN_MessageSerializer, uint8_t);
 void NBN_Endpoint_RegisterChannel(NBN_Endpoint *, NBN_ChannelType, uint8_t);
 NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *, uint32_t, void *);
+int NBN_Endpoint_RegisterRPC(NBN_Endpoint *, int id, NBN_RPC_Signature, NBN_RPC_Func);
 
 #pragma endregion /* NBN_Endpoint */
 
@@ -1257,6 +1340,26 @@ bool NBN_GameClient_IsConnected(void);
  * @return true if packet encryption is enabled, false otherwise
  */
 bool NBN_GameClient_IsEncryptionEnabled(void);
+
+/**
+ * Register a new RPC on the game client.
+ * 
+ * The same RPC must be register on both the game server and the game clients.
+ * 
+ * @param id User defined RPC ID, must be an integer between 0 and NBN_RPC_MAX
+ * @param signature The RPC signature
+ * @param func The function to call on the callee end (NULL on the caller end)
+ * 
+ * @return true if packet encryption is enabled, false otherwise
+ */
+int NBN_GameClient_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func func);
+
+/**
+ * Call a previously registered RPC on the game server.
+ * 
+ * @param id The ID of the RPC to execute on the game server (must be a registered ID)
+ */
+int NBN_GameClient_CallRPC(unsigned int id, ...);
 
 #ifdef NBN_DEBUG
 
@@ -1565,6 +1668,27 @@ NBN_GameServerStats NBN_GameServer_GetStats(void);
  * @return true if packet encryption is enabled, false otherwise
  */
 bool NBN_GameServer_IsEncryptionEnabled(void);
+
+/**
+ * Register a new RPC on the game server.
+ * 
+ * The same RPC must be register on both the game server and the game clients.
+ * 
+ * @param id User defined RPC ID, must be an integer between 0 and NBN_RPC_MAX
+ * @param signature The RPC signature
+ * @param func The function to call on the callee end (NULL on the caller end)
+ * 
+ * @return true if packet encryption is enabled, false otherwise
+ */
+int NBN_GameServer_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func func);
+
+/**
+ * Call a previously registered RPC on a given client.
+ * 
+ * @param id The ID of the RPC to execute (must be a registered ID)
+ * @param client Client connection to execute the RPC on
+ */
+int NBN_GameServer_CallRPC(unsigned int id, NBN_Connection *client, ...);
 
 #ifdef NBN_DEBUG
 
@@ -2802,7 +2926,7 @@ int NBN_StartEncryptMessage_Serialize(void *msg, NBN_Stream *stream)
 
 #pragma endregion /* NBN_StartEncryptMessage */
 
-#pragma region NBN_DisconnectMessage
+#pragma region NBN_DisconnectionMessage
 
 void *NBN_DisconnectionMessage_Create(void)
 {
@@ -2822,7 +2946,7 @@ int NBN_DisconnectionMessage_Serialize(void *msg, NBN_Stream *stream)
     return 0;
 }
 
-#pragma endregion /* NBN_DisconnectMessage */
+#pragma endregion /* NBN_DisconnectionMessage */
 
 #pragma region NBN_ConnectionRequestMessage
 
@@ -2845,7 +2969,68 @@ int NBN_ConnectionRequestMessage_Serialize(NBN_ConnectionRequestMessage *msg, NB
 
 #pragma endregion /* NBN_ConnectionRequestMessage */
 
+#pragma region NBN_RPC_Message
+
+void *NBN_RPC_Message_Create(void)
+{
+    return (NBN_RPC_Message *)NBN_Allocator(sizeof(NBN_RPC_Message));
+}
+
+void NBN_RPC_Message_Destroy(NBN_RPC_Message *msg)
+{
+    NBN_Deallocator(msg);
+}
+
+int NBN_RPC_Message_Serialize(NBN_RPC_Message *msg, NBN_Stream *stream)
+{
+    NBN_SerializeUInt(stream, msg->id, 0, NBN_RPC_MAX);
+    NBN_SerializeUInt(stream, msg->param_count, 0, NBN_RPC_MAX_PARAM_COUNT);
+
+    for (unsigned int i = 0; i < msg->param_count; i++)
+    {
+        NBN_RPC_Param *p = &msg->params[i];
+
+        NBN_SerializeUInt(stream, p->type, 0, 8);
+
+        if (p->type == NBN_RPC_PARAM_INT)
+        {
+            NBN_SerializeBytes(stream, &p->value.i, sizeof(int));
+        }
+        else if (p->type == NBN_RPC_PARAM_FLOAT)
+        {
+            NBN_SerializeBytes(stream, &p->value.f, sizeof(float));
+        }
+        else if (p->type == NBN_RPC_PARAM_BOOL)
+        {
+            NBN_SerializeBytes(stream, &p->value.b, sizeof(bool));
+        }
+        else if (p->type == NBN_RPC_PARAM_STRING)
+        {
+            int length = 0;
+
+            if (stream->type == NBN_STREAM_WRITE || stream->type == NBN_STREAM_MEASURE)
+            {
+                int l = strnlen(p->value.s, NBN_RPC_STRING_MAX_LENGTH);
+
+                assert(l + 1 <= NBN_RPC_STRING_MAX_LENGTH); // make sure we have a spot for the terminating byte
+                assert(l > 0);
+
+                length = l + 1;
+            }
+
+            NBN_SerializeUInt(stream, length, 0, NBN_RPC_STRING_MAX_LENGTH);
+            NBN_SerializeString(stream, p->value.s, length);
+        }
+    }
+
+    return 0;
+}
+
+#pragma endregion /* NBN_RPC_Message */
+
 #pragma region NBN_Connection
+
+static NBN_OutgoingMessage *Endpoint_CreateOutgoingMessage(NBN_Endpoint *, uint8_t, void *);
 
 static uint32_t Connection_BuildPacketAckBits(NBN_Connection *);
 static int Connection_DecodePacketHeader(NBN_Connection *, NBN_Packet *);
@@ -2863,6 +3048,8 @@ static void Connection_UpdateAveragePing(NBN_Connection *, double);
 static void Connection_UpdateAveragePacketLoss(NBN_Connection *, uint16_t);
 static void Connection_UpdateAverageUploadBandwidth(NBN_Connection *, float);
 static void Connection_UpdateAverageDownloadBandwidth(NBN_Connection *);
+NBN_OutgoingMessage *Connection_BuildRPC(NBN_Connection *, NBN_Endpoint *, NBN_RPC *, va_list);
+void Connection_HandleReceivedRPC(NBN_Connection *, NBN_Endpoint *, NBN_RPC_Message *);
 
 /* Encryption related functions */
 
@@ -2993,7 +3180,10 @@ int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet 
         {
             NBN_LogTrace("Received message %d : discarded", message.header.id);
 
-            Connection_RecycleMessage(connection, &message);
+            if (Connection_RecycleMessage(connection, &message) == NBN_ERROR)
+            {
+                NBN_LogWarning("Failed to recycle message");
+            }
         }
     }
 
@@ -3102,7 +3292,12 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
                 packet_entry->messages[packet_entry->messages_count++] = e;
 
                 if (channel->type == NBN_CHANNEL_TYPE_UNRELIABLE_ORDERED)
-                    Connection_RecycleMessage(connection, message);
+                {
+                    if (Connection_RecycleMessage(connection, message) == NBN_ERROR)
+                    {
+                        NBN_LogWarning("Failed to recycle message");
+                    }
+                }
             }
 
             i++;
@@ -3441,7 +3636,14 @@ static int Connection_ReadNextMessageFromPacket(NBN_Connection *connection, NBN_
 
 static int Connection_RecycleMessage(NBN_Connection *connection, NBN_Message *message)
 {
-    assert(message->outgoing_msg == NULL || message->outgoing_msg->ref_count > 0);
+    if (message->outgoing_msg && message->outgoing_msg->ref_count == 0)
+    {
+        NBN_LogWarning("Tried to recycle an already recycled message");
+
+        return -1;
+    }
+
+    // assert(message->outgoing_msg == NULL || message->outgoing_msg->ref_count > 0);
 
     if (message->outgoing_msg == NULL || --message->outgoing_msg->ref_count == 0)
     {
@@ -3530,6 +3732,78 @@ static void Connection_UpdateAverageDownloadBandwidth(NBN_Connection *connection
     connection->downloaded_bytes = 0;
 }
 
+NBN_OutgoingMessage *Connection_BuildRPC(NBN_Connection *connection, NBN_Endpoint *endpoint, NBN_RPC *rpc, va_list args)
+{
+    NBN_RPC_Message *msg = NBN_RPC_Message_Create();
+
+    assert(msg != NULL);
+
+    msg->id = rpc->id;
+    msg->param_count = rpc->signature.param_count;
+
+    for (unsigned int i = 0; i < rpc->signature.param_count; i++)
+    {
+        NBN_RPC_ParamType param_type = rpc->signature.params[i];
+
+        msg->params[i].type = param_type;
+
+        if (param_type == NBN_RPC_PARAM_INT)
+        {
+            msg->params[i].value.i = va_arg(args, int);
+        }
+        else if (param_type == NBN_RPC_PARAM_FLOAT)
+        {
+            msg->params[i].value.f = va_arg(args, double);
+        }
+        else if (param_type == NBN_RPC_PARAM_BOOL)
+        {
+            msg->params[i].value.b = va_arg(args, int);
+        }
+        else if (param_type == NBN_RPC_PARAM_STRING)
+        {
+            char *str = va_arg(args, char *);
+
+            strncpy(msg->params[i].value.s, str, NBN_RPC_STRING_MAX_LENGTH);
+        }
+        else
+        {
+            NBN_LogError("Calling RPC %d with invalid parameters on connection %d", rpc->id, connection->id);
+
+            return NULL;
+        }
+    }
+
+    return Endpoint_CreateOutgoingMessage(endpoint, NBN_RPC_MESSAGE_TYPE, msg);
+}
+
+void Connection_HandleReceivedRPC(NBN_Connection *connection, NBN_Endpoint *endpoint, NBN_RPC_Message *msg)
+{
+    if (msg->id < 0 || msg->id > NBN_RPC_MAX - 1)
+    {
+        NBN_LogError("Received an invalid RPC");
+
+        return;
+    }
+
+    NBN_RPC *rpc = &endpoint->rpcs[msg->id];
+
+    if (rpc->id != msg->id)
+    {
+        NBN_LogError("Received an invalid RPC");
+
+        return;
+    }
+
+    if (!rpc->func)
+    {
+        NBN_LogError("Received RPC does not have an attached function");
+
+        return;
+    }
+
+    rpc->func(msg->param_count, msg->params, connection);
+}
+
 static int Connection_GenerateKeys(NBN_Connection *connection)
 {
     CSPRNG prng = csprng_create();
@@ -3582,7 +3856,7 @@ static int Connection_BuildSharedKey(NBN_ConnectionKeySet *key_set, uint8_t *pub
 static void Connection_StartEncryption(NBN_Connection *connection)
 {
     connection->can_encrypt = true;
-    
+
     NBN_LogDebug("Encryption started for connection %d", connection->id);
 }
 
@@ -3597,12 +3871,22 @@ void NBN_Channel_Destroy(NBN_Channel *channel)
         NBN_MessageSlot *slot = &channel->recved_message_slot_buffer[i];
 
         if (!slot->free)
-            Connection_RecycleMessage(channel->connection, &slot->message);
+        {
+            if (Connection_RecycleMessage(channel->connection, &slot->message) == NBN_ERROR)
+            {
+                NBN_LogWarning("Failed to recycle message");
+            }
+        }
 
         slot = &channel->outgoing_message_slot_buffer[i];
 
         if (!slot->free)
-            Connection_RecycleMessage(channel->connection, &slot->message);
+        {
+            if (Connection_RecycleMessage(channel->connection, &slot->message) == NBN_ERROR)
+            {
+                NBN_LogWarning("Failed to recycle message");
+            }
+        }
     }
 
     NBN_Deallocator(channel);
@@ -3617,10 +3901,10 @@ bool NBN_Channel_AddChunk(NBN_Channel *channel, NBN_Message *chunk_msg)
 {
     assert(chunk_msg->header.type == NBN_MESSAGE_CHUNK_TYPE);
 
-    NBN_MessageChunk *chunk = (NBN_MessageChunk*)chunk_msg->data;
+    NBN_MessageChunk *chunk = (NBN_MessageChunk *)chunk_msg->data;
 
     NBN_LogTrace("Add chunk %d to channel %d (current chunk count: %d, last recved chunk id: %d)",
-            chunk->id, channel->id, channel->chunk_count, channel->last_received_chunk_id);
+                 chunk->id, channel->id, channel->chunk_count, channel->last_received_chunk_id);
 
     if (chunk->id == channel->last_received_chunk_id + 1)
     {
@@ -3666,7 +3950,7 @@ bool NBN_Channel_AddChunk(NBN_Channel *channel, NBN_Message *chunk_msg)
 }
 
 int NBN_Channel_ReconstructMessageFromChunks(
-        NBN_Channel *channel, NBN_Connection *connection, NBN_Message *message)
+    NBN_Channel *channel, NBN_Connection *connection, NBN_Message *message)
 {
     unsigned int message_size = channel->chunk_count * NBN_MESSAGE_CHUNK_SIZE;
 
@@ -3674,7 +3958,7 @@ int NBN_Channel_ReconstructMessageFromChunks(
         NBN_Channel_ResizeReadChunkBuffer(channel, message_size);
 
     NBN_LogTrace("Reconstructing message (chunk count: %d, size: %d) from channel %d",
-            channel->chunk_count, message_size, channel->id);
+                 channel->chunk_count, message_size, channel->id);
 
     for (unsigned int i = 0; i < channel->chunk_count; i++)
     {
@@ -3703,14 +3987,14 @@ int NBN_Channel_ReconstructMessageFromChunks(
 
 void NBN_Channel_ResizeWriteChunkBuffer(NBN_Channel *channel, unsigned int size)
 {
-    channel->write_chunk_buffer = (uint8_t*)NBN_Reallocator(channel->write_chunk_buffer, size);
+    channel->write_chunk_buffer = (uint8_t *)NBN_Reallocator(channel->write_chunk_buffer, size);
 
     channel->write_chunk_buffer_size = size;
 }
 
 void NBN_Channel_ResizeReadChunkBuffer(NBN_Channel *channel, unsigned int size)
 {
-    channel->read_chunk_buffer = (uint8_t*)NBN_Reallocator(channel->read_chunk_buffer, size);
+    channel->read_chunk_buffer = (uint8_t *)NBN_Reallocator(channel->read_chunk_buffer, size);
 
     channel->read_chunk_buffer_size = size;
 }
@@ -3733,7 +4017,7 @@ static NBN_Message *UnreliableOrderedChannel_GetNextOutgoingMessage(NBN_Channel 
 
 NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(void)
 {
-    NBN_UnreliableOrderedChannel *channel = (NBN_UnreliableOrderedChannel*)NBN_Allocator(sizeof(NBN_UnreliableOrderedChannel));
+    NBN_UnreliableOrderedChannel *channel = (NBN_UnreliableOrderedChannel *)NBN_Allocator(sizeof(NBN_UnreliableOrderedChannel));
 
     channel->base.AddReceivedMessage = UnreliableOrderedChannel_AddReceivedMessage;
     channel->base.AddOutgoingMessage = UnreliableOrderedChannel_AddOutgoingMessage;
@@ -3749,7 +4033,7 @@ NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(void)
 
 static bool UnreliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, NBN_Message *message)
 {
-    NBN_UnreliableOrderedChannel *unreliable_ordered_channel = (NBN_UnreliableOrderedChannel *)channel; 
+    NBN_UnreliableOrderedChannel *unreliable_ordered_channel = (NBN_UnreliableOrderedChannel *)channel;
 
     if (SEQUENCE_NUMBER_GT(message->header.id, unreliable_ordered_channel->last_received_message_id))
     {
@@ -3831,7 +4115,7 @@ static int ReliableOrderedChannel_OnOutgoingMessageAcked(NBN_Channel *, uint16_t
 
 NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(void)
 {
-    NBN_ReliableOrderedChannel *channel = (NBN_ReliableOrderedChannel*)NBN_Allocator(sizeof(NBN_ReliableOrderedChannel));
+    NBN_ReliableOrderedChannel *channel = (NBN_ReliableOrderedChannel *)NBN_Allocator(sizeof(NBN_ReliableOrderedChannel));
 
     channel->base.AddReceivedMessage = ReliableOrderedChannel_AddReceivedMessage;
     channel->base.AddOutgoingMessage = ReliableOrderedChannel_AddOutgoingMessage;
@@ -3865,7 +4149,7 @@ static bool ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, NBN_
         message->header.id, reliable_ordered_channel->most_recent_message_id);
 
     NBN_LogTrace("Add recved message %d of type %d to channel %d (most recent msg id: %d, dt: %d)",
-            message->header.id, message->header.type, channel->id, reliable_ordered_channel->most_recent_message_id, dt);
+                 message->header.id, message->header.type, channel->id, reliable_ordered_channel->most_recent_message_id, dt);
 
     if (SEQUENCE_NUMBER_GT(message->header.id, reliable_ordered_channel->most_recent_message_id))
     {
@@ -3881,10 +4165,15 @@ static bool ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, NBN_
             return false;
     }
 
-    NBN_MessageSlot *slot = &channel->recved_message_slot_buffer[message->header.id % NBN_CHANNEL_BUFFER_SIZE]; 
+    NBN_MessageSlot *slot = &channel->recved_message_slot_buffer[message->header.id % NBN_CHANNEL_BUFFER_SIZE];
 
     if (!slot->free)
-        Connection_RecycleMessage(channel->connection, &slot->message);
+    {
+        if (Connection_RecycleMessage(channel->connection, &slot->message) == NBN_ERROR)
+        {
+            NBN_LogWarning("Failed to recycle message");
+        }
+    }
 
     memcpy(&slot->message, message, sizeof(NBN_Message));
 
@@ -3902,7 +4191,7 @@ static bool ReliableOrderedChannel_AddOutgoingMessage(NBN_Channel *channel, NBN_
     if (!slot->free)
     {
         NBN_LogTrace("Slot %d is not free on channel %d (slot msg id: %d, outgoing message count: %d)",
-                index, channel->id, slot->message.header.id, channel->outgoing_message_count);
+                     index, channel->id, slot->message.header.id, channel->outgoing_message_count);
 
         return false;
     }
@@ -3917,7 +4206,7 @@ static bool ReliableOrderedChannel_AddOutgoingMessage(NBN_Channel *channel, NBN_
     channel->outgoing_message_count++;
 
     NBN_LogTrace("Added outgoing message %d of type %d to channel %d (index: %d)",
-            slot->message.header.id, slot->message.header.type, channel->id, index);
+                 slot->message.header.id, slot->message.header.type, channel->id, index);
 
     return true;
 }
@@ -3953,9 +4242,8 @@ static NBN_Message *ReliableOrderedChannel_GetNextOutgoingMessage(NBN_Channel *c
         NBN_MessageSlot *slot = &channel->outgoing_message_slot_buffer[msg_id % NBN_CHANNEL_BUFFER_SIZE];
 
         if (
-                !slot->free &&
-                (slot->last_send_time < 0 || channel->time - slot->last_send_time >= NBN_MESSAGE_RESEND_DELAY)
-           )
+            !slot->free &&
+            (slot->last_send_time < 0 || channel->time - slot->last_send_time >= NBN_MESSAGE_RESEND_DELAY))
         {
             return &slot->message;
         }
@@ -3977,7 +4265,7 @@ static int ReliableOrderedChannel_OnOutgoingMessageAcked(NBN_Channel *channel, u
     slot->free = true;
 
     NBN_LogTrace("Message %d acked on channel %d (buffer index: %d, oldest unacked: %d)",
-        msg_id, channel->id, msg_id % NBN_CHANNEL_BUFFER_SIZE, reliable_ordered_channel->oldest_unacked_message_id);
+                 msg_id, channel->id, msg_id % NBN_CHANNEL_BUFFER_SIZE, reliable_ordered_channel->oldest_unacked_message_id);
 
     reliable_ordered_channel->ack_buffer[msg_id % NBN_CHANNEL_BUFFER_SIZE] = true;
     channel->outgoing_message_count--;
@@ -4001,7 +4289,7 @@ static int ReliableOrderedChannel_OnOutgoingMessageAcked(NBN_Channel *channel, u
         }
 
         NBN_LogTrace("Updated oldest unacked message id on channel %d: %d",
-                channel->id, reliable_ordered_channel->oldest_unacked_message_id);
+                     channel->id, reliable_ordered_channel->oldest_unacked_message_id);
     }
 
     return Connection_RecycleMessage(channel->connection, &slot->message);
@@ -4054,10 +4342,9 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *event_queue)
 
 static uint32_t Endpoint_BuildProtocolId(const char *);
 static int Endpoint_ProcessReceivedPacket(NBN_Endpoint *, NBN_Packet *, NBN_Connection *);
-static NBN_OutgoingMessage *Endpoint_CreateOutgoingMessage(NBN_Endpoint *, uint8_t, void *);
 static int Endpoint_EnqueueOutgoingMessage(NBN_Endpoint *, NBN_Connection *, NBN_OutgoingMessage *, uint8_t);
 static int Endpoint_SplitMessageIntoChunks(
-        NBN_Message *, NBN_OutgoingMessage *, NBN_Channel *, NBN_MessageSerializer, unsigned int, NBN_MessageChunk **);
+    NBN_Message *, NBN_OutgoingMessage *, NBN_Channel *, NBN_MessageSerializer, unsigned int, NBN_MessageChunk **);
 
 void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server)
 {
@@ -4077,6 +4364,9 @@ void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server
         endpoint->message_serializers[i] = NULL;
     }
 
+    for (int i = 0; i < NBN_RPC_MAX; i++)
+        endpoint->rpcs[i] = (NBN_RPC){.id = -1};
+
     NBN_EventQueue_Init(&endpoint->event_queue);
 
     /* Register library reserved channels */
@@ -4086,67 +4376,75 @@ void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server
 
     /* Register NBN_MessageChunk library message */
     NBN_Endpoint_RegisterMessageBuilder(
-            endpoint, (NBN_MessageBuilder)NBN_MessageChunk_Create, NBN_MESSAGE_CHUNK_TYPE);
+        endpoint, (NBN_MessageBuilder)NBN_MessageChunk_Create, NBN_MESSAGE_CHUNK_TYPE);
     NBN_Endpoint_RegisterMessageSerializer(
-            endpoint, (NBN_MessageSerializer)NBN_MessageChunk_Serialize, NBN_MESSAGE_CHUNK_TYPE);
+        endpoint, (NBN_MessageSerializer)NBN_MessageChunk_Serialize, NBN_MESSAGE_CHUNK_TYPE);
     NBN_Endpoint_RegisterMessageDestructor(
-            endpoint, (NBN_MessageDestructor)NBN_MessageChunk_Destroy, NBN_MESSAGE_CHUNK_TYPE);
+        endpoint, (NBN_MessageDestructor)NBN_MessageChunk_Destroy, NBN_MESSAGE_CHUNK_TYPE);
 
     /* Register NBN_ClientClosedMessage library message */
     NBN_Endpoint_RegisterMessageBuilder(
-            endpoint, (NBN_MessageBuilder)NBN_ClientClosedMessage_Create, NBN_CLIENT_CLOSED_MESSAGE_TYPE);
+        endpoint, (NBN_MessageBuilder)NBN_ClientClosedMessage_Create, NBN_CLIENT_CLOSED_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageSerializer(
-            endpoint, (NBN_MessageSerializer)NBN_ClientClosedMessage_Serialize, NBN_CLIENT_CLOSED_MESSAGE_TYPE);
+        endpoint, (NBN_MessageSerializer)NBN_ClientClosedMessage_Serialize, NBN_CLIENT_CLOSED_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageDestructor(
-            endpoint, (NBN_MessageDestructor)NBN_ClientClosedMessage_Destroy, NBN_CLIENT_CLOSED_MESSAGE_TYPE);
+        endpoint, (NBN_MessageDestructor)NBN_ClientClosedMessage_Destroy, NBN_CLIENT_CLOSED_MESSAGE_TYPE);
 
     /* Register NBN_ClientAcceptedMessage library message */
     NBN_Endpoint_RegisterMessageBuilder(
-            endpoint, (NBN_MessageBuilder)NBN_ClientAcceptedMessage_Create, NBN_CLIENT_ACCEPTED_MESSAGE_TYPE);
+        endpoint, (NBN_MessageBuilder)NBN_ClientAcceptedMessage_Create, NBN_CLIENT_ACCEPTED_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageSerializer(
-            endpoint, (NBN_MessageSerializer)NBN_ClientAcceptedMessage_Serialize, NBN_CLIENT_ACCEPTED_MESSAGE_TYPE);
+        endpoint, (NBN_MessageSerializer)NBN_ClientAcceptedMessage_Serialize, NBN_CLIENT_ACCEPTED_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageDestructor(
-            endpoint, (NBN_MessageDestructor)NBN_ClientAcceptedMessage_Destroy, NBN_CLIENT_ACCEPTED_MESSAGE_TYPE);
+        endpoint, (NBN_MessageDestructor)NBN_ClientAcceptedMessage_Destroy, NBN_CLIENT_ACCEPTED_MESSAGE_TYPE);
 
     /* Register NBN_ByteArrayMessage library message */
     NBN_Endpoint_RegisterMessageBuilder(
-            endpoint, (NBN_MessageBuilder)NBN_ByteArrayMessage_Create, NBN_BYTE_ARRAY_MESSAGE_TYPE);
+        endpoint, (NBN_MessageBuilder)NBN_ByteArrayMessage_Create, NBN_BYTE_ARRAY_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageSerializer(
-            endpoint, (NBN_MessageSerializer)NBN_ByteArrayMessage_Serialize, NBN_BYTE_ARRAY_MESSAGE_TYPE);
+        endpoint, (NBN_MessageSerializer)NBN_ByteArrayMessage_Serialize, NBN_BYTE_ARRAY_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageDestructor(
-            endpoint, (NBN_MessageDestructor)NBN_ByteArrayMessage_Destroy, NBN_BYTE_ARRAY_MESSAGE_TYPE);
+        endpoint, (NBN_MessageDestructor)NBN_ByteArrayMessage_Destroy, NBN_BYTE_ARRAY_MESSAGE_TYPE);
 
     /* Register NBN_PublicCryptoInfoMessage library message */
     NBN_Endpoint_RegisterMessageBuilder(
-            endpoint, (NBN_MessageBuilder)NBN_PublicCryptoInfoMessage_Create, NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE);
+        endpoint, (NBN_MessageBuilder)NBN_PublicCryptoInfoMessage_Create, NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageSerializer(
-            endpoint, (NBN_MessageSerializer)NBN_PublicCryptoInfoMessage_Serialize, NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE);
+        endpoint, (NBN_MessageSerializer)NBN_PublicCryptoInfoMessage_Serialize, NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageDestructor(
-            endpoint, (NBN_MessageDestructor)NBN_PublicCryptoInfoMessage_Destroy, NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE);
+        endpoint, (NBN_MessageDestructor)NBN_PublicCryptoInfoMessage_Destroy, NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE);
 
     /* Register NBN_StartEncryptMessage library message */
     NBN_Endpoint_RegisterMessageBuilder(
-            endpoint, (NBN_MessageBuilder)NBN_StartEncryptMessage_Create, NBN_START_ENCRYPT_MESSAGE_TYPE);
+        endpoint, (NBN_MessageBuilder)NBN_StartEncryptMessage_Create, NBN_START_ENCRYPT_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageSerializer(
-            endpoint, (NBN_MessageSerializer)NBN_StartEncryptMessage_Serialize, NBN_START_ENCRYPT_MESSAGE_TYPE);
+        endpoint, (NBN_MessageSerializer)NBN_StartEncryptMessage_Serialize, NBN_START_ENCRYPT_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageDestructor(
-            endpoint, (NBN_MessageDestructor)NBN_StartEncryptMessage_Destroy, NBN_START_ENCRYPT_MESSAGE_TYPE);
+        endpoint, (NBN_MessageDestructor)NBN_StartEncryptMessage_Destroy, NBN_START_ENCRYPT_MESSAGE_TYPE);
 
     /* Register NBN_DisconnectionMessage library message */
     NBN_Endpoint_RegisterMessageBuilder(
-            endpoint, (NBN_MessageBuilder)NBN_DisconnectionMessage_Create, NBN_DISCONNECTION_MESSAGE_TYPE);
+        endpoint, (NBN_MessageBuilder)NBN_DisconnectionMessage_Create, NBN_DISCONNECTION_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageSerializer(
-            endpoint, (NBN_MessageSerializer)NBN_DisconnectionMessage_Serialize, NBN_DISCONNECTION_MESSAGE_TYPE);
+        endpoint, (NBN_MessageSerializer)NBN_DisconnectionMessage_Serialize, NBN_DISCONNECTION_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageDestructor(
-            endpoint, (NBN_MessageDestructor)NBN_DisconnectionMessage_Destroy, NBN_DISCONNECTION_MESSAGE_TYPE);
+        endpoint, (NBN_MessageDestructor)NBN_DisconnectionMessage_Destroy, NBN_DISCONNECTION_MESSAGE_TYPE);
 
     /* Register NBN_ConnectionRequestMessage library message */
     NBN_Endpoint_RegisterMessageBuilder(
-            endpoint, (NBN_MessageBuilder)NBN_ConnectionRequestMessage_Create, NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
+        endpoint, (NBN_MessageBuilder)NBN_ConnectionRequestMessage_Create, NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageSerializer(
-            endpoint, (NBN_MessageSerializer)NBN_ConnectionRequestMessage_Serialize, NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
+        endpoint, (NBN_MessageSerializer)NBN_ConnectionRequestMessage_Serialize, NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
     NBN_Endpoint_RegisterMessageDestructor(
-            endpoint, (NBN_MessageDestructor)NBN_ConnectionRequestMessage_Destroy, NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
+        endpoint, (NBN_MessageDestructor)NBN_ConnectionRequestMessage_Destroy, NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
+
+    /* Register NBN_RPC_Message library message */
+    NBN_Endpoint_RegisterMessageBuilder(
+        endpoint, (NBN_MessageBuilder)NBN_RPC_Message_Create, NBN_RPC_MESSAGE_TYPE);
+    NBN_Endpoint_RegisterMessageSerializer(
+        endpoint, (NBN_MessageSerializer)NBN_RPC_Message_Serialize, NBN_RPC_MESSAGE_TYPE);
+    NBN_Endpoint_RegisterMessageDestructor(
+        endpoint, (NBN_MessageDestructor)NBN_RPC_Message_Destroy, NBN_RPC_MESSAGE_TYPE);
 
 #ifdef NBN_DEBUG
     endpoint->OnMessageAddedToRecvQueue = NULL;
@@ -4178,7 +4476,7 @@ void NBN_Endpoint_RegisterMessageDestructor(NBN_Endpoint *endpoint, NBN_MessageD
 }
 
 void NBN_Endpoint_RegisterMessageSerializer(
-        NBN_Endpoint *endpoint, NBN_MessageSerializer msg_serializer, uint8_t msg_type)
+    NBN_Endpoint *endpoint, NBN_MessageSerializer msg_serializer, uint8_t msg_type)
 {
     endpoint->message_serializers[msg_type] = msg_serializer;
 }
@@ -4193,7 +4491,7 @@ void NBN_Endpoint_RegisterChannel(NBN_Endpoint *endpoint, NBN_ChannelType type, 
 NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_t id, void *driver_data)
 {
     NBN_Connection *connection = NBN_Connection_Create(
-            id, Endpoint_BuildProtocolId(endpoint->config.protocol_name), endpoint, driver_data);
+        id, Endpoint_BuildProtocolId(endpoint->config.protocol_name), endpoint, driver_data);
 
     for (int chan_id = 0; chan_id < NBN_MAX_CHANNELS; chan_id++)
     {
@@ -4204,6 +4502,29 @@ NBN_Connection *NBN_Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_t i
     }
 
     return connection;
+}
+
+int NBN_Endpoint_RegisterRPC(NBN_Endpoint *endpoint, int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
+{
+    if (id < 0 || id >= NBN_RPC_MAX)
+    {
+        NBN_LogError("Failed to register RPC, invalid ID");
+
+        return NBN_ERROR;
+    }
+
+    if (signature.param_count > NBN_RPC_MAX_PARAM_COUNT)
+    {
+        NBN_LogError("Failed to register RPC %d, too many parameters");
+
+        return NBN_ERROR;
+    }
+
+    endpoint->rpcs[id] = (NBN_RPC){.id = id, .signature = signature, .func = func};
+
+    NBN_LogDebug("Registered RPC (id: %d, parameter count: %d)", id, signature.param_count);
+
+    return 0;
 }
 
 static uint32_t Endpoint_BuildProtocolId(const char *protocol_name)
@@ -4224,7 +4545,7 @@ static int Endpoint_ProcessReceivedPacket(NBN_Endpoint *endpoint, NBN_Packet *pa
     (void)endpoint;
 
     NBN_LogTrace("Received packet %d (conn id: %d, ack: %d, messages count: %d)", packet->header.seq_number,
-            connection->id, packet->header.ack, packet->header.messages_count);
+                 connection->id, packet->header.ack, packet->header.messages_count);
 
     if (NBN_Connection_ProcessReceivedPacket(connection, packet) < 0)
         return NBN_ERROR;
@@ -4256,7 +4577,7 @@ static NBN_OutgoingMessage *Endpoint_CreateOutgoingMessage(NBN_Endpoint *endpoin
 }
 
 static int Endpoint_EnqueueOutgoingMessage(
-        NBN_Endpoint *endpoint, NBN_Connection *connection, NBN_OutgoingMessage *outgoing_msg, uint8_t channel_id)
+    NBN_Endpoint *endpoint, NBN_Connection *connection, NBN_OutgoingMessage *outgoing_msg, uint8_t channel_id)
 {
     NBN_Channel *channel = connection->channels[channel_id];
 
@@ -4269,14 +4590,13 @@ static int Endpoint_EnqueueOutgoingMessage(
 
     NBN_MessageSerializer msg_serializer = endpoint->message_serializers[outgoing_msg->type];
 
-    assert(msg_serializer); 
+    assert(msg_serializer);
 
     NBN_Message message = {
-        { 0, outgoing_msg->type, channel_id },
+        {0, outgoing_msg->type, channel_id},
         NULL,
         outgoing_msg,
-        outgoing_msg->data
-    };
+        outgoing_msg->data};
 
     NBN_MeasureStream m_stream;
 
@@ -4288,7 +4608,7 @@ static int Endpoint_EnqueueOutgoingMessage(
     {
         NBN_MessageChunk *chunks[NBN_CHANNEL_CHUNKS_BUFFER_SIZE];
         int chunk_count = Endpoint_SplitMessageIntoChunks(
-                &message, outgoing_msg, channel, msg_serializer, message_size, chunks);
+            &message, outgoing_msg, channel, msg_serializer, message_size, chunks);
 
         assert(chunk_count <= NBN_CHANNEL_CHUNKS_BUFFER_SIZE);
 
@@ -4304,7 +4624,7 @@ static int Endpoint_EnqueueOutgoingMessage(
         for (int i = 0; i < chunk_count; i++)
         {
             NBN_OutgoingMessage *chunk_outgoing_msg = Endpoint_CreateOutgoingMessage(
-                    endpoint, NBN_MESSAGE_CHUNK_TYPE, chunks[i]);
+                endpoint, NBN_MESSAGE_CHUNK_TYPE, chunks[i]);
 
             if (chunk_outgoing_msg == NULL)
                 return NBN_ERROR;
@@ -4328,12 +4648,12 @@ static int Endpoint_EnqueueOutgoingMessage(
 }
 
 static int Endpoint_SplitMessageIntoChunks(
-        NBN_Message *message,
-        NBN_OutgoingMessage *outgoing_msg,
-        NBN_Channel *channel,
-        NBN_MessageSerializer msg_serializer,
-        unsigned int message_size,
-        NBN_MessageChunk **chunks)
+    NBN_Message *message,
+    NBN_OutgoingMessage *outgoing_msg,
+    NBN_Channel *channel,
+    NBN_MessageSerializer msg_serializer,
+    unsigned int message_size,
+    NBN_MessageChunk **chunks)
 {
     unsigned int chunk_count = ((message_size - 1) / NBN_MESSAGE_CHUNK_SIZE) + 1;
 
@@ -4368,14 +4688,14 @@ static int Endpoint_SplitMessageIntoChunks(
         chunk->outgoing_msg = outgoing_msg;
 
         unsigned int offset = i * NBN_MESSAGE_CHUNK_SIZE;
-        unsigned int chunk_size = MIN(NBN_MESSAGE_CHUNK_SIZE, message_size - offset); 
+        unsigned int chunk_size = MIN(NBN_MESSAGE_CHUNK_SIZE, message_size - offset);
 
         assert(chunk_size <= NBN_MESSAGE_CHUNK_SIZE);
 
         memcpy(chunk->data, channel->write_chunk_buffer + offset, chunk_size);
 
         NBN_LogTrace("Enqueue chunk %d (size: %d, total: %d) for message %d of type %d",
-                chunk->id, chunk_size, chunk->total, message->header.id, message->header.type);
+                     chunk->id, chunk_size, chunk->total, message->header.id, message->header.type);
 
         chunks[i] = chunk;
     }
@@ -4476,10 +4796,10 @@ void NBN_GameClient_Stop(void)
 }
 
 void NBN_GameClient_RegisterMessage(
-        uint8_t msg_type,
-        NBN_MessageBuilder msg_builder,
-        NBN_MessageDestructor msg_destructor,
-        NBN_MessageSerializer msg_serializer)
+    uint8_t msg_type,
+    NBN_MessageBuilder msg_builder,
+    NBN_MessageDestructor msg_destructor,
+    NBN_MessageSerializer msg_serializer)
 {
     if (NBN_IsReservedMessage(msg_type))
     {
@@ -4529,7 +4849,7 @@ int NBN_GameClient_Poll(void)
             NBN_Event e;
 
             e.type = NBN_DISCONNECTED;
-            e.data.connection = (NBN_Connection*)NULL;
+            e.data.connection = (NBN_Connection *)NULL;
 
             if (!NBN_EventQueue_Enqueue(&__game_client.endpoint.event_queue, e))
                 return NBN_ERROR;
@@ -4595,7 +4915,7 @@ NBN_OutgoingMessage *NBN_GameClient_CreateMessage(uint8_t msg_type, void *msg_da
 int NBN_GameClient_SendMessage(NBN_OutgoingMessage *outgoing_msg, uint8_t channel_id)
 {
     if (Endpoint_EnqueueOutgoingMessage(
-                &__game_client.endpoint, __game_client.server_connection, outgoing_msg, channel_id) < 0)
+            &__game_client.endpoint, __game_client.server_connection, outgoing_msg, channel_id) < 0)
     {
         NBN_LogError("Failed to create outgoing message");
 
@@ -4678,15 +4998,62 @@ bool NBN_GameClient_IsEncryptionEnabled(void)
     return __game_client.endpoint.config.is_encryption_enabled;
 }
 
+int NBN_GameClient_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
+{
+    return NBN_Endpoint_RegisterRPC(&__game_client.endpoint, id, signature, func);
+}
+
+int NBN_GameClient_CallRPC(unsigned int id, ...)
+{
+    NBN_RPC rpc = __game_client.endpoint.rpcs[id];
+
+    if (rpc.id < 0 || rpc.id != id)
+    {
+        NBN_LogError("Cannot call invalid RPC (ID: %d)", id);
+
+        return NBN_ERROR;
+    }
+
+    va_list args;
+
+    va_start(args, id);
+
+    NBN_OutgoingMessage *outgoing_msg = Connection_BuildRPC(
+        __game_client.server_connection, &__game_client.endpoint, &rpc, args);
+
+    if (!outgoing_msg)
+    {
+        NBN_LogError("Failed to build RPC outgoing message");
+
+        goto rpc_error;
+    }
+
+    if (NBN_GameClient_SendReliableMessage(outgoing_msg) < 0)
+    {
+        NBN_LogError("Failed to send RPC message");
+
+        goto rpc_error;
+    }
+
+    va_end(args);
+
+    return 0;
+
+rpc_error:
+    va_end(args);
+
+    return NBN_ERROR;
+}
+
 #ifdef NBN_DEBUG
 
 void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, void *cb)
 {
     switch (cb_type)
     {
-        case NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE:
-            __game_client.endpoint.OnMessageAddedToRecvQueue = (void (*)(NBN_Connection *, NBN_Message *))cb;
-            break;
+    case NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE:
+        __game_client.endpoint.OnMessageAddedToRecvQueue = (void (*)(NBN_Connection *, NBN_Message *))cb;
+        break;
     }
 }
 
@@ -4716,13 +5083,13 @@ static int GameClient_ProcessReceivedMessage(NBN_Message *message, NBN_Connectio
             return NBN_ERROR;
         }
 
-        NBN_MessageInfo msg_info = { complete_message.header.type, complete_message.data, NULL };
+        NBN_MessageInfo msg_info = {complete_message.header.type, complete_message.data, NULL};
 
         ev.data.message_info = msg_info;
     }
     else
     {
-        NBN_MessageInfo msg_info = { message->header.type, message->data, NULL };
+        NBN_MessageInfo msg_info = {message->header.type, message->data, NULL};
 
         ev.data.message_info = msg_info;
     }
@@ -4737,11 +5104,11 @@ static int GameClient_HandleEvent(void)
 {
     switch (client_last_event.type)
     {
-        case NBN_MESSAGE_RECEIVED:
-            return GameClient_HandleMessageReceivedEvent();
+    case NBN_MESSAGE_RECEIVED:
+        return GameClient_HandleMessageReceivedEvent();
 
-        default:
-            return client_last_event.type;
+    default:
+        return client_last_event.type;
     }
 }
 
@@ -4778,7 +5145,7 @@ static int GameClient_HandleMessageReceivedEvent(void)
             NBN_Abort();
         }
 
-        NBN_PublicCryptoInfoMessage *pub_crypto_msg = (NBN_PublicCryptoInfoMessage*)message_info.data;
+        NBN_PublicCryptoInfoMessage *pub_crypto_msg = (NBN_PublicCryptoInfoMessage *)message_info.data;
 
         if (Connection_BuildSharedKey(&__game_client.server_connection->keys1, pub_crypto_msg->pub_key1) < 0)
         {
@@ -4807,6 +5174,10 @@ static int GameClient_HandleMessageReceivedEvent(void)
     {
         GameClient_StartEncryption();
     }
+    else if (message_info.type == NBN_RPC_MESSAGE_TYPE)
+    {
+        Connection_HandleReceivedRPC(__game_client.server_connection, &__game_client.endpoint, message_info.data);
+    }
     else
     {
         ret = NBN_MESSAGE_RECEIVED;
@@ -4819,7 +5190,7 @@ static int GameClient_SendCryptoPublicInfo(void)
 {
     assert(__game_client.server_connection);
 
-    NBN_PublicCryptoInfoMessage *msg = NBN_PublicCryptoInfoMessage_Create(); 
+    NBN_PublicCryptoInfoMessage *msg = NBN_PublicCryptoInfoMessage_Create();
 
     memcpy(msg->pub_key1, __game_client.server_connection->keys1.pub_key, ECC_PUB_KEY_SIZE);
     memcpy(msg->pub_key2, __game_client.server_connection->keys2.pub_key, ECC_PUB_KEY_SIZE);
@@ -4859,13 +5230,13 @@ void NBN_Driver_GCli_RaiseEvent(NBN_Driver_GCli_EventType ev, void *data)
 {
     switch (ev)
     {
-        case NBN_DRIVER_GCLI_CONNECTED:
-            Driver_GCli_OnConnected();
-            break;
+    case NBN_DRIVER_GCLI_CONNECTED:
+        Driver_GCli_OnConnected();
+        break;
 
-        case NBN_DRIVER_GCLI_SERVER_PACKET_RECEIVED:
-            Driver_GCli_OnPacketReceived((NBN_Packet*)data);
-            break;
+    case NBN_DRIVER_GCLI_SERVER_PACKET_RECEIVED:
+        Driver_GCli_OnPacketReceived((NBN_Packet *)data);
+        break;
     }
 }
 
@@ -4938,10 +5309,10 @@ void NBN_GameServer_Stop(void)
 }
 
 void NBN_GameServer_RegisterMessage(
-        uint8_t msg_type,
-        NBN_MessageBuilder msg_builder,
-        NBN_MessageDestructor msg_destructor,
-        NBN_MessageSerializer msg_serializer)
+    uint8_t msg_type,
+    NBN_MessageBuilder msg_builder,
+    NBN_MessageDestructor msg_destructor,
+    NBN_MessageSerializer msg_serializer)
 {
     if (NBN_IsReservedMessage(msg_type))
     {
@@ -5021,7 +5392,6 @@ int NBN_GameServer_Poll(void)
         GameServer_RemoveClosedClientConnections();
     }
 
-
     while (true)
     {
         bool ret = NBN_EventQueue_Dequeue(&__game_server.endpoint.event_queue, &server_last_event);
@@ -5075,7 +5445,7 @@ NBN_Connection *NBN_GameServer_CreateClientConnection(uint32_t id, void *driver_
 }
 
 int NBN_GameServer_CloseClientWithCode(NBN_Connection *client, int code)
-{ 
+{
     return GameServer_CloseClientWithCode(client, code, false);
 }
 
@@ -5112,7 +5482,7 @@ int NBN_GameServer_SendMessageTo(NBN_Connection *client, NBN_OutgoingMessage *ou
     /* The only message type we can send to an unaccepted client is a NBN_ClientAcceptedMessage message
      * or a NBN_PublicCryptoInfoMessage */
     assert(client->is_accepted ||
-            outgoing_msg->type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE);
+           outgoing_msg->type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE);
 
     if (Endpoint_EnqueueOutgoingMessage(&__game_server.endpoint, client, outgoing_msg, channel_id) < 0)
     {
@@ -5250,15 +5620,62 @@ bool NBN_GameServer_IsEncryptionEnabled(void)
     return __game_server.endpoint.config.is_encryption_enabled;
 }
 
+int NBN_GameServer_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
+{
+    return NBN_Endpoint_RegisterRPC(&__game_server.endpoint, id, signature, func);
+}
+
+int NBN_GameServer_CallRPC(unsigned int id, NBN_Connection *client, ...)
+{
+    NBN_RPC rpc = __game_server.endpoint.rpcs[id];
+
+    if (rpc.id < 0 || rpc.id != id)
+    {
+        NBN_LogError("Cannot call invalid RPC (ID: %d)", id);
+
+        return NBN_ERROR;
+    }
+
+    va_list args;
+
+    va_start(args, client);
+
+    NBN_OutgoingMessage *outgoing_msg = Connection_BuildRPC(
+        client, &__game_server.endpoint, &rpc, args);
+
+    if (!outgoing_msg)
+    {
+        NBN_LogError("Failed to build RPC outgoing message");
+
+        goto rpc_error;
+    }
+
+    if (NBN_GameServer_SendReliableMessageTo(client, outgoing_msg) < 0)
+    {
+        NBN_LogError("Failed to send RPC message");
+
+        goto rpc_error;
+    }
+
+    va_end(args);
+
+    return 0;
+
+rpc_error:
+    va_end(args);
+
+    return NBN_ERROR;
+}
+
 #ifdef NBN_DEBUG
 
 void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, void *cb)
 {
     switch (cb_type)
     {
-        case NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE:
-            __game_server.endpoint.OnMessageAddedToRecvQueue = (void (*)(NBN_Connection *, NBN_Message *))cb;
-            break;
+    case NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE:
+        __game_server.endpoint.OnMessageAddedToRecvQueue = (void (*)(NBN_Connection *, NBN_Message *))cb;
+        break;
     }
 }
 
@@ -5348,13 +5765,13 @@ static int GameServer_ProcessReceivedMessage(NBN_Message *message, NBN_Connectio
             return NBN_ERROR;
         }
 
-        NBN_MessageInfo msg_info = { complete_message.header.type, complete_message.data, client };
+        NBN_MessageInfo msg_info = {complete_message.header.type, complete_message.data, client};
 
         ev.data.message_info = msg_info;
     }
     else
     {
-        NBN_MessageInfo msg_info = { message->header.type, message->data, client };
+        NBN_MessageInfo msg_info = {message->header.type, message->data, client};
 
         ev.data.message_info = msg_info;
     }
@@ -5407,11 +5824,11 @@ static int GameServer_HandleEvent(void)
 {
     switch (server_last_event.type)
     {
-        case NBN_CLIENT_MESSAGE_RECEIVED:
-            return GameServer_HandleMessageReceivedEvent();
+    case NBN_CLIENT_MESSAGE_RECEIVED:
+        return GameServer_HandleMessageReceivedEvent();
 
-        default:
-            break;
+    default:
+        break;
     }
 
     return server_last_event.type;
@@ -5445,12 +5862,12 @@ static int GameServer_HandleMessageReceivedEvent(void)
     }
 
     int ret = NBN_CLIENT_MESSAGE_RECEIVED;
- 
+
     if (NBN_GameServer_IsEncryptionEnabled() && message_info.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
     {
         ret = NBN_NO_EVENT;
 
-        NBN_PublicCryptoInfoMessage *pub_crypto_msg = (NBN_PublicCryptoInfoMessage*)message_info.data;
+        NBN_PublicCryptoInfoMessage *pub_crypto_msg = (NBN_PublicCryptoInfoMessage *)message_info.data;
 
         if (Connection_BuildSharedKey(&message_info.sender->keys1, pub_crypto_msg->pub_key1) < 0)
         {
@@ -5478,7 +5895,13 @@ static int GameServer_HandleMessageReceivedEvent(void)
             NBN_Abort();
         }
 
-        message_info.sender->can_decrypt = true; 
+        message_info.sender->can_decrypt = true;
+    }
+    else if (message_info.type == NBN_RPC_MESSAGE_TYPE)
+    {
+        ret = NBN_NO_EVENT;
+
+        Connection_HandleReceivedRPC(message_info.sender, &__game_server.endpoint, message_info.data);
     }
     else if (message_info.type == NBN_CONNECTION_REQUEST_MESSAGE_TYPE)
     {
@@ -5511,11 +5934,11 @@ int NBN_Driver_GServ_RaiseEvent(NBN_Driver_GServ_EventType ev, void *data)
 {
     switch (ev)
     {
-        case NBN_DRIVER_GSERV_CLIENT_CONNECTED:
-            return Driver_GServ_OnClientConnected((NBN_Connection*)data);
+    case NBN_DRIVER_GSERV_CLIENT_CONNECTED:
+        return Driver_GServ_OnClientConnected((NBN_Connection *)data);
 
-        case NBN_DRIVER_GSERV_CLIENT_PACKET_RECEIVED:
-            return Driver_GServ_OnClientPacketReceived((NBN_Packet*)data);
+    case NBN_DRIVER_GSERV_CLIENT_PACKET_RECEIVED:
+        return Driver_GServ_OnClientPacketReceived((NBN_Packet *)data);
     }
 
     return 0;
@@ -5581,7 +6004,7 @@ static int GameServer_StartEncryption(NBN_Connection *client)
     Connection_StartEncryption(client);
 
     NBN_OutgoingMessage *outgoing_msg = NBN_GameServer_CreateMessage(
-            NBN_START_ENCRYPT_MESSAGE_TYPE, NBN_StartEncryptMessage_Create());
+        NBN_START_ENCRYPT_MESSAGE_TYPE, NBN_StartEncryptMessage_Create());
 
     if (outgoing_msg == NULL)
         return NBN_ERROR;
@@ -5598,7 +6021,7 @@ static int GameServer_StartEncryption(NBN_Connection *client)
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
 
-#define RAND_RATIO_BETWEEN(min, max) (((rand() % (int)((max * 100.f) - (min * 100.f) + 1)) + (min * 100.f)) / 100.f) 
+#define RAND_RATIO_BETWEEN(min, max) (((rand() % (int)((max * 100.f) - (min * 100.f) + 1)) + (min * 100.f)) / 100.f)
 #define RAND_RATIO RAND_RATIO_BETWEEN(0, 1)
 
 #ifdef NBNET_WINDOWS
@@ -5631,7 +6054,7 @@ void NBN_PacketSimulator_Init(NBN_PacketSimulator *packet_simulator)
 }
 
 int NBN_PacketSimulator_EnqueuePacket(
-        NBN_PacketSimulator *packet_simulator, NBN_Packet *packet, NBN_Connection *receiver)
+    NBN_PacketSimulator *packet_simulator, NBN_Packet *packet, NBN_Connection *receiver)
 {
 #ifdef NBNET_WINDOWS
     WaitForSingleObject(packet_simulator->queue_mutex, INFINITE);
@@ -5646,7 +6069,6 @@ int NBN_PacketSimulator_EnqueuePacket(
     int jitter = packet_simulator->jitter * 1000;
 
     jitter = (jitter > 0) ? (rand() % (jitter * 2)) - jitter : 0;
-
 
     NBN_PacketSimulatorEntry *entry = (NBN_PacketSimulatorEntry *)MemoryManager_Alloc(NBN_MEM_PACKET_SIMULATOR_ENTRY);
 
@@ -5797,7 +6219,7 @@ static void *PacketSimulator_Routine(void *arg)
 }
 
 static int PacketSimulator_SendPacket(
-        NBN_PacketSimulator *packet_simulator, NBN_Packet *packet, NBN_Connection *receiver)
+    NBN_PacketSimulator *packet_simulator, NBN_Packet *packet, NBN_Connection *receiver)
 {
     if (RAND_RATIO < packet_simulator->packet_loss_ratio)
     {
@@ -5849,10 +6271,10 @@ static unsigned int PacketSimulator_GetRandomDuplicatePacketCount(NBN_PacketSimu
 #pragma region ECDH
 
 /* margin for overhead needed in intermediate calculations */
-#define BITVEC_MARGIN     3
-#define BITVEC_NBITS      (CURVE_DEGREE + BITVEC_MARGIN)
-#define BITVEC_NWORDS     ((BITVEC_NBITS + 31) / 32)
-#define BITVEC_NBYTES     (sizeof(uint32_t) * BITVEC_NWORDS)
+#define BITVEC_MARGIN 3
+#define BITVEC_NBITS (CURVE_DEGREE + BITVEC_MARGIN)
+#define BITVEC_NWORDS ((BITVEC_NBITS + 31) / 32)
+#define BITVEC_NBYTES (sizeof(uint32_t) * BITVEC_NWORDS)
 
 /* Default to a (somewhat) constant-time mode?
 NOTE: The library is _not_ capable of operating in constant-time and leaks information via timing.
@@ -5870,126 +6292,124 @@ Multiplication on ARM Cortex-M processors takes a variable number of cycles depe
 
 /******************************************************************************/
 
-
 /* the following type will represent bit vectors of length (CURVE_DEGREE+MARGIN) */
 typedef uint32_t bitvec_t[BITVEC_NWORDS];
-typedef bitvec_t gf2elem_t;           /* this type will represent field elements */
+typedef bitvec_t gf2elem_t; /* this type will represent field elements */
 typedef bitvec_t scalar_t;
-
 
 /******************************************************************************/
 
 /* Here the curve parameters are defined. */
 
-#if defined (ECC_CURVE) && (ECC_CURVE != 0)
+#if defined(ECC_CURVE) && (ECC_CURVE != 0)
 #if (ECC_CURVE == NIST_K163)
-#define coeff_a  1
+#define coeff_a 1
 #define cofactor 2
 /* NIST K-163 */
-const gf2elem_t polynomial = { 0x000000c9, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000008 }; 
-const gf2elem_t coeff_b    = { 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000 }; 
-const gf2elem_t base_x     = { 0x5c94eee8, 0xde4e6d5e, 0xaa07d793, 0x7bbc11ac, 0xfe13c053, 0x00000002 }; 
-const gf2elem_t base_y     = { 0xccdaa3d9, 0x0536d538, 0x321f2e80, 0x5d38ff58, 0x89070fb0, 0x00000002 }; 
-const scalar_t  base_order = { 0x99f8a5ef, 0xa2e0cc0d, 0x00020108, 0x00000000, 0x00000000, 0x00000004 }; 
+const gf2elem_t polynomial = {0x000000c9, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000008};
+const gf2elem_t coeff_b = {0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000};
+const gf2elem_t base_x = {0x5c94eee8, 0xde4e6d5e, 0xaa07d793, 0x7bbc11ac, 0xfe13c053, 0x00000002};
+const gf2elem_t base_y = {0xccdaa3d9, 0x0536d538, 0x321f2e80, 0x5d38ff58, 0x89070fb0, 0x00000002};
+const scalar_t base_order = {0x99f8a5ef, 0xa2e0cc0d, 0x00020108, 0x00000000, 0x00000000, 0x00000004};
 #endif
 
 #if (ECC_CURVE == NIST_B163)
-#define coeff_a  1
+#define coeff_a 1
 #define cofactor 2
 /* NIST B-163 */
-const gf2elem_t polynomial = { 0x000000c9, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000008 }; 
-const gf2elem_t coeff_b    = { 0x4a3205fd, 0x512f7874, 0x1481eb10, 0xb8c953ca, 0x0a601907, 0x00000002 }; 
-const gf2elem_t base_x     = { 0xe8343e36, 0xd4994637, 0xa0991168, 0x86a2d57e, 0xf0eba162, 0x00000003 }; 
-const gf2elem_t base_y     = { 0x797324f1, 0xb11c5c0c, 0xa2cdd545, 0x71a0094f, 0xd51fbc6c, 0x00000000 }; 
-const scalar_t  base_order = { 0xa4234c33, 0x77e70c12, 0x000292fe, 0x00000000, 0x00000000, 0x00000004 }; 
+const gf2elem_t polynomial = {0x000000c9, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000008};
+const gf2elem_t coeff_b = {0x4a3205fd, 0x512f7874, 0x1481eb10, 0xb8c953ca, 0x0a601907, 0x00000002};
+const gf2elem_t base_x = {0xe8343e36, 0xd4994637, 0xa0991168, 0x86a2d57e, 0xf0eba162, 0x00000003};
+const gf2elem_t base_y = {0x797324f1, 0xb11c5c0c, 0xa2cdd545, 0x71a0094f, 0xd51fbc6c, 0x00000000};
+const scalar_t base_order = {0xa4234c33, 0x77e70c12, 0x000292fe, 0x00000000, 0x00000000, 0x00000004};
 #endif
 
 #if (ECC_CURVE == NIST_K233)
-#define coeff_a  0
+#define coeff_a 0
 #define cofactor 4
 /* NIST K-233 */
-const gf2elem_t polynomial = { 0x00000001, 0x00000000, 0x00000400, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000200 };
-const gf2elem_t coeff_b    = { 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000 };
-const gf2elem_t base_x     = { 0xefad6126, 0x0a4c9d6e, 0x19c26bf5, 0x149563a4, 0x29f22ff4, 0x7e731af1, 0x32ba853a, 0x00000172 };
-const gf2elem_t base_y     = { 0x56fae6a3, 0x56e0c110, 0xf18aeb9b, 0x27a8cd9b, 0x555a67c4, 0x19b7f70f, 0x537dece8, 0x000001db };
-const scalar_t  base_order = { 0xf173abdf, 0x6efb1ad5, 0xb915bcd4, 0x00069d5b, 0x00000000, 0x00000000, 0x00000000, 0x00000080 };
+const gf2elem_t polynomial = {0x00000001, 0x00000000, 0x00000400, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000200};
+const gf2elem_t coeff_b = {0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000};
+const gf2elem_t base_x = {0xefad6126, 0x0a4c9d6e, 0x19c26bf5, 0x149563a4, 0x29f22ff4, 0x7e731af1, 0x32ba853a, 0x00000172};
+const gf2elem_t base_y = {0x56fae6a3, 0x56e0c110, 0xf18aeb9b, 0x27a8cd9b, 0x555a67c4, 0x19b7f70f, 0x537dece8, 0x000001db};
+const scalar_t base_order = {0xf173abdf, 0x6efb1ad5, 0xb915bcd4, 0x00069d5b, 0x00000000, 0x00000000, 0x00000000, 0x00000080};
 #endif
 
 #if (ECC_CURVE == NIST_B233)
-#define coeff_a  1
+#define coeff_a 1
 #define cofactor 2
 /* NIST B-233 */
-const gf2elem_t polynomial = { 0x00000001, 0x00000000, 0x00000400, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000200 }; 
-const gf2elem_t coeff_b    = { 0x7d8f90ad, 0x81fe115f, 0x20e9ce42, 0x213b333b, 0x0923bb58, 0x332c7f8c, 0x647ede6c, 0x00000066 }; 
-const gf2elem_t base_x     = { 0x71fd558b, 0xf8f8eb73, 0x391f8b36, 0x5fef65bc, 0x39f1bb75, 0x8313bb21, 0xc9dfcbac, 0x000000fa }; 
-const gf2elem_t base_y     = { 0x01f81052, 0x36716f7e, 0xf867a7ca, 0xbf8a0bef, 0xe58528be, 0x03350678, 0x6a08a419, 0x00000100 }; 
-const scalar_t  base_order = { 0x03cfe0d7, 0x22031d26, 0xe72f8a69, 0x0013e974, 0x00000000, 0x00000000, 0x00000000, 0x00000100 };
+const gf2elem_t polynomial = {0x00000001, 0x00000000, 0x00000400, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000200};
+const gf2elem_t coeff_b = {0x7d8f90ad, 0x81fe115f, 0x20e9ce42, 0x213b333b, 0x0923bb58, 0x332c7f8c, 0x647ede6c, 0x00000066};
+const gf2elem_t base_x = {0x71fd558b, 0xf8f8eb73, 0x391f8b36, 0x5fef65bc, 0x39f1bb75, 0x8313bb21, 0xc9dfcbac, 0x000000fa};
+const gf2elem_t base_y = {0x01f81052, 0x36716f7e, 0xf867a7ca, 0xbf8a0bef, 0xe58528be, 0x03350678, 0x6a08a419, 0x00000100};
+const scalar_t base_order = {0x03cfe0d7, 0x22031d26, 0xe72f8a69, 0x0013e974, 0x00000000, 0x00000000, 0x00000000, 0x00000100};
 #endif
 
 #if (ECC_CURVE == NIST_K283)
-#define coeff_a  0
+#define coeff_a 0
 #define cofactor 4
 /* NIST K-283 */
-const gf2elem_t polynomial = { 0x000010a1, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x08000000 };
-const gf2elem_t coeff_b    = { 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000 }; 
-const gf2elem_t base_x     = { 0x58492836, 0xb0c2ac24, 0x16876913, 0x23c1567a, 0x53cd265f, 0x62f188e5, 0x3f1a3b81, 0x78ca4488, 0x0503213f }; 
-const gf2elem_t base_y     = { 0x77dd2259, 0x4e341161, 0xe4596236, 0xe8184698, 0xe87e45c0, 0x07e5426f, 0x8d90f95d, 0x0f1c9e31, 0x01ccda38 }; 
-const scalar_t  base_order = { 0x1e163c61, 0x94451e06, 0x265dff7f, 0x2ed07577, 0xffffe9ae, 0xffffffff, 0xffffffff, 0xffffffff, 0x01ffffff }; 
+const gf2elem_t polynomial = {0x000010a1, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x08000000};
+const gf2elem_t coeff_b = {0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000};
+const gf2elem_t base_x = {0x58492836, 0xb0c2ac24, 0x16876913, 0x23c1567a, 0x53cd265f, 0x62f188e5, 0x3f1a3b81, 0x78ca4488, 0x0503213f};
+const gf2elem_t base_y = {0x77dd2259, 0x4e341161, 0xe4596236, 0xe8184698, 0xe87e45c0, 0x07e5426f, 0x8d90f95d, 0x0f1c9e31, 0x01ccda38};
+const scalar_t base_order = {0x1e163c61, 0x94451e06, 0x265dff7f, 0x2ed07577, 0xffffe9ae, 0xffffffff, 0xffffffff, 0xffffffff, 0x01ffffff};
 #endif
 
 #if (ECC_CURVE == NIST_B283)
-#define coeff_a  1
+#define coeff_a 1
 #define cofactor 2
 /* NIST B-283 */
-const gf2elem_t polynomial = { 0x000010a1, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x08000000 }; 
-const gf2elem_t coeff_b    = { 0x3b79a2f5, 0xf6263e31, 0xa581485a, 0x45309fa2, 0xca97fd76, 0x19a0303f, 0xa5a4af8a, 0xc8b8596d, 0x027b680a }; 
-const gf2elem_t base_x     = { 0x86b12053, 0xf8cdbecd, 0x80e2e198, 0x557eac9c, 0x2eed25b8, 0x70b0dfec, 0xe1934f8c, 0x8db7dd90, 0x05f93925 }; 
-const gf2elem_t base_y     = { 0xbe8112f4, 0x13f0df45, 0x826779c8, 0x350eddb0, 0x516ff702, 0xb20d02b4, 0xb98fe6d4, 0xfe24141c, 0x03676854 }; 
-const scalar_t  base_order = { 0xefadb307, 0x5b042a7c, 0x938a9016, 0x399660fc, 0xffffef90, 0xffffffff, 0xffffffff, 0xffffffff, 0x03ffffff }; 
+const gf2elem_t polynomial = {0x000010a1, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x08000000};
+const gf2elem_t coeff_b = {0x3b79a2f5, 0xf6263e31, 0xa581485a, 0x45309fa2, 0xca97fd76, 0x19a0303f, 0xa5a4af8a, 0xc8b8596d, 0x027b680a};
+const gf2elem_t base_x = {0x86b12053, 0xf8cdbecd, 0x80e2e198, 0x557eac9c, 0x2eed25b8, 0x70b0dfec, 0xe1934f8c, 0x8db7dd90, 0x05f93925};
+const gf2elem_t base_y = {0xbe8112f4, 0x13f0df45, 0x826779c8, 0x350eddb0, 0x516ff702, 0xb20d02b4, 0xb98fe6d4, 0xfe24141c, 0x03676854};
+const scalar_t base_order = {0xefadb307, 0x5b042a7c, 0x938a9016, 0x399660fc, 0xffffef90, 0xffffffff, 0xffffffff, 0xffffffff, 0x03ffffff};
 #endif
 
 #if (ECC_CURVE == NIST_K409)
-#define coeff_a  0
+#define coeff_a 0
 #define cofactor 4
 /* NIST K-409 */
-const gf2elem_t polynomial = { 0x00000001, 0x00000000, 0x00800000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x02000000 }; 
-const gf2elem_t coeff_b    = { 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000 }; 
-const gf2elem_t base_x     = { 0xe9023746, 0xb35540cf, 0xee222eb1, 0xb5aaaa62, 0xc460189e, 0xf9f67cc2, 0x27accfb8, 0xe307c84c, 0x0efd0987, 0x0f718421, 0xad3ab189, 0x658f49c1, 0x0060f05f }; 
-const gf2elem_t base_y     = { 0xd8e0286b, 0x5863ec48, 0xaa9ca27a, 0xe9c55215, 0xda5f6c42, 0xe9ea10e3, 0xe6325165, 0x918ea427, 0x3460782f, 0xbf04299c, 0xacba1dac, 0x0b7c4e42, 0x01e36905 }; 
-const scalar_t  base_order = { 0xe01e5fcf, 0x4b5c83b8, 0xe3e7ca5b, 0x557d5ed3, 0x20400ec4, 0x83b2d4ea, 0xfffffe5f, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0x007fffff }; 
+const gf2elem_t polynomial = {0x00000001, 0x00000000, 0x00800000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x02000000};
+const gf2elem_t coeff_b = {0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000};
+const gf2elem_t base_x = {0xe9023746, 0xb35540cf, 0xee222eb1, 0xb5aaaa62, 0xc460189e, 0xf9f67cc2, 0x27accfb8, 0xe307c84c, 0x0efd0987, 0x0f718421, 0xad3ab189, 0x658f49c1, 0x0060f05f};
+const gf2elem_t base_y = {0xd8e0286b, 0x5863ec48, 0xaa9ca27a, 0xe9c55215, 0xda5f6c42, 0xe9ea10e3, 0xe6325165, 0x918ea427, 0x3460782f, 0xbf04299c, 0xacba1dac, 0x0b7c4e42, 0x01e36905};
+const scalar_t base_order = {0xe01e5fcf, 0x4b5c83b8, 0xe3e7ca5b, 0x557d5ed3, 0x20400ec4, 0x83b2d4ea, 0xfffffe5f, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0x007fffff};
 #endif
 
 #if (ECC_CURVE == NIST_B409)
-#define coeff_a  1
+#define coeff_a 1
 #define cofactor 2
 /* NIST B-409 */
-const gf2elem_t polynomial = { 0x00000001, 0x00000000, 0x00800000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x02000000 }; 
-const gf2elem_t coeff_b    = { 0x7b13545f, 0x4f50ae31, 0xd57a55aa, 0x72822f6c, 0xa9a197b2, 0xd6ac27c8, 0x4761fa99, 0xf1f3dd67, 0x7fd6422e, 0x3b7b476b, 0x5c4b9a75, 0xc8ee9feb, 0x0021a5c2 }; 
-const gf2elem_t base_x     = { 0xbb7996a7, 0x60794e54, 0x5603aeab, 0x8a118051, 0xdc255a86, 0x34e59703, 0xb01ffe5b, 0xf1771d4d, 0x441cde4a, 0x64756260, 0x496b0c60, 0xd088ddb3, 0x015d4860 }; 
-const gf2elem_t base_y     = { 0x0273c706, 0x81c364ba, 0xd2181b36, 0xdf4b4f40, 0x38514f1f, 0x5488d08f, 0x0158aa4f, 0xa7bd198d, 0x7636b9c5, 0x24ed106a, 0x2bbfa783, 0xab6be5f3, 0x0061b1cf }; 
-const scalar_t  base_order = { 0xd9a21173, 0x8164cd37, 0x9e052f83, 0x5fa47c3c, 0xf33307be, 0xaad6a612, 0x000001e2, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x01000000 }; 
+const gf2elem_t polynomial = {0x00000001, 0x00000000, 0x00800000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x02000000};
+const gf2elem_t coeff_b = {0x7b13545f, 0x4f50ae31, 0xd57a55aa, 0x72822f6c, 0xa9a197b2, 0xd6ac27c8, 0x4761fa99, 0xf1f3dd67, 0x7fd6422e, 0x3b7b476b, 0x5c4b9a75, 0xc8ee9feb, 0x0021a5c2};
+const gf2elem_t base_x = {0xbb7996a7, 0x60794e54, 0x5603aeab, 0x8a118051, 0xdc255a86, 0x34e59703, 0xb01ffe5b, 0xf1771d4d, 0x441cde4a, 0x64756260, 0x496b0c60, 0xd088ddb3, 0x015d4860};
+const gf2elem_t base_y = {0x0273c706, 0x81c364ba, 0xd2181b36, 0xdf4b4f40, 0x38514f1f, 0x5488d08f, 0x0158aa4f, 0xa7bd198d, 0x7636b9c5, 0x24ed106a, 0x2bbfa783, 0xab6be5f3, 0x0061b1cf};
+const scalar_t base_order = {0xd9a21173, 0x8164cd37, 0x9e052f83, 0x5fa47c3c, 0xf33307be, 0xaad6a612, 0x000001e2, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x01000000};
 #endif
 
 #if (ECC_CURVE == NIST_K571)
-#define coeff_a  0
+#define coeff_a 0
 #define cofactor 4
 /* NIST K-571 */
-const gf2elem_t polynomial = { 0x00000425, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x08000000 }; 
-const gf2elem_t coeff_b    = { 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000 }; 
-const gf2elem_t base_x     = { 0xa01c8972, 0xe2945283, 0x4dca88c7, 0x988b4717, 0x494776fb, 0xbbd1ba39, 0xb4ceb08c, 0x47da304d, 0x93b205e6, 0x43709584, 0x01841ca4, 0x60248048, 0x0012d5d4, 0xac9ca297, 0xf8103fe4, 0x82189631, 0x59923fbc, 0x026eb7a8 }; 
-const gf2elem_t base_y     = { 0x3ef1c7a3, 0x01cd4c14, 0x591984f6, 0x320430c8, 0x7ba7af1b, 0xb620b01a, 0xf772aedc, 0x4fbebbb9, 0xac44aea7, 0x9d4979c0, 0x006d8a2c, 0xffc61efc, 0x9f307a54, 0x4dd58cec, 0x3bca9531, 0x4f4aeade, 0x7f4fbf37, 0x0349dc80 }; 
-const scalar_t  base_order = { 0x637c1001, 0x5cfe778f, 0x1e91deb4, 0xe5d63938, 0xb630d84b, 0x917f4138, 0xb391a8db, 0xf19a63e4, 0x131850e1, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x02000000 }; 
+const gf2elem_t polynomial = {0x00000425, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x08000000};
+const gf2elem_t coeff_b = {0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000};
+const gf2elem_t base_x = {0xa01c8972, 0xe2945283, 0x4dca88c7, 0x988b4717, 0x494776fb, 0xbbd1ba39, 0xb4ceb08c, 0x47da304d, 0x93b205e6, 0x43709584, 0x01841ca4, 0x60248048, 0x0012d5d4, 0xac9ca297, 0xf8103fe4, 0x82189631, 0x59923fbc, 0x026eb7a8};
+const gf2elem_t base_y = {0x3ef1c7a3, 0x01cd4c14, 0x591984f6, 0x320430c8, 0x7ba7af1b, 0xb620b01a, 0xf772aedc, 0x4fbebbb9, 0xac44aea7, 0x9d4979c0, 0x006d8a2c, 0xffc61efc, 0x9f307a54, 0x4dd58cec, 0x3bca9531, 0x4f4aeade, 0x7f4fbf37, 0x0349dc80};
+const scalar_t base_order = {0x637c1001, 0x5cfe778f, 0x1e91deb4, 0xe5d63938, 0xb630d84b, 0x917f4138, 0xb391a8db, 0xf19a63e4, 0x131850e1, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x02000000};
 #endif
 
 #if (ECC_CURVE == NIST_B571)
-#define coeff_a  1
+#define coeff_a 1
 #define cofactor 2
 /* NIST B-571 */
-const gf2elem_t polynomial = { 0x00000425, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x08000000 }; 
-const gf2elem_t coeff_b    = { 0x2955727a, 0x7ffeff7f, 0x39baca0c, 0x520e4de7, 0x78ff12aa, 0x4afd185a, 0x56a66e29, 0x2be7ad67, 0x8efa5933, 0x84ffabbd, 0x4a9a18ad, 0xcd6ba8ce, 0xcb8ceff1, 0x5c6a97ff, 0xb7f3d62f, 0xde297117, 0x2221f295, 0x02f40e7e }; 
-const gf2elem_t base_x     = { 0x8eec2d19, 0xe1e7769c, 0xc850d927, 0x4abfa3b4, 0x8614f139, 0x99ae6003, 0x5b67fb14, 0xcdd711a3, 0xf4c0d293, 0xbde53950, 0xdb7b2abd, 0xa5f40fc8, 0x955fa80a, 0x0a93d1d2, 0x0d3cd775, 0x6c16c0d4, 0x34b85629, 0x0303001d }; 
-const gf2elem_t base_y     = { 0x1b8ac15b, 0x1a4827af, 0x6e23dd3c, 0x16e2f151, 0x0485c19b, 0xb3531d2f, 0x461bb2a8, 0x6291af8f, 0xbab08a57, 0x84423e43, 0x3921e8a6, 0x1980f853, 0x009cbbca, 0x8c6c27a6, 0xb73d69d7, 0x6dccfffe, 0x42da639b, 0x037bf273 }; 
-const scalar_t  base_order = { 0x2fe84e47, 0x8382e9bb, 0x5174d66e, 0x161de93d, 0xc7dd9ca1, 0x6823851e, 0x08059b18, 0xff559873, 0xe661ce18, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0x03ffffff }; 
+const gf2elem_t polynomial = {0x00000425, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x08000000};
+const gf2elem_t coeff_b = {0x2955727a, 0x7ffeff7f, 0x39baca0c, 0x520e4de7, 0x78ff12aa, 0x4afd185a, 0x56a66e29, 0x2be7ad67, 0x8efa5933, 0x84ffabbd, 0x4a9a18ad, 0xcd6ba8ce, 0xcb8ceff1, 0x5c6a97ff, 0xb7f3d62f, 0xde297117, 0x2221f295, 0x02f40e7e};
+const gf2elem_t base_x = {0x8eec2d19, 0xe1e7769c, 0xc850d927, 0x4abfa3b4, 0x8614f139, 0x99ae6003, 0x5b67fb14, 0xcdd711a3, 0xf4c0d293, 0xbde53950, 0xdb7b2abd, 0xa5f40fc8, 0x955fa80a, 0x0a93d1d2, 0x0d3cd775, 0x6c16c0d4, 0x34b85629, 0x0303001d};
+const gf2elem_t base_y = {0x1b8ac15b, 0x1a4827af, 0x6e23dd3c, 0x16e2f151, 0x0485c19b, 0xb3531d2f, 0x461bb2a8, 0x6291af8f, 0xbab08a57, 0x84423e43, 0x3921e8a6, 0x1980f853, 0x009cbbca, 0x8c6c27a6, 0xb73d69d7, 0x6dccfffe, 0x42da639b, 0x037bf273};
+const scalar_t base_order = {0x2fe84e47, 0x8382e9bb, 0x5174d66e, 0x161de93d, 0xc7dd9ca1, 0x6823851e, 0x08059b18, 0xff559873, 0xe661ce18, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0x03ffffff};
 #endif
 #endif
 
@@ -6100,8 +6520,7 @@ static int bitvec_degree(const bitvec_t x)
     x += BITVEC_NWORDS;
 
     /* Skip empty / zero words */
-    while (    (i > 0)
-            && (*(--x)) == 0)
+    while ((i > 0) && (*(--x)) == 0)
     {
         i -= 32;
     }
@@ -6124,7 +6543,7 @@ static void bitvec_lshift(bitvec_t x, const bitvec_t y, int nbits)
     int nwords = (nbits / 32);
 
     /* Shift whole words first if nwords > 0 */
-    int i,j;
+    int i, j;
     for (i = 0; i < nwords; ++i)
     {
         /* Zero-initialize from least-significant word until offset reached */
@@ -6147,19 +6566,17 @@ static void bitvec_lshift(bitvec_t x, const bitvec_t y, int nbits)
         int i;
         for (i = (BITVEC_NWORDS - 1); i > 0; --i)
         {
-            x[i]  = (x[i] << nbits) | (x[i - 1] >> (32 - nbits));
+            x[i] = (x[i] << nbits) | (x[i - 1] >> (32 - nbits));
         }
         x[0] <<= nbits;
     }
 }
-
 
 /*************************************************************************************************/
 /*
    Code that does arithmetic on bit-vectors in the Galois Field GF(2^CURVE_DEGREE).
    */
 /*************************************************************************************************/
-
 
 static void gf2field_set_one(gf2elem_t x)
 {
@@ -6175,7 +6592,7 @@ static void gf2field_set_one(gf2elem_t x)
 
 #if defined(CONST_TIME) && (CONST_TIME == 0)
 /* fastest check if x == 1 */
-static int gf2field_is_one(const gf2elem_t x) 
+static int gf2field_is_one(const gf2elem_t x)
 {
     /* Check if first word == 1 */
     if (x[0] != 1)
@@ -6213,7 +6630,6 @@ static int gf2field_is_one(const gf2elem_t x)
 }
 #endif
 
-
 /* galois field(2^m) addition is modulo 2, so XOR is used instead - 'z := a + b' */
 static void gf2field_add(gf2elem_t z, const gf2elem_t x, const gf2elem_t y)
 {
@@ -6229,7 +6645,6 @@ static void gf2field_inc(gf2elem_t x)
 {
     x[0] ^= 1;
 }
-
 
 /* field multiplication 'z := (x * y)' */
 static void gf2field_mul(gf2elem_t z, const gf2elem_t x, const gf2elem_t y)
@@ -6332,7 +6747,6 @@ static void gf2field_inv(gf2elem_t z, const gf2elem_t x)
    */
 /*************************************************************************************************/
 
-
 static void gf2point_copy(gf2elem_t x1, gf2elem_t y1, const gf2elem_t x2, const gf2elem_t y2)
 {
     bitvec_copy(x1, x2);
@@ -6347,8 +6761,7 @@ static void gf2point_set_zero(gf2elem_t x, gf2elem_t y)
 
 static int gf2point_is_zero(const gf2elem_t x, const gf2elem_t y)
 {
-    return (    bitvec_is_zero(x)
-            && bitvec_is_zero(y));
+    return (bitvec_is_zero(x) && bitvec_is_zero(y));
 }
 
 /* double the point (x,y) */
@@ -6376,7 +6789,6 @@ static void gf2point_double(gf2elem_t x, gf2elem_t y)
         gf2field_add(y, y, l);
     }
 }
-
 
 /* add two points together (x1, y1) := (x1, y1) + (x2, y2) */
 static void gf2point_add(gf2elem_t x1, gf2elem_t y1, const gf2elem_t x2, const gf2elem_t y2)
@@ -6424,8 +6836,6 @@ static void gf2point_add(gf2elem_t x1, gf2elem_t y1, const gf2elem_t x2, const g
         }
     }
 }
-
-
 
 #if defined(CONST_TIME) && (CONST_TIME == 0)
 /* point multiplication via double-and-add algorithm */
@@ -6478,8 +6888,6 @@ static void gf2point_mul(gf2elem_t x, gf2elem_t y, const scalar_t exp)
 }
 #endif
 
-
-
 /* check if y^2 + x*y = x^3 + a*x^2 + coeff_b holds */
 static int gf2point_on_curve(const gf2elem_t x, const gf2elem_t y)
 {
@@ -6512,13 +6920,13 @@ static int gf2point_on_curve(const gf2elem_t x, const gf2elem_t y)
 /*************************************************************************************************/
 
 /* NOTE: private should contain random data a-priori! */
-static int ecdh_generate_keys(uint8_t* public_key, uint8_t* private_key)
+static int ecdh_generate_keys(uint8_t *public_key, uint8_t *private_key)
 {
     /* Get copy of "base" point 'G' */
-    gf2point_copy((uint32_t*)public_key, (uint32_t*)(public_key + BITVEC_NBYTES), base_x, base_y);
+    gf2point_copy((uint32_t *)public_key, (uint32_t *)(public_key + BITVEC_NBYTES), base_x, base_y);
 
     /* Abort key generation if random number is too small */
-    if (bitvec_degree((uint32_t*)private_key) < (CURVE_DEGREE / 2))
+    if (bitvec_degree((uint32_t *)private_key) < (CURVE_DEGREE / 2))
     {
         return 0;
     }
@@ -6530,21 +6938,20 @@ static int ecdh_generate_keys(uint8_t* public_key, uint8_t* private_key)
 
         for (i = (nbits - 1); i < (BITVEC_NWORDS * 32); ++i)
         {
-            bitvec_clr_bit((uint32_t*)private_key, i);
+            bitvec_clr_bit((uint32_t *)private_key, i);
         }
 
         /* Multiply base-point with scalar (private-key) */
-        gf2point_mul((uint32_t*)public_key, (uint32_t*)(public_key + BITVEC_NBYTES), (uint32_t*)private_key);
+        gf2point_mul((uint32_t *)public_key, (uint32_t *)(public_key + BITVEC_NBYTES), (uint32_t *)private_key);
 
         return 1;
     }
 }
 
-static int ecdh_shared_secret(const uint8_t* private_key, const uint8_t* others_pub, uint8_t* output)
+static int ecdh_shared_secret(const uint8_t *private_key, const uint8_t *others_pub, uint8_t *output)
 {
     /* Do some basic validation of other party's public key */
-    if (    !gf2point_is_zero ((uint32_t*)others_pub, (uint32_t*)(others_pub + BITVEC_NBYTES))
-            &&  gf2point_on_curve((uint32_t*)others_pub, (uint32_t*)(others_pub + BITVEC_NBYTES)) )
+    if (!gf2point_is_zero((uint32_t *)others_pub, (uint32_t *)(others_pub + BITVEC_NBYTES)) && gf2point_on_curve((uint32_t *)others_pub, (uint32_t *)(others_pub + BITVEC_NBYTES)))
     {
         /* Copy other side's public key to output */
         unsigned int i;
@@ -6554,15 +6961,15 @@ static int ecdh_shared_secret(const uint8_t* private_key, const uint8_t* others_
         }
 
         /* Multiply other side's public key with own private key */
-        gf2point_mul((uint32_t*)output,(uint32_t*)(output + BITVEC_NBYTES), (const uint32_t*)private_key);
+        gf2point_mul((uint32_t *)output, (uint32_t *)(output + BITVEC_NBYTES), (const uint32_t *)private_key);
 
         /* Multiply outcome by cofactor if using ECC CDH-variant: */
 #if defined(ECDH_COFACTOR_VARIANT) && (ECDH_COFACTOR_VARIANT == 1)
-#if   (cofactor == 2)
-        gf2point_double((uint32_t*)output, (uint32_t*)(output + BITVEC_NBYTES));
+#if (cofactor == 2)
+        gf2point_double((uint32_t *)output, (uint32_t *)(output + BITVEC_NBYTES));
 #elif (cofactor == 4)
-        gf2point_double((uint32_t*)output, (uint32_t*)(output + BITVEC_NBYTES));
-        gf2point_double((uint32_t*)output, (uint32_t*)(output + BITVEC_NBYTES));
+        gf2point_double((uint32_t *)output, (uint32_t *)(output + BITVEC_NBYTES));
+        gf2point_double((uint32_t *)output, (uint32_t *)(output + BITVEC_NBYTES));
 #endif
 #endif
 
@@ -6591,11 +6998,11 @@ static int ecdh_shared_secret(const uint8_t* private_key, const uint8_t* others_
 #define Nk 6
 #define Nr 12
 #else
-#define Nk 4        // The number of 32 bit words in a key.
-#define Nr 10       // The number of rounds in AES Cipher.
+#define Nk 4  // The number of 32 bit words in a key.
+#define Nr 10 // The number of rounds in AES Cipher.
 #endif
 
-// jcallan@github points out that declaring Multiply as a function 
+// jcallan@github points out that declaring Multiply as a function
 // reduces code size considerably with the Keil ARM compiler.
 // See this link for more information: https://github.com/kokke/tiny-AES-C/pull/3
 #ifndef MULTIPLY_AS_A_FUNCTION
@@ -6609,7 +7016,7 @@ static int ecdh_shared_secret(const uint8_t* private_key, const uint8_t* others_
 typedef uint8_t state_t[4][4];
 
 // The lookup-tables are marked const so they can be placed in read-only storage instead of RAM
-// The numbers below can be computed dynamically trading ROM for RAM - 
+// The numbers below can be computed dynamically trading ROM for RAM -
 // This can be useful in (embedded) bootloader applications, where ROM is often limited.
 static const uint8_t sbox[256] = {
     //0     1    2      3     4    5     6     7      8    9     A      B    C     D     E     F
@@ -6628,7 +7035,7 @@ static const uint8_t sbox[256] = {
     0xba, 0x78, 0x25, 0x2e, 0x1c, 0xa6, 0xb4, 0xc6, 0xe8, 0xdd, 0x74, 0x1f, 0x4b, 0xbd, 0x8b, 0x8a,
     0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e, 0x61, 0x35, 0x57, 0xb9, 0x86, 0xc1, 0x1d, 0x9e,
     0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
-    0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16 };
+    0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16};
 
 static const uint8_t rsbox[256] = {
     0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb,
@@ -6646,12 +7053,12 @@ static const uint8_t rsbox[256] = {
     0x1f, 0xdd, 0xa8, 0x33, 0x88, 0x07, 0xc7, 0x31, 0xb1, 0x12, 0x10, 0x59, 0x27, 0x80, 0xec, 0x5f,
     0x60, 0x51, 0x7f, 0xa9, 0x19, 0xb5, 0x4a, 0x0d, 0x2d, 0xe5, 0x7a, 0x9f, 0x93, 0xc9, 0x9c, 0xef,
     0xa0, 0xe0, 0x3b, 0x4d, 0xae, 0x2a, 0xf5, 0xb0, 0xc8, 0xeb, 0xbb, 0x3c, 0x83, 0x53, 0x99, 0x61,
-    0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d };
+    0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d};
 
-// The round constant word array, Rcon[i], contains the values given by 
+// The round constant word array, Rcon[i], contains the values given by
 // x to the power (i-1) being powers of x (x is denoted as {02}) in the field GF(2^8)
 static const uint8_t Rcon[11] = {
-    0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36 };
+    0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36};
 
 /*
  * Jordan Goulder points out in PR #12 (https://github.com/kokke/tiny-AES-C/pull/12),
@@ -6662,7 +7069,6 @@ static const uint8_t Rcon[11] = {
  * "Only the first some of these constants are actually used – up to rcon[10] for AES-128 (as 11 round keys are needed), 
  *  up to rcon[8] for AES-192, up to rcon[7] for AES-256. rcon[0] is not used in AES algorithm."
  */
-
 
 /*****************************************************************************/
 /* Private functions:                                                        */
@@ -6682,8 +7088,8 @@ static const uint8_t Rcon[11] = {
    */
 #define getSBoxInvert(num) (rsbox[(num)])
 
-// This function produces Nb(Nr+1) round keys. The round keys are used in each round to decrypt the states. 
-static void KeyExpansion(uint8_t* RoundKey, const uint8_t* Key)
+// This function produces Nb(Nr+1) round keys. The round keys are used in each round to decrypt the states.
+static void KeyExpansion(uint8_t *RoundKey, const uint8_t *Key)
 {
     unsigned i, j, k;
     uint8_t tempa[4]; // Used for the column/row operations
@@ -6702,11 +7108,10 @@ static void KeyExpansion(uint8_t* RoundKey, const uint8_t* Key)
     {
         {
             k = (i - 1) * 4;
-            tempa[0]=RoundKey[k + 0];
-            tempa[1]=RoundKey[k + 1];
-            tempa[2]=RoundKey[k + 2];
-            tempa[3]=RoundKey[k + 3];
-
+            tempa[0] = RoundKey[k + 0];
+            tempa[1] = RoundKey[k + 1];
+            tempa[2] = RoundKey[k + 2];
+            tempa[3] = RoundKey[k + 3];
         }
 
         if (i % Nk == 0)
@@ -6723,7 +7128,7 @@ static void KeyExpansion(uint8_t* RoundKey, const uint8_t* Key)
                 tempa[3] = u8tmp;
             }
 
-            // SubWord() is a function that takes a four-byte input word and 
+            // SubWord() is a function that takes a four-byte input word and
             // applies the S-box to each of the four bytes to produce an output word.
 
             // Function Subword()
@@ -6734,7 +7139,7 @@ static void KeyExpansion(uint8_t* RoundKey, const uint8_t* Key)
                 tempa[3] = getSBoxValue(tempa[3]);
             }
 
-            tempa[0] = tempa[0] ^ Rcon[i/Nk];
+            tempa[0] = tempa[0] ^ Rcon[i / Nk];
         }
 #if defined(AES256) && (AES256 == 1)
         if (i % Nk == 4)
@@ -6748,7 +7153,8 @@ static void KeyExpansion(uint8_t* RoundKey, const uint8_t* Key)
             }
         }
 #endif
-        j = i * 4; k=(i - Nk) * 4;
+        j = i * 4;
+        k = (i - Nk) * 4;
         RoundKey[j + 0] = RoundKey[k + 0] ^ tempa[0];
         RoundKey[j + 1] = RoundKey[k + 1] ^ tempa[1];
         RoundKey[j + 2] = RoundKey[k + 2] ^ tempa[2];
@@ -6756,17 +7162,17 @@ static void KeyExpansion(uint8_t* RoundKey, const uint8_t* Key)
     }
 }
 
-static void AES_init_ctx_iv(struct AES_ctx* ctx, const uint8_t* key, const uint8_t* iv)
+static void AES_init_ctx_iv(struct AES_ctx *ctx, const uint8_t *key, const uint8_t *iv)
 {
     KeyExpansion(ctx->RoundKey, key);
-    memcpy (ctx->Iv, iv, AES_BLOCKLEN);
+    memcpy(ctx->Iv, iv, AES_BLOCKLEN);
 }
 
 // This function adds the round key to state.
 // The round key is added to the state by an XOR function.
-static void AddRoundKey(uint8_t round,state_t* state,uint8_t* RoundKey)
+static void AddRoundKey(uint8_t round, state_t *state, uint8_t *RoundKey)
 {
-    uint8_t i,j;
+    uint8_t i, j;
     for (i = 0; i < 4; ++i)
     {
         for (j = 0; j < 4; ++j)
@@ -6778,7 +7184,7 @@ static void AddRoundKey(uint8_t round,state_t* state,uint8_t* RoundKey)
 
 // The SubBytes Function Substitutes the values in the
 // state matrix with values in an S-box.
-static void SubBytes(state_t* state)
+static void SubBytes(state_t *state)
 {
     uint8_t i, j;
     for (i = 0; i < 4; ++i)
@@ -6793,28 +7199,28 @@ static void SubBytes(state_t* state)
 // The ShiftRows() function shifts the rows in the state to the left.
 // Each row is shifted with different offset.
 // Offset = Row number. So the first row is not shifted.
-static void ShiftRows(state_t* state)
+static void ShiftRows(state_t *state)
 {
     uint8_t temp;
 
-    // Rotate first row 1 columns to left  
-    temp           = (*state)[0][1];
+    // Rotate first row 1 columns to left
+    temp = (*state)[0][1];
     (*state)[0][1] = (*state)[1][1];
     (*state)[1][1] = (*state)[2][1];
     (*state)[2][1] = (*state)[3][1];
     (*state)[3][1] = temp;
 
-    // Rotate second row 2 columns to left  
-    temp           = (*state)[0][2];
+    // Rotate second row 2 columns to left
+    temp = (*state)[0][2];
     (*state)[0][2] = (*state)[2][2];
     (*state)[2][2] = temp;
 
-    temp           = (*state)[1][2];
+    temp = (*state)[1][2];
     (*state)[1][2] = (*state)[3][2];
     (*state)[3][2] = temp;
 
     // Rotate third row 3 columns to left
-    temp           = (*state)[0][3];
+    temp = (*state)[0][3];
     (*state)[0][3] = (*state)[3][3];
     (*state)[3][3] = (*state)[2][3];
     (*state)[2][3] = (*state)[1][3];
@@ -6823,22 +7229,30 @@ static void ShiftRows(state_t* state)
 
 static uint8_t xtime(uint8_t x)
 {
-    return ((x<<1) ^ (((x>>7) & 1) * 0x1b));
+    return ((x << 1) ^ (((x >> 7) & 1) * 0x1b));
 }
 
 // MixColumns function mixes the columns of the state matrix
-static void MixColumns(state_t* state)
+static void MixColumns(state_t *state)
 {
     uint8_t i;
     uint8_t Tmp, Tm, t;
     for (i = 0; i < 4; ++i)
-    {  
-        t   = (*state)[i][0];
-        Tmp = (*state)[i][0] ^ (*state)[i][1] ^ (*state)[i][2] ^ (*state)[i][3] ;
-        Tm  = (*state)[i][0] ^ (*state)[i][1] ; Tm = xtime(Tm);  (*state)[i][0] ^= Tm ^ Tmp ;
-        Tm  = (*state)[i][1] ^ (*state)[i][2] ; Tm = xtime(Tm);  (*state)[i][1] ^= Tm ^ Tmp ;
-        Tm  = (*state)[i][2] ^ (*state)[i][3] ; Tm = xtime(Tm);  (*state)[i][2] ^= Tm ^ Tmp ;
-        Tm  = (*state)[i][3] ^ t ;              Tm = xtime(Tm);  (*state)[i][3] ^= Tm ^ Tmp ;
+    {
+        t = (*state)[i][0];
+        Tmp = (*state)[i][0] ^ (*state)[i][1] ^ (*state)[i][2] ^ (*state)[i][3];
+        Tm = (*state)[i][0] ^ (*state)[i][1];
+        Tm = xtime(Tm);
+        (*state)[i][0] ^= Tm ^ Tmp;
+        Tm = (*state)[i][1] ^ (*state)[i][2];
+        Tm = xtime(Tm);
+        (*state)[i][1] ^= Tm ^ Tmp;
+        Tm = (*state)[i][2] ^ (*state)[i][3];
+        Tm = xtime(Tm);
+        (*state)[i][2] ^= Tm ^ Tmp;
+        Tm = (*state)[i][3] ^ t;
+        Tm = xtime(Tm);
+        (*state)[i][3] ^= Tm ^ Tmp;
     }
 }
 
@@ -6850,30 +7264,30 @@ static void MixColumns(state_t* state)
 static uint8_t Multiply(uint8_t x, uint8_t y)
 {
     return (((y & 1) * x) ^
-            ((y>>1 & 1) * xtime(x)) ^
-            ((y>>2 & 1) * xtime(xtime(x))) ^
-            ((y>>3 & 1) * xtime(xtime(xtime(x)))) ^
-            ((y>>4 & 1) * xtime(xtime(xtime(xtime(x)))))); /* this last call to xtime() can be omitted */
+            ((y >> 1 & 1) * xtime(x)) ^
+            ((y >> 2 & 1) * xtime(xtime(x))) ^
+            ((y >> 3 & 1) * xtime(xtime(xtime(x)))) ^
+            ((y >> 4 & 1) * xtime(xtime(xtime(xtime(x)))))); /* this last call to xtime() can be omitted */
 }
 #else
-#define Multiply(x, y)                                \
-    (  ((y & 1) * x) ^                              \
-       ((y>>1 & 1) * xtime(x)) ^                       \
-       ((y>>2 & 1) * xtime(xtime(x))) ^                \
-       ((y>>3 & 1) * xtime(xtime(xtime(x)))) ^         \
-       ((y>>4 & 1) * xtime(xtime(xtime(xtime(x))))))   \
+#define Multiply(x, y)                         \
+    (((y & 1) * x) ^                           \
+     ((y >> 1 & 1) * xtime(x)) ^               \
+     ((y >> 2 & 1) * xtime(xtime(x))) ^        \
+     ((y >> 3 & 1) * xtime(xtime(xtime(x)))) ^ \
+     ((y >> 4 & 1) * xtime(xtime(xtime(xtime(x))))))
 
 #endif
 
 // MixColumns function mixes the columns of the state matrix.
 // The method used to multiply may be difficult to understand for the inexperienced.
 // Please use the references to gain more information.
-static void InvMixColumns(state_t* state)
+static void InvMixColumns(state_t *state)
 {
     int i;
     uint8_t a, b, c, d;
     for (i = 0; i < 4; ++i)
-    { 
+    {
         a = (*state)[i][0];
         b = (*state)[i][1];
         c = (*state)[i][2];
@@ -6886,10 +7300,9 @@ static void InvMixColumns(state_t* state)
     }
 }
 
-
 // The SubBytes Function Substitutes the values in the
 // state matrix with values in an S-box.
-static void InvSubBytes(state_t* state)
+static void InvSubBytes(state_t *state)
 {
     uint8_t i, j;
     for (i = 0; i < 4; ++i)
@@ -6901,18 +7314,18 @@ static void InvSubBytes(state_t* state)
     }
 }
 
-static void InvShiftRows(state_t* state)
+static void InvShiftRows(state_t *state)
 {
     uint8_t temp;
 
-    // Rotate first row 1 columns to right  
+    // Rotate first row 1 columns to right
     temp = (*state)[3][1];
     (*state)[3][1] = (*state)[2][1];
     (*state)[2][1] = (*state)[1][1];
     (*state)[1][1] = (*state)[0][1];
     (*state)[0][1] = temp;
 
-    // Rotate second row 2 columns to right 
+    // Rotate second row 2 columns to right
     temp = (*state)[0][2];
     (*state)[0][2] = (*state)[2][2];
     (*state)[2][2] = temp;
@@ -6930,12 +7343,12 @@ static void InvShiftRows(state_t* state)
 }
 
 // Cipher is the main function that encrypts the PlainText.
-static void Cipher(state_t* state, uint8_t* RoundKey)
+static void Cipher(state_t *state, uint8_t *RoundKey)
 {
     uint8_t round = 0;
 
     // Add the First round key to the state before starting the rounds.
-    AddRoundKey(0, state, RoundKey); 
+    AddRoundKey(0, state, RoundKey);
 
     // There will be Nr rounds.
     // The first Nr-1 rounds are identical.
@@ -6955,12 +7368,12 @@ static void Cipher(state_t* state, uint8_t* RoundKey)
     AddRoundKey(Nr, state, RoundKey);
 }
 
-static void InvCipher(state_t* state,uint8_t* RoundKey)
+static void InvCipher(state_t *state, uint8_t *RoundKey)
 {
     uint8_t round = 0;
 
     // Add the First round key to the state before starting the rounds.
-    AddRoundKey(Nr, state, RoundKey); 
+    AddRoundKey(Nr, state, RoundKey);
 
     // There will be Nr rounds.
     // The first Nr-1 rounds are identical.
@@ -6984,7 +7397,7 @@ static void InvCipher(state_t* state,uint8_t* RoundKey)
 /* Public functions:                                                         */
 /*****************************************************************************/
 
-static void XorWithIv(uint8_t* buf, uint8_t* Iv)
+static void XorWithIv(uint8_t *buf, uint8_t *Iv)
 {
     uint8_t i;
     for (i = 0; i < AES_BLOCKLEN; ++i) // The block in AES is always 128bit no matter the key size
@@ -6993,14 +7406,14 @@ static void XorWithIv(uint8_t* buf, uint8_t* Iv)
     }
 }
 
-static void AES_CBC_encrypt_buffer(struct AES_ctx *ctx,uint8_t* buf, uint32_t length)
+static void AES_CBC_encrypt_buffer(struct AES_ctx *ctx, uint8_t *buf, uint32_t length)
 {
     uintptr_t i;
     uint8_t *Iv = ctx->Iv;
     for (i = 0; i < length; i += AES_BLOCKLEN)
     {
         XorWithIv(buf, Iv);
-        Cipher((state_t*)buf, ctx->RoundKey);
+        Cipher((state_t *)buf, ctx->RoundKey);
         Iv = buf;
         buf += AES_BLOCKLEN;
         //printf("Step %d - %d", i/16, i);
@@ -7009,19 +7422,18 @@ static void AES_CBC_encrypt_buffer(struct AES_ctx *ctx,uint8_t* buf, uint32_t le
     memcpy(ctx->Iv, Iv, AES_BLOCKLEN);
 }
 
-static void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf,  uint32_t length)
+static void AES_CBC_decrypt_buffer(struct AES_ctx *ctx, uint8_t *buf, uint32_t length)
 {
     uintptr_t i;
     uint8_t storeNextIv[AES_BLOCKLEN];
     for (i = 0; i < length; i += AES_BLOCKLEN)
     {
         memcpy(storeNextIv, buf, AES_BLOCKLEN);
-        InvCipher((state_t*)buf, ctx->RoundKey);
+        InvCipher((state_t *)buf, ctx->RoundKey);
         XorWithIv(buf, ctx->Iv);
         memcpy(ctx->Iv, storeNextIv, AES_BLOCKLEN);
         buf += AES_BLOCKLEN;
     }
-
 }
 
 #pragma endregion /* AES */
@@ -7030,20 +7442,22 @@ static void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf,  uint32_t 
 
 #define mul32x32_64(a, b) ((uint64_t)(a) * (b))
 
-#define U8TO32_LE(p)                                                           \
-  (((uint32_t)((p)[0])) | ((uint32_t)((p)[1]) << 8) |                          \
-   ((uint32_t)((p)[2]) << 16) | ((uint32_t)((p)[3]) << 24))
+#define U8TO32_LE(p)                                    \
+    (((uint32_t)((p)[0])) | ((uint32_t)((p)[1]) << 8) | \
+     ((uint32_t)((p)[2]) << 16) | ((uint32_t)((p)[3]) << 24))
 
-#define U32TO8_LE(p, v)                                                        \
-  do {                                                                         \
-    (p)[0] = (uint8_t)((v));                                                   \
-    (p)[1] = (uint8_t)((v) >> 8);                                              \
-    (p)[2] = (uint8_t)((v) >> 16);                                             \
-    (p)[3] = (uint8_t)((v) >> 24);                                             \
-  } while (0)
+#define U32TO8_LE(p, v)                \
+    do                                 \
+    {                                  \
+        (p)[0] = (uint8_t)((v));       \
+        (p)[1] = (uint8_t)((v) >> 8);  \
+        (p)[2] = (uint8_t)((v) >> 16); \
+        (p)[3] = (uint8_t)((v) >> 24); \
+    } while (0)
 
 void poly1305_auth(unsigned char out[POLY1305_TAGLEN], const unsigned char *m,
-        size_t inlen, const unsigned char key[POLY1305_KEYLEN]) {
+                   size_t inlen, const unsigned char key[POLY1305_KEYLEN])
+{
     uint32_t t0, t1, t2, t3;
     uint32_t h0, h1, h2, h3, h4;
     uint32_t r0, r1, r2, r3, r4;
@@ -7108,15 +7522,15 @@ poly1305_donna_16bytes:
 
 poly1305_donna_mul:
     t[0] = mul32x32_64(h0, r0) + mul32x32_64(h1, s4) + mul32x32_64(h2, s3) +
-        mul32x32_64(h3, s2) + mul32x32_64(h4, s1);
+           mul32x32_64(h3, s2) + mul32x32_64(h4, s1);
     t[1] = mul32x32_64(h0, r1) + mul32x32_64(h1, r0) + mul32x32_64(h2, s4) +
-        mul32x32_64(h3, s3) + mul32x32_64(h4, s2);
+           mul32x32_64(h3, s3) + mul32x32_64(h4, s2);
     t[2] = mul32x32_64(h0, r2) + mul32x32_64(h1, r1) + mul32x32_64(h2, r0) +
-        mul32x32_64(h3, s4) + mul32x32_64(h4, s3);
+           mul32x32_64(h3, s4) + mul32x32_64(h4, s3);
     t[3] = mul32x32_64(h0, r3) + mul32x32_64(h1, r2) + mul32x32_64(h2, r1) +
-        mul32x32_64(h3, r0) + mul32x32_64(h4, s4);
+           mul32x32_64(h3, r0) + mul32x32_64(h4, s4);
     t[4] = mul32x32_64(h0, r4) + mul32x32_64(h1, r3) + mul32x32_64(h2, r2) +
-        mul32x32_64(h3, r1) + mul32x32_64(h4, r0);
+           mul32x32_64(h3, r1) + mul32x32_64(h4, r0);
 
     h0 = (uint32_t)t[0] & 0x3ffffff;
     c = (t[0] >> 26);
@@ -7236,13 +7650,13 @@ poly1305_donna_finish:
 static CSPRNG csprng_create()
 {
     CSPRNG_TYPE csprng;
-    if (!CryptAcquireContextA( &csprng.hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT ))
+    if (!CryptAcquireContextA(&csprng.hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT))
         csprng.hCryptProv = 0;
     return csprng.object;
 }
 
 /* ------------------------------------------------------------------------------------------- */
-static int csprng_get( CSPRNG object, void* dest, unsigned long long size )
+static int csprng_get(CSPRNG object, void *dest, unsigned long long size)
 {
     // Alas, we have to be pedantic here. csprng_get().size is a 64-bit entity.
     // However, CryptGenRandom().size is only a 32-bit DWORD. So we have to make sure failure
@@ -7251,50 +7665,54 @@ static int csprng_get( CSPRNG object, void* dest, unsigned long long size )
 
     CSPRNG_TYPE csprng;
     csprng.object = object;
-    if (!csprng.hCryptProv) return 0;
+    if (!csprng.hCryptProv)
+        return 0;
 
     n = size >> 30;
     while (n--)
-        if (!CryptGenRandom( csprng.hCryptProv, 1UL << 30, (BYTE*)dest )) return 0;
+        if (!CryptGenRandom(csprng.hCryptProv, 1UL << 30, (BYTE *)dest))
+            return 0;
 
-    return !!CryptGenRandom( csprng.hCryptProv, size & ((1ULL << 30) - 1), (BYTE*)dest );
+    return !!CryptGenRandom(csprng.hCryptProv, size & ((1ULL << 30) - 1), (BYTE *)dest);
 }
 
 /* ------------------------------------------------------------------------------------------- */
-static CSPRNG csprng_destroy( CSPRNG object )
+static CSPRNG csprng_destroy(CSPRNG object)
 {
     CSPRNG_TYPE csprng;
     csprng.object = object;
-    if (csprng.hCryptProv) CryptReleaseContext( csprng.hCryptProv, 0 );
+    if (csprng.hCryptProv)
+        CryptReleaseContext(csprng.hCryptProv, 0);
     return 0;
 }
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////// */
-#else  /* Using /dev/urandom                                                                     */
+#else /* Using /dev/urandom                                                                     */
 /* ///////////////////////////////////////////////////////////////////////////////////////////// */
 
 /* ------------------------------------------------------------------------------------------- */
 static CSPRNG csprng_create()
 {
     CSPRNG_TYPE csprng;
-    csprng.urandom = fopen( "/dev/urandom", "rb" );
+    csprng.urandom = fopen("/dev/urandom", "rb");
     return csprng.object;
 }
 
 /* ------------------------------------------------------------------------------------------- */
-static int csprng_get( CSPRNG object, void* dest, unsigned long long size )
+static int csprng_get(CSPRNG object, void *dest, unsigned long long size)
 {
     CSPRNG_TYPE csprng;
     csprng.object = object;
-    return (csprng.urandom) && (fread( (char*)dest, 1, size, csprng.urandom ) == size);
+    return (csprng.urandom) && (fread((char *)dest, 1, size, csprng.urandom) == size);
 }
 
 /* ------------------------------------------------------------------------------------------- */
-static CSPRNG csprng_destroy( CSPRNG object )
+static CSPRNG csprng_destroy(CSPRNG object)
 {
     CSPRNG_TYPE csprng;
     csprng.object = object;
-    if (csprng.urandom) fclose( csprng.urandom );
+    if (csprng.urandom)
+        fclose(csprng.urandom);
     return 0;
 }
 
