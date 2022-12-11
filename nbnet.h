@@ -3039,8 +3039,10 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
         NBN_LogTrace("Flushing channel %d (message count: %d)", channel->id, channel->outgoing_message_count);
 
         NBN_Message *message;
+        int i = 0;
 
         while (
+                i < channel->outgoing_message_count &&
                 sent_packet_count < NBN_CONNECTION_MAX_SENT_PACKET_COUNT &&
                 (message = channel->GetNextOutgoingMessage(channel)) != NULL
               )
@@ -3102,6 +3104,8 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
                 if (channel->type == NBN_CHANNEL_TYPE_UNRELIABLE_ORDERED)
                     Connection_RecycleMessage(connection, message);
             }
+
+            i++;
         }
     }
 
