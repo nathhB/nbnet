@@ -42,6 +42,7 @@
 #define NBN_LogTrace Soak_LogTrace
 #define NBN_LogDebug Soak_LogDebug
 #define NBN_LogError Soak_LogError
+#define NBN_LogWarning Soak_LogWarn
 
 #include "../nbnet.h"
 
