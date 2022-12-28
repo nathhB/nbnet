@@ -5,7 +5,8 @@
 [![Build Status](https://app.travis-ci.com/nathhB/nbnet.svg?branch=master)](https://app.travis-ci.com/nathhB/nbnet)
 [![CodeFactor](https://www.codefactor.io/repository/github/nathhb/nbnet/badge/master)](https://www.codefactor.io/repository/github/nathhb/nbnet/overview/master)
 [![Documentation](https://img.shields.io/badge/docs-docsforge-blue)](http://nbnet.docsforge.com/)
-[![Support Server](https://img.shields.io/discord/591914197219016707.svg?color=7289da&label=nbnet&logo=discord&style=flat-square)](https://discord.gg/esR8FSyPnF)
+
+[![](https://dcbadge.vercel.app/api/server/P9N7fy677D)](https://discord.gg/P9N7fy677D)
 
 nbnet is a single header C (C99) library to implement client-server network code for games. It is more precisely designed for fast-paced action games.
 
