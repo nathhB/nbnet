@@ -1,6 +1,6 @@
 {
   "name": "nbnet",
-  "version": "0.0.1",
+  "version": "1.0",
   "description": "WebRTC driver for the nbnet library",
   "author": "BIAGINI Nathan",
   "license": "MIT",

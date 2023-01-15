@@ -29,6 +29,7 @@ endif()
 
 target_compile_definitions(client PUBLIC NBN_DEBUG)
 target_compile_definitions(server PUBLIC NBN_DEBUG)
+target_compile_definitions(server PUBLIC NBN_RAYLIB_SERVER)
 
 if (ENCRYPTION_ENABLED)
   message("Encryption enabled")

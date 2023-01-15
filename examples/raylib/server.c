@@ -285,6 +285,14 @@ int main(int argc, char *argv[])
     // Even though we do not display anything we still use raylib logging capacibilities
     SetTraceLogLevel(LOG_DEBUG);
 
+#ifdef __EMSCRIPTEN__
+    NBN_WebRTC_Register(); // Register the WebRTC driver
+#else
+    NBN_UDP_Register(); // Register the UDP driver
+    // Register the FIFO driver (allow data to be exchanged through a FIFO)
+    NBN_FIFO_Register("/tmp/raylib_server-recv", "/tmp/raylib_server-send");
+#endif // __EMSCRIPTEN__
+
     // Start server with a protocol name and a port, must be done first
 #ifdef EXAMPLE_ENCRYPTION
     if (NBN_GameServer_Start(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT, true) < 0)

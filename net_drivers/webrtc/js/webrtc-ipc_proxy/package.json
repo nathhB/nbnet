@@ -1,0 +1,17 @@
+{
+  "name": "webrtc-ipc_proxy",
+  "version": "0.0.1",
+  "description": "WebRTC to IPC proxy to use with nbnet IPC driver",
+  "author": "BIAGINI Nathan",
+  "license": "MIT",
+  "main": "js/index.js",
+  "dependencies": {
+    "unix-dgram": "./node-unix-dgram",
+    "websocket": "^1.0.31",
+    "winston": "^3.2.1",
+    "wrtc": "^0.4.2"
+  },
+  "scripts": {
+    "start": "node index.js"
+  }
+}
