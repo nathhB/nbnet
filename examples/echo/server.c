@@ -69,6 +69,12 @@ static bool error = false;
 
 int main(void)
 {
+#ifdef __EMSCRIPTEN__
+    NBN_WebRTC_Register(); // Register the WebRTC driver
+#else
+    NBN_UDP_Register(); // Register the UDP driver
+#endif // __EMSCRIPTEN__
+
     // Start the server with a protocol name and a port, must be done first
 #ifdef NBN_ENCRYPTION
     if (NBN_GameServer_Start(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, true) < 0)

@@ -73,7 +73,8 @@ static const char *log_type_strings[] = {
     "INFO",
     "ERROR",
     "DEBUG",
-    "TRACE"
+    "TRACE",
+    "WARNING"
 };
 
 // Basic logging function

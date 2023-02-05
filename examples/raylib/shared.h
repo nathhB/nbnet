@@ -101,16 +101,6 @@ typedef struct tagMSG *LPMSG;
 #include "../../net_drivers/udp.h"
 #endif // __EMSCRIPTEN__
 
-#ifdef NBN_RAYLIB_SERVER
-
-// FIFO driver only works on UNIX systems
-#if defined(unix) || defined(__unix__) || defined(__unix) || \
-    (defined(__APPLE__) && defined(__MACH__))
-#include "../../net_drivers/fifo.h"
-#endif
-
-#endif // NBN_RAYLIB_SERVER
-
 #define TICK_RATE 60 // Simulation tick rate
 
 // Window size, used to display window but also to cap the serialized position values within messages
