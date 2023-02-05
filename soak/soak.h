@@ -56,7 +56,7 @@
 #define SOAK_MESSAGE 0
 #define SOAK_SEED time(NULL)
 #define SOAK_DONE 1
-#define SOAK_MAX_CLIENTS 32
+#define SOAK_MAX_CLIENTS 256
 #define SOAK_CLIENT_MAX_PENDING_MESSAGES 50 // max number of unacked messages at a time
 #define SOAK_SERVER_FULL_CODE 42
 

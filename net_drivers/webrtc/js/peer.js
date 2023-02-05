@@ -124,7 +124,9 @@ function onIceGatheringStateChanged(peer) {
         peer.logger.info('All candidates gathered, waiting for the remote peer to be ready to receive them')
 
         waitForRemotePeerToBeReadyToReceiveIceCandidates(peer).then(() => {
-            sendCandidates(peer)
+            if (peer.state !== 'connected') {
+                sendCandidates(peer)
+            }
         }).catch((err) => {
             raiseError(peer, `waitForRemotePeerToBeReadyToReceiveIceCandidates: ${err}`)
         })
@@ -197,7 +199,7 @@ function waitForRemotePeerToBeReadyToReceiveIceCandidates(peer) {
         }, 5000)
 
         const intervalId = setInterval(() => {
-            if (peer.isRemotePeerReadyToReceiveRemoteIceCandidates) {
+            if (peer.state === 'connected' || peer.isRemotePeerReadyToReceiveRemoteIceCandidates) {
                 clearTimeout(timeoutId)
                 clearInterval(intervalId)
                 resolve()

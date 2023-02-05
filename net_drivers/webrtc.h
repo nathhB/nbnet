@@ -332,7 +332,7 @@ static int NBN_WebRTC_ServRecvPackets(void)
             peer = (NBN_WebRTC_Peer *)NBN_Allocator(sizeof(NBN_WebRTC_Peer));
 
             peer->id = peer_id; 
-            peer->conn = NBN_GameServer_CreateClientConnection(peer_id, NBN_WEBRTC_DRIVER_ID, peer);
+            peer->conn = NBN_GameServer_CreateClientConnection(NBN_WEBRTC_DRIVER_ID, peer);
 
             NBN_WebRTC_HTable_Add(nbn_wrtc_peers, peer_id, peer);
 
