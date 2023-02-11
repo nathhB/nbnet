@@ -624,8 +624,9 @@ static void NBN_WebRTC_C_ServRemoveClientConnection(NBN_Connection *conn)
 
 static int NBN_WebRTC_C_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *conn)
 {
-    NBN_WebRTC_C_Peer *peer = conn->driver_data;
+    if (!conn->is_accepted) return 0;
 
+    NBN_WebRTC_C_Peer *peer = conn->driver_data;
     return rtcSendMessage(peer->channel_id, (char *)packet->buffer, packet->size);
 }
 

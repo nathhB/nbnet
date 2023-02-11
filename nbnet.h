@@ -3055,7 +3055,7 @@ int NBN_RPC_Message_Serialize(NBN_RPC_Message *msg, NBN_Stream *stream)
 
             if (stream->type == NBN_STREAM_WRITE || stream->type == NBN_STREAM_MEASURE)
             {
-                int l = strnlen(p->value.s, NBN_RPC_STRING_MAX_LENGTH);
+                int l = strlen(p->value.s);
 
                 assert(l + 1 <= NBN_RPC_STRING_MAX_LENGTH); // make sure we have a spot for the terminating byte
                 assert(l > 0);
