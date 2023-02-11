@@ -99,6 +99,11 @@ typedef struct tagMSG *LPMSG;
 #include "../../net_drivers/webrtc.h"
 #else
 #include "../../net_drivers/udp.h"
+
+#ifdef SOAK_WEBRTC_C_DRIVER
+#include "../../net_drivers/webrtc_c.h"
+#endif
+
 #endif // __EMSCRIPTEN__
 
 #define TICK_RATE 60 // Simulation tick rate

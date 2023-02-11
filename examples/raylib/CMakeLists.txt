@@ -38,6 +38,26 @@ if (ENCRYPTION_ENABLED)
   target_compile_definitions(server PUBLIC EXAMPLE_ENCRYPTION)
 endif(ENCRYPTION_ENABLED)
 
+unset(ENCRYPTION_ENABLED)
+
+# compile with C WebRTC driver
+if (WEBRTC_C_DRIVER)
+  message("Compiling with C WebRTC driver")
+
+  target_compile_definitions(server PUBLIC SOAK_WEBRTC_C_DRIVER)
+
+  target_link_libraries(server ${LIBFACILIO_LIBRARY_PATH})
+  target_link_libraries(server ${LIBCRYPTO_LIBRARY_PATH})
+  target_link_libraries(server ${LIBSSL_LIBRARY_PATH})
+  target_link_libraries(server ${LIBDATACHANNEL_LIBRARY_PATH})
+
+  target_include_directories(server PUBLIC "${LIBFACILIO_INCLUDE_PATH}")
+  target_include_directories(server PUBLIC "${OPENSSL_INCLUDE_PATH}")
+  target_include_directories(server PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
+endif (WEBRTC_C_DRIVER)
+
+unset(WEBRTC_C_DRIVER)
+
 if (EMSCRIPTEN)
     set(ASYNCIFY_IMPORTS "[\"__js_game_server_start\", \"__js_game_client_start\", \"__js_game_client_close\"]")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s ALLOW_MEMORY_GROWTH=1 -s TOTAL_MEMORY=30MB -s EXIT_RUNTIME=1 -s ASSERTIONS=1 -s ASYNCIFY -s ASYNCIFY_IMPORTS=\"${ASYNCIFY_IMPORTS}\"")

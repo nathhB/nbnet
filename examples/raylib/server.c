@@ -271,8 +271,17 @@ static int BroadcastGameState(void)
     return 0;
 }
 
+static bool running = true;
+
+static void SigintHandler(int dummy)
+{
+    running = false;
+}
+
 int main(int argc, char *argv[])
 {
+    signal(SIGINT, SigintHandler);
+
     // Read command line arguments
     if (ReadCommandLine(argc, argv))
     {
@@ -289,6 +298,11 @@ int main(int argc, char *argv[])
     NBN_WebRTC_Register(); // Register the WebRTC driver
 #else
     NBN_UDP_Register(); // Register the UDP driver
+
+#ifdef SOAK_WEBRTC_C_DRIVER
+    NBN_WebRTC_C_Register(); // Register the native WebRTC driver
+#endif
+
 #endif // __EMSCRIPTEN__
 
     // Start server with a protocol name and a port, must be done first
@@ -328,7 +342,7 @@ int main(int argc, char *argv[])
 
     float tick_dt = 1.f / TICK_RATE; // Tick delta time
 
-    while (true)
+    while (running)
     {
         // Update the server clock
         NBN_GameServer_AddTime(tick_dt);
