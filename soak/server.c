@@ -30,12 +30,13 @@
 #include "soak.h"
 
 #ifdef __EMSCRIPTEN__
-/* Use WebRTC driver */
 #include "../net_drivers/webrtc.h"
 #else
-/* Use UDP driver */
 #include "../net_drivers/udp.h"
+
+#ifdef SOAK_WEBRTC_C_DRIVER
 #include "../net_drivers/webrtc_c.h"
+#endif
 
 #endif // __EMSCRIPTEN__
 
@@ -273,7 +274,11 @@ int main(int argc, char *argv[])
     NBN_WebRTC_Register(); // Register the WebRTC driver
 #else
     NBN_UDP_Register(); // Register the UDP driver
+
+#ifdef SOAK_WEBRTC_C_DRIVER
     NBN_WebRTC_C_Register(); // Register native WebRTC driver
+#endif
+
 #endif // __EMSCRIPTEN__
 
     if (NBN_GameServer_Start(SOAK_PROTOCOL_NAME, SOAK_PORT, false))

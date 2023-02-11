@@ -30,6 +30,8 @@ if (ENCRYPTION_ENABLED)
   target_compile_definitions(server PUBLIC SOAK_ENCRYPTION)
 endif(ENCRYPTION_ENABLED)
 
+unset(ENCRYPTION_ENABLED)
+
 # compile with C WebRTC driver
 if (WEBRTC_C_DRIVER)
   message("Compiling with C WebRTC driver")
@@ -46,7 +48,7 @@ if (WEBRTC_C_DRIVER)
   target_include_directories(server PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
 endif (WEBRTC_C_DRIVER)
 
-unset(ENCRYPTION_ENABLED)
+unset(WEBRTC_C_DRIVER)
 
 if(WIN32)
   target_link_libraries(client wsock32 ws2_32)
