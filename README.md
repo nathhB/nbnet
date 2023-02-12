@@ -3,6 +3,7 @@
 ![logo](logo/logo.png "Logo")
 
 [![Build Status](https://app.travis-ci.com/nathhB/nbnet.svg?branch=master)](https://app.travis-ci.com/nathhB/nbnet)
+[![Docs site](https://img.shields.io/badge/docs-GitHub_Pages-blue)](https://nathhb.github.io/nbnet)
 [![CodeFactor](https://www.codefactor.io/repository/github/nathhb/nbnet/badge/master)](https://www.codefactor.io/repository/github/nathhb/nbnet/overview/master)
 
 [![](https://dcbadge.vercel.app/api/server/P9N7fy677D)](https://discord.gg/P9N7fy677D)
@@ -18,10 +19,6 @@ nbnet aims to be as easy to use as possible. nbnet's API is *friendly* and goes 
 You can see nbnet in action [in this video](https://www.youtube.com/watch?v=BJl_XN3QJhQ&ab_channel=NathanBIAGINI).
 
 If you want to discuss the library, you can join the [nbnet's discord server](https://discord.gg/esR8FSyPnF).
-
-## Documentation
-
-docsforge appears to be dead so I need to find another documentation solution :(
 
 ## Features
 
