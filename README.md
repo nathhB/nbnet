@@ -21,9 +21,7 @@ If you want to discuss the library, you can join the [nbnet's discord server](ht
 
 ## Documentation
 
-At the moment I think the best way to learn how to use nbnet is to go through the [examples](https://github.com/nathhB/nbnet/tree/master/examples).
-
-You can also take a look at the official [documentation](https://nbnet.docsforge.com/) (**WIP**).
+docsforge appears to be dead so I need to find another documentation solution :(
 
 ## Features
 
