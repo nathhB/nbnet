@@ -4,7 +4,6 @@
 
 [![Build Status](https://app.travis-ci.com/nathhB/nbnet.svg?branch=master)](https://app.travis-ci.com/nathhB/nbnet)
 [![CodeFactor](https://www.codefactor.io/repository/github/nathhb/nbnet/badge/master)](https://www.codefactor.io/repository/github/nathhb/nbnet/overview/master)
-[![Documentation](https://img.shields.io/badge/docs-docsforge-blue)](http://nbnet.docsforge.com/)
 
 [![](https://dcbadge.vercel.app/api/server/P9N7fy677D)](https://discord.gg/P9N7fy677D)
 
