@@ -50,6 +50,19 @@ endif (WEBRTC_C_DRIVER)
 
 unset(WEBRTC_C_DRIVER)
 
+# Use HTTPS (for WebRTC drivers)
+if (USE_HTTPS)
+  message("Compiling with HTTPS enabled")
+
+  target_compile_definitions(client PUBLIC NBN_USE_HTTPS)
+  target_compile_definitions(server PUBLIC NBN_USE_HTTPS)
+  target_compile_definitions(server PUBLIC NBN_HTTPS_SERVER_NAME="localhost")
+  target_compile_definitions(server PUBLIC NBN_HTTPS_KEY_PEM="localhost.key")
+  target_compile_definitions(server PUBLIC NBN_HTTPS_CERT_PEM="localhost.crt")
+endif (USE_HTTPS)
+
+unset(USE_HTTPS)
+
 if(WIN32)
   target_link_libraries(client wsock32 ws2_32)
   target_link_libraries(server wsock32 ws2_32)

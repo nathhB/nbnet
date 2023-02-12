@@ -39,6 +39,7 @@ freely, subject to the following restrictions:
 */
 
 #include <http.h>
+#include <fio_tls.h>
 #include <rtc/rtc.h>
 #include <pthread.h>
 #include "json.h"
@@ -419,6 +420,7 @@ static void NBN_WebRTC_C_OnLocalDescriptionCallback(int pc, const char *sdp, con
 static NBN_WebRTC_C_HTable *nbn_wrtc_c_peers = NULL;
 static pthread_t thread;
 static uint16_t ws_port;
+static fio_tls_s *tls;
 
 static void NBN_WebRTC_C_DestroyPeer(NBN_WebRTC_C_Peer *peer)
 {
@@ -554,7 +556,10 @@ static void *NBN_WebRTC_C_HttpServerThread(void *data)
 
     snprintf(port_str, sizeof(port_str), "%d", ws_port);
 
-    if (http_listen(port_str, NULL, .on_request = NBN_WebRTC_C_OnHttpRequest, .on_upgrade = NBN_WebRTC_C_OnHttpUpgrade) < 0)
+    if (http_listen(port_str, NULL,
+        .tls = tls,
+        .on_request = NBN_WebRTC_C_OnHttpRequest,
+        .on_upgrade = NBN_WebRTC_C_OnHttpUpgrade) < 0)
     {
         NBN_LogError("Failed to start websocket server");
         return NULL;
@@ -570,12 +575,27 @@ static int NBN_WebRTC_C_ServStart(uint32_t protocol_id, uint16_t port)
 
     ws_port = port;
     nbn_wrtc_c_peers = NBN_WebRTC_C_HTable_Create();
+    tls = NULL;
 
-    if (pthread_create(&thread, NULL, NBN_WebRTC_C_HttpServerThread, NULL) < 0)
+#ifdef NBN_USE_HTTPS
+
+    tls = fio_tls_new(
+        NBN_HTTPS_SERVER_NAME,
+        NBN_HTTPS_CERT_PEM,
+        NBN_HTTPS_KEY_PEM,
+        NULL);
+
+    NBN_LogDebug("Using HTTPS (server name: %s, cert: %s, key: %s)",
+        NBN_HTTPS_SERVER_NAME, NBN_HTTPS_CERT_PEM, NBN_HTTPS_KEY_PEM);
+
+#endif // NBN_USE_HTTPS
+
+    if (pthread_create(&thread, NULL, NBN_WebRTC_C_HttpServerThread, tls) < 0)
     {
         NBN_LogError("Failed to start HTTP server thread");
         return NBN_ERROR;
     }
+
     return 0;
 }
 
@@ -584,6 +604,7 @@ static void NBN_WebRTC_C_ServStop(void)
     pthread_join(thread, NULL);
     NBN_WebRTC_C_HTable_Destroy(nbn_wrtc_c_peers);
     rtcCleanup();
+    fio_tls_destroy(tls);
 }
 
 static int NBN_WebRTC_C_ServRecvPackets(void)
