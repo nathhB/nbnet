@@ -43,11 +43,11 @@ Information about the state of the connection will be displayed in the bottom ri
 
 ## Web
 
-### Server
+nbnet supports two WebRTC drivers: one using JS and emscripten and a native one fully written in C.
 
-The server can be compiled to support WebRTC using either the JS WebRTC driver (using emscripten) or the native WebRTC driver.
+### emscripten WebRTC driver
 
-#### emscripten WebRTC driver
+This driver requires the code to be compiled with emscripten.
 
 `mkdir build`
 
@@ -63,9 +63,15 @@ You can pass options to the server like so:
 
 `npm run server -- --packet_loss=<value> ...`
 
+To run the client you need to have an HTTP server running and serving the build directory (it contains the HTML file), then you just have to open `http://localhost:<PORT>/client.html` in your browser.
+
+When compiling the server this way, it will have to run as a nodejs application and only web clients will be able to connect to it. If you want your server to accept both web and native clients, read the next section.
+
 #### Native WebRTC driver
 
-Unlike the JS WebRTC driver, this one requires external dependencies to run:
+Unlike the JS WebRTC driver, this one can be compiled natively and therefore can be used alongside the UDP driver, making it possible to support both UDP socket and WebRTC connections.
+
+Some external dependencies are required:
 
 - libssl
 - libcrypto
@@ -78,14 +84,14 @@ Unlike the JS WebRTC driver, this one requires external dependencies to run:
 
 `cmake -DRAYLIB_LIBRARY_PATH=<path to raylib lib file> -DRAYLIB_INCLUDE_PATH=<path to raylib headers folder> -DLIBFACILIO_LIBRARY_PATH=<path libfacil.io lib file> -DLIBCRYPTO_LIBRARY_PATH=<path to libcrypto lib file> -DLIBSSL_LIBRARY_PATH=<path to libssl lib file> -DLIBDATACHANNEL_LIBRARY_PATH=<path to libdatachannel lib file> -DLIBFACILIO_INCLUDE_PATH=<path libfacilio headers folder> -DOPENSSL_INCLUDE_PATH=<path to openssl headers folder> -DLIBDATACHANNEL_INCLUDE_PATH=<path to libdatachannel headers folder> -DWEBRTC_C_DRIVER=ON ..`
 
-### Client
+To run the server:
 
-`mkdir build`
+`./server`
 
-`cd build`
+To run a native client:
 
-`emcmake cmake -DRAYLIB_LIBRARY_PATH=<path to raylib lib file> -DRAYLIB_INCLUDE_PATH=<path to raylib headers folder> ..`
+`./client`
 
-To run the client you need to have an HTTP server running and serving the build directory (it contains the HTML file), then you just have to open `http://localhost:<PORT>/client.html` in your browser.
+To run a web client simply do the same thing as in the previous section.
 
-*NOTE: For now there is no way to pass options to the client when it's running in the browser*
+[Here is a video](https://www.youtube.com/watch?v=63sC-WW79Oc) showcasing one web client and one native client connected to the same server.
