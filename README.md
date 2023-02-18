@@ -39,6 +39,12 @@ nbnet encryption and packet authentication would not have been possible without 
 - [tiny-AES](https://github.com/kokke/tiny-AES-c)
 - [poly1305-donna](https://github.com/floodyberry/poly1305-donna)
 
+and the native WebRTC driver would not exist without these ones:
+
+- [facil.io](https://github.com/boazsegev/facil.io)
+- [libdatachannel](https://github.com/paullouisageneau/libdatachannel)
+- [json.h](https://github.com/sheredom/json.h)
+
 ## Made with nbnet
 
 ### Boomshakalaka
