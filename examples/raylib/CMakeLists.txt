@@ -42,6 +42,11 @@ unset(ENCRYPTION_ENABLED)
 
 # compile with C WebRTC driver
 if (WEBRTC_C_DRIVER)
+  # can't compile WebRTC native driver with emscripten
+  if (EMSCRIPTEN)
+    message(SEND_ERROR "Can't compile WebRTC native driver with emscripten")
+  endif (EMSCRIPTEN)
+
   message("Compiling with C WebRTC driver")
 
   target_compile_definitions(server PUBLIC SOAK_WEBRTC_C_DRIVER)
@@ -54,9 +59,25 @@ if (WEBRTC_C_DRIVER)
   target_include_directories(server PUBLIC "${LIBFACILIO_INCLUDE_PATH}")
   target_include_directories(server PUBLIC "${OPENSSL_INCLUDE_PATH}")
   target_include_directories(server PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
+
+  if (USE_HTTPS)
+    target_compile_definitions(server PUBLIC NBN_HTTPS_SERVER_NAME="localhost")
+    target_compile_definitions(server PUBLIC NBN_HTTPS_KEY_PEM="localhost.key")
+    target_compile_definitions(server PUBLIC NBN_HTTPS_CERT_PEM="localhost.crt")
+  endif (USE_HTTPS)
 endif (WEBRTC_C_DRIVER)
 
 unset(WEBRTC_C_DRIVER)
+
+# Use HTTPS (for WebRTC drivers)
+if (USE_HTTPS)
+  message("Compiling with HTTPS enabled")
+
+  target_compile_definitions(client PUBLIC NBN_USE_HTTPS)
+  target_compile_definitions(server PUBLIC NBN_USE_HTTPS)
+endif (USE_HTTPS)
+
+unset(USE_HTTPS)
 
 if (EMSCRIPTEN)
     set(ASYNCIFY_IMPORTS "[\"__js_game_server_start\", \"__js_game_client_start\", \"__js_game_client_close\"]")

@@ -273,14 +273,20 @@ static int BroadcastGameState(void)
 
 static bool running = true;
 
+#ifndef __EMSCRIPTEN__
+
 static void SigintHandler(int dummy)
 {
     running = false;
 }
 
+#endif
+
 int main(int argc, char *argv[])
 {
+#ifndef __EMSCRIPTEN__
     signal(SIGINT, SigintHandler);
+#endif
 
     // Read command line arguments
     if (ReadCommandLine(argc, argv))
