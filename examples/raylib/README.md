@@ -43,13 +43,17 @@ Information about the state of the connection will be displayed in the bottom ri
 
 ## Web
 
-To compile the example for the web:
+### Server
+
+The server can be compiled to support WebRTC using either the JS WebRTC driver (using emscripten) or the native WebRTC driver.
+
+#### emscripten WebRTC driver
 
 `mkdir build`
 
 `cd build`
 
-`emcmake cmake -DRAYLIB_LIBRARY_PATH=<path to libraylib.bc file> -DRAYLIB_INCLUDE_PATH=<path to raylib headers>`
+`emcmake cmake -DRAYLIB_LIBRARY_PATH=<path to raylib lib file> -DRAYLIB_INCLUDE_PATH=<path to raylib headers folder> ..`
 
 To run the server:
 
@@ -58,6 +62,29 @@ To run the server:
 You can pass options to the server like so:
 
 `npm run server -- --packet_loss=<value> ...`
+
+#### Native WebRTC driver
+
+Unlike the JS WebRTC driver, this one requires external dependencies to run:
+
+- libssl
+- libcrypto
+- libdatachannel
+- facil.io
+
+`mkdir build`
+
+`cd build`
+
+`cmake -DRAYLIB_LIBRARY_PATH=<path to raylib lib file> -DRAYLIB_INCLUDE_PATH=<path to raylib headers folder> -DLIBFACILIO_LIBRARY_PATH=<path libfacil.io lib file> -DLIBCRYPTO_LIBRARY_PATH=<path to libcrypto lib file> -DLIBSSL_LIBRARY_PATH=<path to libssl lib file> -DLIBDATACHANNEL_LIBRARY_PATH=<path to libdatachannel lib file> -DLIBFACILIO_INCLUDE_PATH=<path libfacilio headers folder> -DOPENSSL_INCLUDE_PATH=<path to openssl headers folder> -DLIBDATACHANNEL_INCLUDE_PATH=<path to libdatachannel headers folder> -DWEBRTC_C_DRIVER=ON ..`
+
+### Client
+
+`mkdir build`
+
+`cd build`
+
+`emcmake cmake -DRAYLIB_LIBRARY_PATH=<path to raylib lib file> -DRAYLIB_INCLUDE_PATH=<path to raylib headers folder> ..`
 
 To run the client you need to have an HTTP server running and serving the build directory (it contains the HTML file), then you just have to open `http://localhost:<PORT>/client.html` in your browser.
 
