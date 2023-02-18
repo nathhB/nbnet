@@ -240,6 +240,12 @@ int main(int argc, char *argv[])
 {
     Soak_SetLogLevel(LOG_TRACE);
 
+#ifdef __EMSCRIPTEN__
+    NBN_WebRTC_Register(); // Register the WebRTC driver
+#else
+    NBN_UDP_Register(); // Register the UDP driver
+#endif // __EMSCRIPTEN__
+
     if (NBN_GameClient_Start(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT, false, NULL) < 0)
     {
         Soak_LogError("Failed to start game client. Exit");

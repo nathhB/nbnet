@@ -1,0 +1,9 @@
+{
+    "scripts": {
+        "server": "node server.js",
+        "client": "node client.js"
+    },
+    "dependencies": {
+        "nbnet": "file:../../net_drivers/webrtc"
+    }
+}

@@ -39,13 +39,15 @@ enum
     LOG_INFO,
     LOG_ERROR,
     LOG_DEBUG,
-    LOG_TRACE
+    LOG_TRACE,
+    LOG_WARNING
 };
 
 #define NBN_LogInfo(...) Log(LOG_INFO,  __VA_ARGS__)
 #define NBN_LogError(...) Log(LOG_ERROR, __VA_ARGS__)
 #define NBN_LogDebug(...) Log(LOG_DEBUG, __VA_ARGS__)
 #define NBN_LogTrace(...) Log(LOG_TRACE, __VA_ARGS__)
+#define NBN_LogWarning(...) Log(LOG_WARNING, __VA_ARGS__)
 
 void Log(int, const char *, ...);
 

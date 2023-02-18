@@ -271,8 +271,23 @@ static int BroadcastGameState(void)
     return 0;
 }
 
+static bool running = true;
+
+#ifndef __EMSCRIPTEN__
+
+static void SigintHandler(int dummy)
+{
+    running = false;
+}
+
+#endif
+
 int main(int argc, char *argv[])
 {
+#ifndef __EMSCRIPTEN__
+    signal(SIGINT, SigintHandler);
+#endif
+
     // Read command line arguments
     if (ReadCommandLine(argc, argv))
     {
@@ -284,6 +299,17 @@ int main(int argc, char *argv[])
 
     // Even though we do not display anything we still use raylib logging capacibilities
     SetTraceLogLevel(LOG_DEBUG);
+
+#ifdef __EMSCRIPTEN__
+    NBN_WebRTC_Register(); // Register the WebRTC driver
+#else
+    NBN_UDP_Register(); // Register the UDP driver
+
+#ifdef SOAK_WEBRTC_C_DRIVER
+    NBN_WebRTC_C_Register(); // Register the native WebRTC driver
+#endif
+
+#endif // __EMSCRIPTEN__
 
     // Start server with a protocol name and a port, must be done first
 #ifdef EXAMPLE_ENCRYPTION
@@ -322,7 +348,7 @@ int main(int argc, char *argv[])
 
     float tick_dt = 1.f / TICK_RATE; // Tick delta time
 
-    while (true)
+    while (running)
     {
         // Update the server clock
         NBN_GameServer_AddTime(tick_dt);

@@ -99,7 +99,11 @@ function handleConnection(gameServer, connection) {
     }
 
     peer.onPacketReceived = (packet) => {
-        gameServer.packets.push([packet, peer.id])
+        if (gameServer.onPacketReceived) {
+            gameServer.onPacketReceived(packet, peer.id)
+        } else {
+            gameServer.packets.push([packet, peer.id])
+        }
     }
 
     gameServer.logger.info('Created new peer (id: %d) for connection %d', peer.id, connection.id)

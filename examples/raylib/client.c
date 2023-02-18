@@ -372,7 +372,7 @@ static int Update(void)
 void DrawClient(ClientState *state, bool is_local)
 {
     Color color = client_colors_to_raylib_colors[state->color];
-    const char *text = FormatText("%.3f", state->val);
+    const char *text = TextFormat("%.3f", state->val);
     int font_size = 20;
     int text_width = MeasureText(text, font_size);
 
@@ -389,11 +389,11 @@ void DrawHUD(void)
     unsigned int ping = stats.ping * 1000;
     unsigned int packet_loss = stats.packet_loss * 100;
 
-    DrawText(FormatText("FPS: %d", GetFPS()), 450, 350, 32, MAROON);
-    DrawText(FormatText("Ping: %d ms", ping), 450, 400, 32, MAROON);
-    DrawText(FormatText("Packet loss: %d %%", packet_loss), 450, 450, 32, MAROON);
-    DrawText(FormatText("Upload: %.1f Bps", stats.upload_bandwidth), 450, 500, 32, MAROON);
-    DrawText(FormatText("Download: %.1f Bps", stats.download_bandwidth), 450, 550, 32, MAROON);
+    DrawText(TextFormat("FPS: %d", GetFPS()), 450, 350, 32, MAROON);
+    DrawText(TextFormat("Ping: %d ms", ping), 450, 400, 32, MAROON);
+    DrawText(TextFormat("Packet loss: %d %%", packet_loss), 450, 450, 32, MAROON);
+    DrawText(TextFormat("Upload: %.1f Bps", stats.upload_bandwidth), 450, 500, 32, MAROON);
+    DrawText(TextFormat("Download: %.1f Bps", stats.download_bandwidth), 450, 550, 32, MAROON);
 }
 
 void Draw(void)
@@ -516,6 +516,12 @@ int main(int argc, char *argv[])
 #ifndef __EMSCRIPTEN__
     SetTargetFPS(TARGET_FPS);
 #endif
+
+#ifdef __EMSCRIPTEN__
+    NBN_WebRTC_Register(); // Register the WebRTC driver
+#else
+    NBN_UDP_Register(); // Register the UDP driver
+#endif // __EMSCRIPTEN__
 
     // Start the client with a protocol name (must be the same than the one used by the server), the server ip address
     // and port

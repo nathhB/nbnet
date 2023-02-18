@@ -124,6 +124,12 @@ int main(int argc, char *argv[])
 #endif
     }
 
+#ifdef __EMSCRIPTEN__
+    NBN_WebRTC_Register(); // Register the WebRTC driver
+#else
+    NBN_UDP_Register(); // Register the UDP driver
+#endif // __EMSCRIPTEN__
+
     // Start the client with a protocol name (must be the same than the one used by the server), the server ip address
     // and port
 #ifdef NBN_ENCRYPTION
