@@ -67,7 +67,7 @@ To run the client you need to have an HTTP server running and serving the build 
 
 When compiling the server this way, it will have to run as a nodejs application and only web clients will be able to connect to it. If you want your server to accept both web and native clients, read the next section.
 
-#### Native WebRTC driver
+### Native WebRTC driver
 
 Unlike the JS WebRTC driver, this one can be compiled natively and therefore can be used alongside the UDP driver, making it possible to support both UDP socket and WebRTC connections.
 
