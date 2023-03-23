@@ -424,6 +424,7 @@ static fio_tls_s *tls;
 
 static void NBN_WebRTC_C_DestroyPeer(NBN_WebRTC_C_Peer *peer)
 {
+    NBN_LogDebug("Destroy peer %d", peer->id);
     rtcClose(peer->channel_id);
     rtcDelete(peer->channel_id);
     rtcClosePeerConnection(peer->id);
@@ -493,9 +494,7 @@ static void NBN_WebRTC_C_OnWsClose(intptr_t uuid, void *udata)
     {
         NBN_WebRTC_C_Peer *peer = udata;
 
-        NBN_LogDebug("WebSocket %d closed, destroying peer %d", uuid, peer->id);
-        NBN_WebRTC_C_HTable_Remove(nbn_wrtc_c_peers, peer->id);
-        NBN_WebRTC_C_DestroyPeer(peer);
+        NBN_LogDebug("WebSocket %d closed (peer id %d)", uuid, peer->id);
     }
 }
 
@@ -604,7 +603,11 @@ static void NBN_WebRTC_C_ServStop(void)
     pthread_join(thread, NULL);
     NBN_WebRTC_C_HTable_Destroy(nbn_wrtc_c_peers);
     rtcCleanup();
-    fio_tls_destroy(tls);
+
+    if (tls)
+    {
+        fio_tls_destroy(tls);
+    }
 }
 
 static int NBN_WebRTC_C_ServRecvPackets(void)
@@ -648,7 +651,13 @@ static int NBN_WebRTC_C_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *con
     if (!conn->is_accepted) return 0;
 
     NBN_WebRTC_C_Peer *peer = conn->driver_data;
-    return rtcSendMessage(peer->channel_id, (char *)packet->buffer, packet->size);
+
+    if (rtcSendMessage(peer->channel_id, (char *)packet->buffer, packet->size) < 0)
+    {
+        NBN_LogDebug("rtcSendMessage failed for peer %d", peer->id);
+    }
+
+    return 0;
 }
 
 #pragma endregion /* Game server */

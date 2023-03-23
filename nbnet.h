@@ -3352,7 +3352,7 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
 
     if (Connection_SendPacket(connection, &packet, packet_entry) < 0)
     {
-        NBN_LogError("Failed to send packet %d", packet.header.seq_number);
+        NBN_LogError("Failed to send packet %d to connection %d", packet.header.seq_number, connection->id);
 
         return NBN_ERROR;
     }
