@@ -28,7 +28,7 @@ If you want to discuss the library, you can join the [nbnet's discord server](ht
 - Bit-level serialization (for bandwidth optimization): integers (signed and unsigned), floats, booleans, and byte arrays
 - Network conditions simulation: ping, jitter, packet loss, packet duplication, and out of order packets)
 - Network statistics: ping, bandwidth (upload and download) and packet loss
-- Web (WebRTC) support (powered by [emscripten](https://emscripten.org/docs/introducing_emscripten/about_emscripten.html))
+- Web (WebRTC) support (both natively and through WASM using [emscripten](https://emscripten.org/docs/introducing_emscripten/about_emscripten.html))
 - Encrypted and authenticated packets
 
 ## Thanks
@@ -171,7 +171,13 @@ Apart from that, you probably want to add:
 
 For more information: https://emscripten.org/docs/tools_reference/emcc.html
 
-### NodeJS
+### Native WebRTC server
+
+TODO.
+
+Please refer to the [raylib example](https://github.com/nathhB/nbnet/tree/master/examples/raylib#native-webrtc-driver) for more information.
+
+### NodeJS server
 
 Most of the time, you want your server code to run in a *NodeJS* server. You can get *NodeJS* it from [here](https://nodejs.org/en/download/).
 
