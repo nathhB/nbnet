@@ -137,6 +137,7 @@ typedef uint32_t Word;
 
 #define NBN_SerializeUInt(stream, v, min, max) \
     ASSERTED_SERIALIZE(stream, v, min, max, stream->serialize_uint_func(stream, (unsigned int *)&(v), min, max))
+#define NBN_SerializeUInt64(stream, v) stream->serialize_uint64_func(stream, (uint64_t *)&(v))
 #define NBN_SerializeInt(stream, v, min, max) \
     ASSERTED_SERIALIZE(stream, v, min, max, stream->serialize_int_func(stream, &(v), min, max))
 #define NBN_SerializeFloat(stream, v, min, max, precision) \
@@ -183,7 +184,8 @@ int NBN_BitWriter_Flush(NBN_BitWriter *);
 
 typedef struct NBN_Stream NBN_Stream;
 
-typedef int (*NBN_Stream_SerializUint)(NBN_Stream *, unsigned int *, unsigned int, unsigned int);
+typedef int (*NBN_Stream_SerializeUInt)(NBN_Stream *, unsigned int *, unsigned int, unsigned int);
+typedef int (*NBN_Stream_SerializeUInt64)(NBN_Stream *, uint64_t *);
 typedef int (*NBN_Stream_SerializeInt)(NBN_Stream *, int *, int, int);
 typedef int (*NBN_Stream_SerializeFloat)(NBN_Stream *, float *, float, float, int);
 typedef int (*NBN_Stream_SerializeBool)(NBN_Stream *, bool *);
@@ -200,7 +202,8 @@ typedef enum
 struct NBN_Stream
 {
     NBN_StreamType type;
-    NBN_Stream_SerializUint serialize_uint_func;
+    NBN_Stream_SerializeUInt serialize_uint_func;
+    NBN_Stream_SerializeUInt64 serialize_uint64_func;
     NBN_Stream_SerializeInt serialize_int_func;
     NBN_Stream_SerializeFloat serialize_float_func;
     NBN_Stream_SerializeBool serialize_bool_func;
@@ -220,6 +223,7 @@ typedef struct
 
 void NBN_ReadStream_Init(NBN_ReadStream *, uint8_t *, unsigned int);
 int NBN_ReadStream_SerializeUint(NBN_ReadStream *, unsigned int *, unsigned int, unsigned int);
+int NBN_ReadStream_SerializeUint64(NBN_ReadStream *read_stream, uint64_t *value);
 int NBN_ReadStream_SerializeInt(NBN_ReadStream *, int *, int, int);
 int NBN_ReadStream_SerializeFloat(NBN_ReadStream *, float *, float, float, int);
 int NBN_ReadStream_SerializeBool(NBN_ReadStream *, bool *);
@@ -238,6 +242,7 @@ typedef struct
 
 void NBN_WriteStream_Init(NBN_WriteStream *, uint8_t *, unsigned int);
 int NBN_WriteStream_SerializeUint(NBN_WriteStream *, unsigned int *, unsigned int, unsigned int);
+int NBN_WriteStream_SerializeUint64(NBN_WriteStream *write_stream, uint64_t *value);
 int NBN_WriteStream_SerializeInt(NBN_WriteStream *, int *, int, int);
 int NBN_WriteStream_SerializeFloat(NBN_WriteStream *, float *, float, float, int);
 int NBN_WriteStream_SerializeBool(NBN_WriteStream *, bool *);
@@ -257,6 +262,7 @@ typedef struct
 
 void NBN_MeasureStream_Init(NBN_MeasureStream *);
 int NBN_MeasureStream_SerializeUint(NBN_MeasureStream *, unsigned int *, unsigned int, unsigned int);
+int NBN_MeasureStream_SerializeUint64(NBN_MeasureStream *measure_stream, unsigned int *value);
 int NBN_MeasureStream_SerializeInt(NBN_MeasureStream *, int *, int, int);
 int NBN_MeasureStream_SerializeFloat(NBN_MeasureStream *, float *, float, float, int);
 int NBN_MeasureStream_SerializeBool(NBN_MeasureStream *, bool *);
@@ -2154,7 +2160,8 @@ static int BitWriter_FlushScratchBits(NBN_BitWriter *bit_writer, unsigned int nu
 void NBN_ReadStream_Init(NBN_ReadStream *read_stream, uint8_t *buffer, unsigned int size)
 {
     read_stream->base.type = NBN_STREAM_READ;
-    read_stream->base.serialize_uint_func = (NBN_Stream_SerializUint)NBN_ReadStream_SerializeUint;
+    read_stream->base.serialize_uint_func = (NBN_Stream_SerializeUInt)NBN_ReadStream_SerializeUint;
+    read_stream->base.serialize_uint64_func = (NBN_Stream_SerializeUInt64)NBN_ReadStream_SerializeUint64;
     read_stream->base.serialize_int_func = (NBN_Stream_SerializeInt)NBN_ReadStream_SerializeInt;
     read_stream->base.serialize_float_func = (NBN_Stream_SerializeFloat)NBN_ReadStream_SerializeFloat;
     read_stream->base.serialize_bool_func = (NBN_Stream_SerializeBool)NBN_ReadStream_SerializeBool;
@@ -2179,6 +2186,22 @@ int NBN_ReadStream_SerializeUint(NBN_ReadStream *read_stream, unsigned int *valu
     if (*value < min || *value > max)
         return NBN_ERROR;
 #endif
+
+    return 0;
+}
+
+int NBN_ReadStream_SerializeUint64(NBN_ReadStream *read_stream, uint64_t *value)
+{
+    union uint64_to_bytes
+    {
+        uint64_t v;
+        uint8_t bytes[8];
+    } u;
+
+    if (NBN_ReadStream_SerializeBytes(read_stream, u.bytes, 8) < 0)
+        return NBN_ERROR;
+
+    *value = u.v;
 
     return 0;
 }
@@ -2265,7 +2288,9 @@ int NBN_ReadStream_SerializeBytes(NBN_ReadStream *read_stream, uint8_t *bytes, u
         return NBN_ERROR;
 
     if (NBN_ReadStream_SerializePadding(read_stream) < 0)
+    {
         return NBN_ERROR;
+    }
 
     NBN_BitReader *bit_reader = &read_stream->bit_reader;
 
@@ -2279,7 +2304,9 @@ int NBN_ReadStream_SerializeBytes(NBN_ReadStream *read_stream, uint8_t *bytes, u
         Word word;
 
         if (NBN_BitReader_Read(bit_reader, &word, length * 8) < 0)
+        {
             return NBN_ERROR;
+        }
 
         memcpy(bytes, &word, length);
     }
@@ -2308,7 +2335,8 @@ int NBN_ReadStream_SerializeBytes(NBN_ReadStream *read_stream, uint8_t *bytes, u
 void NBN_WriteStream_Init(NBN_WriteStream *write_stream, uint8_t *buffer, unsigned int size)
 {
     write_stream->base.type = NBN_STREAM_WRITE;
-    write_stream->base.serialize_uint_func = (NBN_Stream_SerializUint)NBN_WriteStream_SerializeUint;
+    write_stream->base.serialize_uint_func = (NBN_Stream_SerializeUInt)NBN_WriteStream_SerializeUint;
+    write_stream->base.serialize_uint64_func = (NBN_Stream_SerializeUInt64)NBN_WriteStream_SerializeUint64;
     write_stream->base.serialize_int_func = (NBN_Stream_SerializeInt)NBN_WriteStream_SerializeInt;
     write_stream->base.serialize_float_func = (NBN_Stream_SerializeFloat)NBN_WriteStream_SerializeFloat;
     write_stream->base.serialize_bool_func = (NBN_Stream_SerializeBool)NBN_WriteStream_SerializeBool;
@@ -2328,6 +2356,19 @@ int NBN_WriteStream_SerializeUint(
         return NBN_ERROR;
 
     return 0;
+}
+
+int NBN_WriteStream_SerializeUint64(NBN_WriteStream *write_stream, uint64_t *value)
+{
+    union uint64_to_bytes
+    {
+        uint64_t v;
+        uint8_t bytes[8];
+    } u;
+
+    u.v = *value;
+
+    return NBN_WriteStream_SerializeBytes(write_stream, u.bytes, 8);
 }
 
 int NBN_WriteStream_SerializeInt(NBN_WriteStream *write_stream, int *value, int min, int max)
@@ -2433,7 +2474,8 @@ int NBN_WriteStream_Flush(NBN_WriteStream *write_stream)
 void NBN_MeasureStream_Init(NBN_MeasureStream *measure_stream)
 {
     measure_stream->base.type = NBN_STREAM_MEASURE;
-    measure_stream->base.serialize_uint_func = (NBN_Stream_SerializUint)NBN_MeasureStream_SerializeUint;
+    measure_stream->base.serialize_uint_func = (NBN_Stream_SerializeUInt)NBN_MeasureStream_SerializeUint;
+    measure_stream->base.serialize_uint64_func = (NBN_Stream_SerializeUInt64)NBN_MeasureStream_SerializeUint64;
     measure_stream->base.serialize_int_func = (NBN_Stream_SerializeInt)NBN_MeasureStream_SerializeInt;
     measure_stream->base.serialize_float_func = (NBN_Stream_SerializeFloat)NBN_MeasureStream_SerializeFloat;
     measure_stream->base.serialize_bool_func = (NBN_Stream_SerializeBool)NBN_MeasureStream_SerializeBool;
@@ -2456,6 +2498,13 @@ int NBN_MeasureStream_SerializeUint(
     measure_stream->number_of_bits += number_of_bits;
 
     return number_of_bits;
+}
+
+int NBN_MeasureStream_SerializeUint64(NBN_MeasureStream *measure_stream, unsigned int *value)
+{
+    (void)value;
+
+    return NBN_MeasureStream_SerializeBytes(measure_stream, NULL, 8);
 }
 
 int NBN_MeasureStream_SerializeInt(NBN_MeasureStream *measure_stream, int *value, int min, int max)
@@ -4569,7 +4618,7 @@ int NBN_Endpoint_RegisterRPC(NBN_Endpoint *endpoint, int id, NBN_RPC_Signature s
 
     if (signature.param_count > NBN_RPC_MAX_PARAM_COUNT)
     {
-        NBN_LogError("Failed to register RPC %d, too many parameters");
+        NBN_LogError("Failed to register RPC %d, too many parameters", id);
 
         return NBN_ERROR;
     }
@@ -5639,7 +5688,7 @@ int NBN_GameServer_SendMessageTo(NBN_Connection *client, NBN_OutgoingMessage *ou
 
     if (Endpoint_EnqueueOutgoingMessage(&nbn_game_server.endpoint, client, outgoing_msg, channel_id) < 0)
     {
-        NBN_LogError("Failed to create outgoing message for client %d");
+        NBN_LogError("Failed to create outgoing message for client %d", client->id);
 
         /* Do not close the client if we failed to send the close client message to avoid infinite loops */
         if (outgoing_msg->type != NBN_CLIENT_CLOSED_MESSAGE_TYPE)
