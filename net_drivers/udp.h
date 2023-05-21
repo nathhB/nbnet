@@ -193,9 +193,10 @@ static NBN_UDP_Connection *NBN_UDP_HTable_Remove(NBN_UDP_HTable *htable, NBN_IPA
 
     if (entry)
     {
+        NBN_UDP_Connection *conn = entry->conn;
         NBN_UDP_HTable_RemoveEntry(htable, entry);
 
-        return entry->conn;
+        return conn;
     }
 
     return NULL;
