@@ -37,7 +37,7 @@
 
 EchoMessage *EchoMessage_Create(void)
 {
-    return malloc(sizeof(EchoMessage));
+    return (EchoMessage *) malloc(sizeof(EchoMessage));
 }
 
 void EchoMessage_Destroy(EchoMessage *msg)

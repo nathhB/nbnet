@@ -140,9 +140,9 @@ static NBN_UDP_HTable *NBN_UDP_HTable_Create(void)
 
 static NBN_UDP_HTable *NBN_UDP_HTable_CreateWithCapacity(unsigned int capacity)
 {
-    NBN_UDP_HTable *htable = NBN_Allocator(sizeof(NBN_UDP_HTable));
+    NBN_UDP_HTable *htable = (NBN_UDP_HTable *) NBN_Allocator(sizeof(NBN_UDP_HTable));
 
-    htable->internal_array = NBN_Allocator(sizeof(NBN_UDP_HTableEntry *) * capacity);
+    htable->internal_array = (NBN_UDP_HTableEntry **) NBN_Allocator(sizeof(NBN_UDP_HTableEntry *) * capacity);
     htable->capacity = capacity;
     htable->count = 0;
     htable->load_factor = 0;
@@ -169,7 +169,7 @@ static void NBN_UDP_HTable_Destroy(NBN_UDP_HTable *htable)
 
 static void NBN_UDP_HTable_Add(NBN_UDP_HTable *htable, NBN_IPAddress ip_addr, NBN_UDP_Connection *conn)
 {
-    NBN_UDP_HTableEntry *entry = NBN_Allocator(sizeof(NBN_UDP_HTableEntry));
+    NBN_UDP_HTableEntry *entry = (NBN_UDP_HTableEntry*) NBN_Allocator(sizeof(NBN_UDP_HTableEntry));
 
     entry->ip_addr = ip_addr;
     entry->conn = conn;
@@ -285,7 +285,7 @@ static void NBN_UDP_HTable_Grow(NBN_UDP_HTable *htable)
     unsigned int old_capacity = htable->capacity;
     unsigned int new_capacity = old_capacity * 2;
     NBN_UDP_HTableEntry** old_internal_array = htable->internal_array;
-    NBN_UDP_HTableEntry** new_internal_array = NBN_Allocator(sizeof(NBN_UDP_HTableEntry*) * new_capacity);
+    NBN_UDP_HTableEntry** new_internal_array = (NBN_UDP_HTableEntry**) NBN_Allocator(sizeof(NBN_UDP_HTableEntry*) * new_capacity);
 
     for (unsigned int i = 0; i < new_capacity; i++)
     {
