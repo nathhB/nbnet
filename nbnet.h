@@ -1823,7 +1823,7 @@ static int NBN_ConnectionVector_Grow(NBN_ConnectionVector *vector, unsigned int 
 
 static NBN_ConnectionVector *NBN_ConnectionVector_Create(void)
 {
-    NBN_ConnectionVector *vector = NBN_Allocator(sizeof(NBN_ConnectionVector));
+    NBN_ConnectionVector *vector = (NBN_ConnectionVector *) NBN_Allocator(sizeof(NBN_ConnectionVector));
 
     vector->connections = NULL;
     vector->capacity = 0;
@@ -1878,7 +1878,7 @@ static void NBN_ConnectionVector_Remove(NBN_ConnectionVector *vector, NBN_Connec
 
 static int NBN_ConnectionVector_Grow(NBN_ConnectionVector *vector, unsigned int new_capacity)
 {
-    vector->connections = NBN_Reallocator(vector->connections, sizeof(NBN_Connection *) * new_capacity);
+    vector->connections = (NBN_Connection **) NBN_Reallocator(vector->connections, sizeof(NBN_Connection *) * new_capacity);
 
     if (vector->connections == NULL)
         return NBN_ERROR;
@@ -3324,10 +3324,10 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
         NBN_LogTrace("Flushing channel %d (message count: %d)", channel->id, channel->outgoing_message_count);
 
         NBN_Message *message;
-        unsigned int i = 0;
+        unsigned int j = 0;
 
         while (
-                i < channel->outgoing_message_count &&
+                j < channel->outgoing_message_count &&
                 sent_packet_count < NBN_CONNECTION_MAX_SENT_PACKET_COUNT &&
                 (message = channel->GetNextOutgoingMessage(channel)) != NULL
               )
@@ -3395,7 +3395,7 @@ int NBN_Connection_FlushSendQueue(NBN_Connection *connection)
                 }
             }
 
-            i++;
+            j++;
         }
     }
 
@@ -3831,7 +3831,7 @@ static void Connection_UpdateAverageDownloadBandwidth(NBN_Connection *connection
 
 NBN_OutgoingMessage *Connection_BuildRPC(NBN_Connection *connection, NBN_Endpoint *endpoint, NBN_RPC *rpc, va_list args)
 {
-    NBN_RPC_Message *msg = NBN_RPC_Message_Create();
+    NBN_RPC_Message *msg = (NBN_RPC_Message *) NBN_RPC_Message_Create();
 
     assert(msg != NULL);
 
@@ -4462,7 +4462,7 @@ void NBN_Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server
     }
 
     for (int i = 0; i < NBN_RPC_MAX; i++)
-        endpoint->rpcs[i] = (NBN_RPC){.id = -1};
+        endpoint->rpcs[i] = (NBN_RPC){.id = UINT_MAX};
 
     NBN_EventQueue_Init(&endpoint->event_queue);
 
@@ -4623,7 +4623,7 @@ int NBN_Endpoint_RegisterRPC(NBN_Endpoint *endpoint, int id, NBN_RPC_Signature s
         return NBN_ERROR;
     }
 
-    endpoint->rpcs[id] = (NBN_RPC){.id = id, .signature = signature, .func = func};
+    endpoint->rpcs[id] = (NBN_RPC){.id = (unsigned int) id, .signature = signature, .func = func};
 
     NBN_LogDebug("Registered RPC (id: %d, parameter count: %d)", id, signature.param_count);
 
@@ -5363,7 +5363,7 @@ static int GameClient_HandleMessageReceivedEvent(void)
     }
     else if (message_info.type == NBN_RPC_MESSAGE_TYPE)
     {
-        Connection_HandleReceivedRPC(nbn_game_client.server_connection, &nbn_game_client.endpoint, message_info.data);
+        Connection_HandleReceivedRPC(nbn_game_client.server_connection, &nbn_game_client.endpoint, (NBN_RPC_Message *) message_info.data);
     }
     else
     {
@@ -6103,7 +6103,7 @@ static int GameServer_HandleMessageReceivedEvent(void)
     {
         ret = NBN_NO_EVENT;
 
-        Connection_HandleReceivedRPC(message_info.sender, &nbn_game_server.endpoint, message_info.data);
+        Connection_HandleReceivedRPC(message_info.sender, &nbn_game_server.endpoint, (NBN_RPC_Message *) message_info.data);
     }
     else if (message_info.type == NBN_CONNECTION_REQUEST_MESSAGE_TYPE)
     {
