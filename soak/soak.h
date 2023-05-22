@@ -52,17 +52,19 @@
 #define SOAK_TICK_DT (1.0 / SOAK_TICK_RATE)
 #define SOAK_MESSAGE_MIN_DATA_LENGTH 50
 #define SOAK_MESSAGE_MAX_DATA_LENGTH 4096
-#define SOAK_BIG_MESSAGE_PERCENTAGE 33
+#define SOAK_BIG_MESSAGE_PERCENTAGE 0
 #define SOAK_MESSAGE 0
 #define SOAK_SEED time(NULL)
 #define SOAK_DONE 1
 #define SOAK_MAX_CLIENTS 256
 #define SOAK_CLIENT_MAX_PENDING_MESSAGES 50 // max number of unacked messages at a time
 #define SOAK_SERVER_FULL_CODE 42
+#define SOAK_MAX_CHANNELS (NBN_MAX_CHANNELS - 3)
 
 typedef struct
 {
     unsigned int message_count;
+    unsigned int channel_count;
     float packet_loss; /* 0 - 1 */
     float packet_duplication; /* 0 - 1 */
     float ping; /* in seconds */
@@ -80,7 +82,7 @@ typedef struct
 int Soak_Init(int, char *[]);
 void Soak_Deinit(void);
 int Soak_ReadCommandLine(int, char *[]);
-int Soak_MainLoop(int (*)(void));
+int Soak_MainLoop(int (*Tick)(void *), void *data);
 void Soak_Stop(void);
 SoakOptions Soak_GetOptions(void);
 void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *, NBN_Message *);
