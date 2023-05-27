@@ -1640,40 +1640,6 @@ int NBN_GameServer_SendUnreliableByteArrayTo(NBN_Connection *client, uint8_t *by
 int NBN_GameServer_SendReliableByteArrayTo(NBN_Connection *client, uint8_t *bytes, unsigned int length);
 
 /**
- * Broadcast a message to all clients on a given channel.
- * 
- * It's recommended to use NBN_GameServer_BroadcastUnreliableMessage or NBN_GameServer_BroadcastReliableMessage
- * unless you really want to use a specific channel.
- * 
- * @param msg_type The type of message to send; it needs to be registered (see NBN_GameServer_RegisterMessage)
- * @param channel_id The ID of the channel to send the message on
- * @param msg_data A pointer to the message to send (managed by user code)
- * 
- * @return 0 when successful, -1 otherwise
- */
-int NBN_GameServer_BroadcastMessage(uint8_t msg_type, uint8_t channel_id, void *msg_data);
-
-/**
- * Broadcast a message to all clients, unreliably.
- * 
- * @param msg_type The type of message to send; it needs to be registered (see NBN_GameServer_RegisterMessage)
- * @param msg_data A pointer to the message to send (managed by user code)
- * 
- * @return 0 when successful, -1 otherwise
- */
-int NBN_GameServer_BroadcastUnreliableMessage(uint8_t msg_type, void *msg_data);
-
-/**
- * Broadcast a message to all clients, reliably.
- * 
- * @param msg_type The type of message to send; it needs to be registered (see NBN_GameServer_RegisterMessage)
- * @param msg_data A pointer to the message to send (managed by user code)
- * 
- * @return 0 when successful, -1 otherwise
- */
-int NBN_GameServer_BroadcastReliableMessage(uint8_t msg_type, void *msg_data);
-
-/**
  * Retrieve a stream to write data that will be send to the client upon accepting its connection.
  * 
  * Data should be written before accepting the connection (before calling NBN_GameServer_AcceptIncomingConnection).
@@ -3214,7 +3180,7 @@ static bool Connection_IsPacketReceived(NBN_Connection *, uint16_t);
 static int Connection_SendPacket(NBN_Connection *, NBN_Packet *, NBN_PacketEntry *);
 static int Connection_ReadNextMessageFromStream(NBN_Connection *, NBN_ReadStream *, NBN_Message *);
 static int Connection_ReadNextMessageFromPacket(NBN_Connection *, NBN_Packet *, NBN_Message *);
-static int Connection_RecycleMessage(NBN_Connection *, NBN_Message *);
+static void Connection_RecycleMessage(NBN_Connection *, NBN_Message *);
 static void Connection_UpdateAveragePing(NBN_Connection *, double);
 static void Connection_UpdateAveragePacketLoss(NBN_Connection *, uint16_t);
 static void Connection_UpdateAverageUploadBandwidth(NBN_Connection *, float);
@@ -3357,10 +3323,7 @@ int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet 
         {
             NBN_LogTrace("Received message %d : discarded", message.header.id);
 
-            if (Connection_RecycleMessage(connection, &message) == NBN_ERROR)
-            {
-                NBN_LogWarning("Failed to recycle message");
-            }
+            Connection_RecycleMessage(connection, &message);
         }
     }
 
@@ -3784,16 +3747,10 @@ static int Connection_ReadNextMessageFromPacket(NBN_Connection *connection, NBN_
     return Connection_ReadNextMessageFromStream(connection, &packet->r_stream, message);
 }
 
-static int Connection_RecycleMessage(NBN_Connection *connection, NBN_Message *message)
+static void Connection_RecycleMessage(NBN_Connection *connection, NBN_Message *message)
 {
-    if (message->outgoing_msg && message->outgoing_msg->ref_count == 0)
-    {
-        NBN_LogError("Tried to recycle an already recycled message");
-
-        return NBN_ERROR;
-    }
-
-    // assert(message->outgoing_msg == NULL || message->outgoing_msg->ref_count > 0);
+    // for incoming messages : message->outgoing_msg == NULL
+    assert(message->outgoing_msg == NULL || message->outgoing_msg->ref_count > 0);
 
     if (message->outgoing_msg == NULL || --message->outgoing_msg->ref_count == 0)
     {
@@ -3821,8 +3778,6 @@ static int Connection_RecycleMessage(NBN_Connection *connection, NBN_Message *me
         if (msg_destructor)
             msg_destructor(message->data);
     }
-
-    return 0;
 }
 
 static void Connection_UpdateAveragePing(NBN_Connection *connection, double ping)
@@ -4023,20 +3978,14 @@ void NBN_Channel_Destroy(NBN_Channel *channel)
 
         if (!slot->free)
         {
-            if (Connection_RecycleMessage(channel->connection, &slot->message) == NBN_ERROR)
-            {
-                NBN_LogWarning("Failed to recycle message");
-            }
+            Connection_RecycleMessage(channel->connection, &slot->message);
         }
 
         slot = &channel->outgoing_message_slot_buffer[i];
 
         if (!slot->free)
         {
-            if (Connection_RecycleMessage(channel->connection, &slot->message) == NBN_ERROR)
-            {
-                NBN_LogWarning("Failed to recycle message");
-            }
+            Connection_RecycleMessage(channel->connection, &slot->message);
         }
     }
 
@@ -4261,12 +4210,7 @@ static NBN_Message *UnreliableOrderedChannel_GetNextOutgoingMessage(NBN_Channel 
 
 static int UnreliableOrderedChannel_OnMessageSent(NBN_Channel *channel, NBN_Connection *connection, NBN_Message *message)
 {
-    if (Connection_RecycleMessage(connection, message) == NBN_ERROR)
-    {
-        NBN_LogError("Failed to recycle message");
-
-        return NBN_ERROR;
-    }
+    Connection_RecycleMessage(connection, message);
 
     return 0;
 }
@@ -4337,10 +4281,7 @@ static bool ReliableOrderedChannel_AddReceivedMessage(NBN_Channel *channel, NBN_
 
     if (!slot->free)
     {
-        if (Connection_RecycleMessage(channel->connection, &slot->message) == NBN_ERROR)
-        {
-            NBN_LogWarning("Failed to recycle message");
-        }
+        Connection_RecycleMessage(channel->connection, &slot->message);
     }
 
     memcpy(&slot->message, message, sizeof(NBN_Message));
@@ -4460,7 +4401,9 @@ static int ReliableOrderedChannel_OnOutgoingMessageAcked(NBN_Channel *channel, u
                      channel->id, reliable_ordered_channel->oldest_unacked_message_id);
     }
 
-    return Connection_RecycleMessage(channel->connection, &slot->message);
+    Connection_RecycleMessage(channel->connection, &slot->message);
+
+    return 0;
 }
 
 #pragma endregion /* NBN_MessageChannel */
@@ -5842,32 +5785,6 @@ int NBN_GameServer_SendUnreliableByteArrayTo(NBN_Connection *client, uint8_t *by
 int NBN_GameServer_SendReliableByteArrayTo(NBN_Connection *client, uint8_t *bytes, unsigned int length)
 {
     return NBN_GameServer_SendByteArrayTo(client, bytes, length, NBN_CHANNEL_RESERVED_RELIABLE);
-}
-
-int NBN_GameServer_BroadcastMessage(uint8_t msg_type, uint8_t channel_id, void *msg_data)
-{
-    for (unsigned int i = 0; i < nbn_game_server.clients->count; i++)
-    {
-        NBN_Connection *client = nbn_game_server.clients->connections[i];
-
-        if (!client->is_closed && !client->is_stale && client->is_accepted)
-        {
-            if (NBN_GameServer_SendMessageTo(client, msg_type, channel_id, msg_data) < 0)
-                return NBN_ERROR;
-        }
-    }
-
-    return 0;
-}
-
-int NBN_GameServer_BroadcastUnreliableMessage(uint8_t msg_type, void *msg_data)
-{
-    return NBN_GameServer_BroadcastMessage(msg_type, NBN_CHANNEL_RESERVED_UNRELIABLE, msg_data);
-}
-
-int NBN_GameServer_BroadcastReliableMessage(uint8_t msg_type, void *msg_data)
-{
-    return NBN_GameServer_BroadcastMessage(msg_type, NBN_CHANNEL_RESERVED_RELIABLE, msg_data);
 }
 
 NBN_Stream *NBN_GameServer_GetConnectionAcceptDataWriteStream(NBN_Connection *client)
