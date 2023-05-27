@@ -68,13 +68,14 @@ int main(int argc, char *argv[])
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__
 
-    // Start the client with a protocol name (must be the same than the one used by the server), the server ip address
-    // and port
+    // Initialize the client with a protocol name (must be the same than the one used by the server), the server ip address and port
 #ifdef NBN_ENCRYPTION
-    if (NBN_GameClient_Start(RPC_PROTOCOL_NAME, "127.0.0.1", RPC_EXAMPLE_PORT, true, NULL) < 0)
+    NBN_GameClient_Init(RPC_PROTOCOL_NAME, "127.0.0.1", RPC_EXAMPLE_PORT, true, NULL);
 #else
-    if (NBN_GameClient_Start(RPC_PROTOCOL_NAME, "127.0.0.1", RPC_EXAMPLE_PORT, false, NULL) < 0)
+    NBN_GameClient_Init(RPC_PROTOCOL_NAME, "127.0.0.1", RPC_EXAMPLE_PORT, false, NULL);
 #endif
+
+    if (NBN_GameClient_Start() < 0)
     {
         Log(LOG_ERROR, "Failed to start client");
 

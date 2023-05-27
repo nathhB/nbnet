@@ -283,13 +283,8 @@ static int SendPositionUpdate(void)
     msg->y = local_client_state.y;
     msg->val = local_client_state.val;
 
-    // Create a nbnet outgoing message
-    NBN_OutgoingMessage *outgoing_msg = NBN_GameClient_CreateMessage(UPDATE_STATE_MESSAGE, msg);
-
-    assert(outgoing_msg);
-
     // Unreliably send it to the server
-    if (NBN_GameClient_SendUnreliableMessage(outgoing_msg) < 0)
+    if (NBN_GameClient_SendUnreliableMessage(UPDATE_STATE_MESSAGE, msg) < 0)
         return -1;
 
     return 0;
@@ -302,13 +297,8 @@ static int SendColorUpdate(void)
     // Fill message data
     msg->color = local_client_state.color;
 
-    // Create a nbnet outgoing message
-    NBN_OutgoingMessage *outgoing_msg = NBN_GameClient_CreateMessage(CHANGE_COLOR_MESSAGE, msg);
-
-    assert(outgoing_msg);
-
     // Reliably send it to the server
-    if (NBN_GameClient_SendReliableMessage(outgoing_msg) < 0)
+    if (NBN_GameClient_SendReliableMessage(CHANGE_COLOR_MESSAGE, msg) < 0)
         return -1;
 
     return 0;
@@ -523,14 +513,14 @@ int main(int argc, char *argv[])
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__
 
-    // Start the client with a protocol name (must be the same than the one used by the server), the server ip address
-    // and port
-
+    // Initialize the client with a protocol name (must be the same than the one used by the server), the server ip address and port
 #ifdef EXAMPLE_ENCRYPTION
-    if (NBN_GameClient_Start(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, true, NULL) < 0)
+    NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, true, NULL);
 #else
-    if (NBN_GameClient_Start(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, false, NULL) < 0)
+    NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, false, NULL);
 #endif
+
+    if (NBN_GameClient_Start() < 0)
     {
         TraceLog(LOG_WARNING, "Game client failed to start. Exit");
 
