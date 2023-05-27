@@ -3786,8 +3786,6 @@ static int Connection_ReadNextMessageFromPacket(NBN_Connection *connection, NBN_
 
 static int Connection_RecycleMessage(NBN_Connection *connection, NBN_Message *message)
 {
-    NBN_LogDebug("RECYCLE MESSAGE: %d %p", message->header.id, message->outgoing_msg);
-
     if (message->outgoing_msg && message->outgoing_msg->ref_count == 0)
     {
         NBN_LogError("Tried to recycle an already recycled message");
