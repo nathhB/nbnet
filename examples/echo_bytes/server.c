@@ -43,14 +43,9 @@ static int EchoReceivedMessage(void)
     // Retrieve the received message
     NBN_ByteArrayMessage *msg = (NBN_ByteArrayMessage *)msg_info.data;
 
-    // Create a nbnet outgoing message from the received data
-    NBN_OutgoingMessage *outgoing_msg = NBN_GameServer_CreateByteArrayMessage(msg->bytes, msg->length);
-
-    assert(outgoing_msg);
-
     // If the send fails the client will be disconnected and a NBN_CLIENT_DISCONNECTED event
     // will be received (see event polling in main)
-    if (NBN_GameServer_SendReliableMessageTo(client, outgoing_msg) < 0)
+    if (NBN_GameServer_SendReliableByteArrayTo(client, msg->bytes, msg->length) < 0)
         return -1;
 
     // Destroy the received message
@@ -69,8 +64,11 @@ int main(void)
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__
 
-    // Start the server with a protocol name and a port, must be done first
-    if (NBN_GameServer_Start(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, false) < 0)
+    // Initialize the server with a protocol name and a port, must be done first
+    NBN_GameServer_Init(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, false);
+
+    // Start the server
+    if (NBN_GameServer_Start() < 0)
     {
         Log(LOG_ERROR, "Failed to start the server");
 

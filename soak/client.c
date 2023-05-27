@@ -36,16 +36,22 @@
 typedef struct
 {
     uint8_t data[SOAK_MESSAGE_MAX_DATA_LENGTH];
+    uint8_t channel_id;
     unsigned int length;
     bool free;
 } Soak_MessageEntry;
 
-static unsigned int sent_message_count = 0;
-static unsigned int next_msg_id = 1;
-static unsigned int last_recved_message_id = 0;
-static unsigned int last_sent_message_id = 0;
+typedef struct
+{
+    unsigned int sent_message_count;
+    unsigned int next_msg_id;
+    unsigned int last_recved_message_id;
+    unsigned int last_sent_message_id;
+    Soak_MessageEntry messages[SOAK_CLIENT_MAX_PENDING_MESSAGES];
+} SoakChannel;
+
 static bool connected = false;
-static Soak_MessageEntry messages[SOAK_CLIENT_MAX_PENDING_MESSAGES];
+static unsigned int done_channel_count = 0;
 
 static void GenerateRandomBytes(uint8_t *data, unsigned int length)
 {
@@ -53,18 +59,20 @@ static void GenerateRandomBytes(uint8_t *data, unsigned int length)
         data[i] = rand() % 255 + 1;
 }
 
-static int SendSoakMessages(void)
+static int SendSoakMessages(SoakChannel *channel, uint8_t channel_id)
 {
-    if (sent_message_count < Soak_GetOptions().message_count)
-    {
-        // number of messages yet to send
-        unsigned int remaining_message_count = Soak_GetOptions().message_count - sent_message_count;
+    unsigned int msg_count = Soak_GetOptions().message_count;
 
-        // number of messages sent but not yet acked
-        unsigned int pending_message_count = last_sent_message_id - last_recved_message_id;
+    if (channel->sent_message_count < msg_count)
+    {
+        // number of messages yet to be sent
+        unsigned int remaining_message_count = msg_count - channel->sent_message_count;
+
+        // number of messages sent but not yet to be acked
+        unsigned int pending_message_count = channel->last_sent_message_id - channel->last_recved_message_id;
 
         Soak_LogInfo("Compute number of soak messages to send (sent: %d, pending: %d, remaining: %d)",
-                sent_message_count, pending_message_count, remaining_message_count);
+                channel->sent_message_count, pending_message_count, remaining_message_count);
 
         // don't send anything on this tick if we have reached the max number of unacked messages
         if (pending_message_count >= SOAK_CLIENT_MAX_PENDING_MESSAGES)
@@ -104,45 +112,47 @@ static int SendSoakMessages(void)
                 msg->data_length = rand() % (200 - SOAK_MESSAGE_MIN_DATA_LENGTH) + SOAK_MESSAGE_MIN_DATA_LENGTH;
             }
 
-            msg->id = next_msg_id++;
+            msg->id = channel->next_msg_id++;
 
             GenerateRandomBytes(msg->data, msg->data_length);
 
-            Soak_MessageEntry *entry = &messages[(msg->id - 1) % SOAK_CLIENT_MAX_PENDING_MESSAGES];
+            Soak_MessageEntry *entry = &channel->messages[(msg->id - 1) % SOAK_CLIENT_MAX_PENDING_MESSAGES];
 
             assert(entry->free);
 
             entry->length = msg->data_length;
             entry->free = false;
+            entry->channel_id = channel_id;
             memcpy(entry->data, msg->data, msg->data_length);
 
             Soak_LogInfo("Send soak message (id: %d, data length: %d)", msg->id, msg->data_length);
 
-            NBN_OutgoingMessage *outgoing_msg = NBN_GameClient_CreateMessage(SOAK_MESSAGE, msg);
-
-            if (NBN_GameClient_SendReliableMessage(outgoing_msg) < 0)
+            if (NBN_GameClient_SendMessage(SOAK_MESSAGE, channel_id, msg) < 0)
                 return -1;
 
-            sent_message_count++;
-            last_sent_message_id = msg->id;
+            channel->sent_message_count++;
+            channel->last_sent_message_id = msg->id;
         }
     }
 
     return 0;
 }
 
-static int HandleReceivedSoakMessage(SoakMessage *msg)
+static int HandleReceivedSoakMessage(SoakMessage *msg, uint8_t channel_id, SoakChannel *channels)
 {
-    if (msg->id != last_recved_message_id + 1)
+    SoakChannel *channel = &channels[channel_id];
+
+    if (msg->id != channel->last_recved_message_id + 1)
     {
-        Soak_LogError("Expected to receive message %d but received message %d", last_recved_message_id + 1, msg->id);
+        Soak_LogError("Expected to receive message %d but received message %d", channel->last_recved_message_id + 1, msg->id);
 
         return -1;
     }
 
-    Soak_MessageEntry *entry = &messages[(msg->id - 1) % SOAK_CLIENT_MAX_PENDING_MESSAGES];
+    Soak_MessageEntry *entry = &channel->messages[(msg->id - 1) % SOAK_CLIENT_MAX_PENDING_MESSAGES];
 
     assert(!entry->free);
+    assert(entry->channel_id == channel_id);
 
     if (memcmp(msg->data, entry->data, msg->data_length) != 0)
     {
@@ -153,15 +163,25 @@ static int HandleReceivedSoakMessage(SoakMessage *msg)
 
     entry->free = true;
 
-    last_recved_message_id = msg->id;
+    channel->last_recved_message_id = msg->id;
 
-    Soak_LogInfo("Received soak message (length: %d, %d/%d)", msg->data_length, msg->id, Soak_GetOptions().message_count);
+    SoakOptions options = Soak_GetOptions();
+    unsigned int msg_count = options.message_count;
+    unsigned int channel_count = options.channel_count;
+
+    Soak_LogInfo("Received soak message (length: %d, %d/%d)", msg->data_length, msg->id, msg_count);
 
     SoakMessage_Destroy(msg);
 
-    if (last_recved_message_id == Soak_GetOptions().message_count)
+    if (channel->last_recved_message_id == msg_count)
     {
-        Soak_LogInfo("Received all soak message echoes");
+        Soak_LogInfo("Received all soak message echoes on channel %d", channel_id);
+        done_channel_count++;
+    }
+
+    if (done_channel_count >= channel_count)
+    {
+        Soak_LogInfo("Received all soak message echoes on all channels");
         Soak_Stop();
 
         return SOAK_DONE;
@@ -170,14 +190,14 @@ static int HandleReceivedSoakMessage(SoakMessage *msg)
     return 0;
 }
 
-static int HandleReceivedMessage(void)
+static int HandleReceivedMessage(SoakChannel *channels)
 {
     NBN_MessageInfo msg = NBN_GameClient_GetMessageInfo();
 
     switch (msg.type)
     {
         case SOAK_MESSAGE:
-            return HandleReceivedSoakMessage((SoakMessage *)msg.data);
+            return HandleReceivedSoakMessage((SoakMessage *)msg.data, msg.channel_id, channels);
 
         default:
             Soak_LogError("Received unexpected message (type: %d)", msg.type);
@@ -188,8 +208,9 @@ static int HandleReceivedMessage(void)
     return 0;
 }
 
-static int Tick(void)
+static int Tick(void *data)
 {
+    SoakChannel *channels = data;
     NBN_GameClient_AddTime(SOAK_TICK_DT);
 
     int ev;
@@ -214,7 +235,7 @@ static int Tick(void)
                 break;
 
             case NBN_MESSAGE_RECEIVED:
-                if (HandleReceivedMessage() < 0)
+                if (HandleReceivedMessage(channels) < 0)
                     return -1;
                 break;
         }
@@ -222,8 +243,18 @@ static int Tick(void)
 
     if (connected)
     {
-        if (SendSoakMessages() < 0)
-            return -1;
+        unsigned int channel_count = Soak_GetOptions().channel_count;
+
+        for (unsigned int c = 0; c < channel_count; c++)
+        {
+            SoakChannel *channel = &channels[c];
+
+            if (SendSoakMessages(channel, c) < 0)
+            {
+                Soak_LogError("An error occured while sending messages on channel %d", c);
+                return -1;
+            }
+        }
     }
 
     if (NBN_GameClient_SendPackets() < 0)
@@ -244,9 +275,20 @@ int main(int argc, char *argv[])
     NBN_WebRTC_Register(); // Register the WebRTC driver
 #else
     NBN_UDP_Register(); // Register the UDP driver
-#endif // __EMSCRIPTEN__
+#endif // __EMSCRIPTEN__ 
 
-    if (NBN_GameClient_Start(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT, false, NULL) < 0)
+    NBN_GameClient_Init(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT, false, NULL);
+
+    if (Soak_Init(argc, argv) < 0)
+    {
+        Soak_LogError("Failed to initialize soak test");
+        return 1;
+    } 
+
+    unsigned int channel_count = Soak_GetOptions().channel_count;
+    SoakChannel *channels = malloc(sizeof(SoakChannel) * channel_count);
+
+    if (NBN_GameClient_Start() < 0)
     {
         Soak_LogError("Failed to start game client. Exit");
 
@@ -255,25 +297,53 @@ int main(int argc, char *argv[])
 #else
         return 1;
 #endif
+    } 
+
+    for (int c = 0; c < channel_count; c++)
+    {
+        SoakChannel *channel = &channels[c];
+        
+        channel->next_msg_id = 1;
+        channel->sent_message_count = 0;
+        channel->last_recved_message_id = 0;
+        channel->last_sent_message_id = 0;
+
+        for (int i = 0; i < SOAK_CLIENT_MAX_PENDING_MESSAGES; i++)
+        {
+            channel->messages[i].free = true;
+        }
     }
-
-    if (Soak_Init(argc, argv) < 0)
-        return 1;
-
-    for (int i = 0; i < SOAK_CLIENT_MAX_PENDING_MESSAGES; i++)
-        messages[i].free = true;
 
     NBN_GameClient_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue); 
 
-    int ret = Soak_MainLoop(Tick);
+    int ret = Soak_MainLoop(Tick, channels);
 
     NBN_GameClient_Stop();
+    free(channels);
 
-    Soak_LogInfo("Outgoing soak messages created: %d", Soak_GetCreatedOutgoingSoakMessageCount());
-    Soak_LogInfo("Outgoing soak messages destroyed: %d", Soak_GetDestroyedOutgoingSoakMessageCount());
-    Soak_LogInfo("Incoming soak messages created: %d", Soak_GetCreatedIncomingSoakMessageCount());
-    Soak_LogInfo("Incoming soak messages destroyed: %d", Soak_GetDestroyedIncomingSoakMessageCount());
+    unsigned int created_outgoing_message_count = Soak_GetCreatedOutgoingSoakMessageCount();
+    unsigned int destroyed_outgoing_message_count = Soak_GetDestroyedOutgoingSoakMessageCount();
+    unsigned int created_incoming_message_count = Soak_GetCreatedIncomingSoakMessageCount();
+    unsigned int destroyed_incoming_message_count = Soak_GetDestroyedIncomingSoakMessageCount();
 
+    Soak_LogInfo("Outgoing soak messages created: %d", created_outgoing_message_count);
+    Soak_LogInfo("Outgoing soak messages destroyed: %d", destroyed_outgoing_message_count);
+    Soak_LogInfo("Incoming soak messages created: %d", created_incoming_message_count);
+    Soak_LogInfo("Incoming soak messages destroyed: %d", destroyed_incoming_message_count);
+
+    if (created_outgoing_message_count != destroyed_outgoing_message_count)
+    {
+        Soak_LogError("created_outgoing_message_count != destroyed_outgoing_message_count (potential memory leak !)");
+        return 1;
+    }
+
+    if (created_incoming_message_count != destroyed_incoming_message_count)
+    {
+        Soak_LogError("created_incoming_message_count != destroyed_incoming_message_count (potential memory leak !)");
+        return 1;
+    }
+
+    Soak_LogInfo("No memory leak detected! Cool... cool cool cool");
     Soak_Deinit();
 
 #ifdef __EMSCRIPTEN__

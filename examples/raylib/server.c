@@ -249,24 +249,19 @@ static int BroadcastGameState(void)
                 .val = client->state.val,
                 .color = client->state.color};
 
+        GameStateMessage *msg = GameStateMessage_Create();
+
+        // Fill message data
+        msg->client_count = client_index;
+        memcpy(msg->client_states, client_states, sizeof(ClientState) * MAX_CLIENTS);
+
+        // Unreliably send the message to all connected clients
+        NBN_GameServer_SendUnreliableMessageTo(client->connection, GAME_STATE_MESSAGE, msg);
+
         client_index++;
     }
 
     assert(client_index == client_count);
-
-    GameStateMessage *msg = GameStateMessage_Create();
-
-    // Fill message data
-    msg->client_count = client_index;
-    memcpy(msg->client_states, client_states, sizeof(ClientState) * MAX_CLIENTS);
-
-    // Create a nbnet outgoing message
-    NBN_OutgoingMessage *outgoing_msg = NBN_GameServer_CreateMessage(GAME_STATE_MESSAGE, msg);
-
-    assert(outgoing_msg);
-
-    // Unreliably broadcast the message to all connected clients
-    NBN_GameServer_BroadcastUnreliableMessage(outgoing_msg);
 
     return 0;
 }
@@ -311,14 +306,16 @@ int main(int argc, char *argv[])
 
 #endif // __EMSCRIPTEN__
 
-    // Start server with a protocol name and a port, must be done first
+    // Initialize server with a protocol name and a port, must be done first
 #ifdef EXAMPLE_ENCRYPTION
-    if (NBN_GameServer_Start(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT, true) < 0)
+    NBN_GameServer_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT, true);
 #else
-    if (NBN_GameServer_Start(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT, false) < 0)
+    NBN_GameServer_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT, false);
 #endif
+
+    if (NBN_GameServer_Start() < 0)
     {
-        TraceLog(LOG_ERROR, "Game client failed to start. Exit");
+        TraceLog(LOG_ERROR, "Game server failed to start. Exit");
 
         return 1;
     }

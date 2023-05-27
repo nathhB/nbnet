@@ -54,7 +54,12 @@ int Soak_Init(int argc, char *argv[])
     Soak_LogInfo("Soak test initialized (Packet loss: %f, Packet duplication: %f, Ping: %f, Jitter: %f)",
         options.packet_loss, options.packet_duplication, options.ping, options.jitter);
 
-#ifdef SOAK_CLIENT
+#ifdef SOAK_CLIENT 
+
+    for (int i = 0; i < options.channel_count; i++)
+    {
+        NBN_GameClient_RegisterReliableChannel(i);
+    }
 
 #ifdef SOAK_ENCRYPTION
     NBN_GameClient_EnableEncryption();
@@ -67,7 +72,12 @@ int Soak_Init(int argc, char *argv[])
 
 #endif
 
-#ifdef SOAK_SERVER
+#ifdef SOAK_SERVER 
+
+    for (int i = 0; i < options.channel_count; i++)
+    {
+        NBN_GameServer_RegisterReliableChannel(i);
+    }
 
 #ifdef SOAK_ENCRYPTION
     NBN_GameServer_EnableEncryption();
@@ -85,14 +95,14 @@ int Soak_Init(int argc, char *argv[])
     NBN_GameClient_SetPing(soak_options.ping);
     NBN_GameClient_SetJitter(soak_options.jitter);
     NBN_GameClient_SetPacketLoss(soak_options.packet_loss);
-    NBN_GameClient_SetPacketDuplication(soak_options.packet_duplication);
+    NBN_GameClient_SetPacketDuplication(soak_options.packet_duplication); 
 #endif
 
 #ifdef SOAK_SERVER
     NBN_GameServer_SetPing(soak_options.ping);
     NBN_GameServer_SetJitter(soak_options.jitter);
     NBN_GameServer_SetPacketLoss(soak_options.packet_loss);
-    NBN_GameServer_SetPacketDuplication(soak_options.packet_duplication);
+    NBN_GameServer_SetPacketDuplication(soak_options.packet_duplication); 
 #endif
 
     return 0;
@@ -108,19 +118,30 @@ void Soak_Deinit(void)
 int Soak_ReadCommandLine(int argc, char *argv[])
 {
 #ifdef SOAK_CLIENT
-    if (argc < 2)
+    if (argc < 3)
     {
-        printf("Usage: client --message_count=<value> [--packet_loss=<value>] \
+        printf("Usage: client --message_count=<value> --channel_count=<value> [--packet_loss=<value>] \
 [--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
 
         return -1;
     }
 #endif // SOAK_CLIENT
 
+#ifdef SOAK_SERVER
+    if (argc < 2)
+    {
+        printf("Usage: client --channel_count=<value> [--packet_loss=<value>] \
+[--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
+
+        return -1;
+    }
+#endif
+
     struct cag_option options[] = {
 #ifdef SOAK_CLIENT
         {'m', NULL, "message_count", "VALUE", "Number of messages to send"},
 #endif
+        {'c', NULL, "channel_count", "VALUE", "Number of channels (0-NBN_MAX_CHANNELS)"},
         {'l', NULL, "packet_loss", "VALUE", "Packet loss frenquency (0-1)"},
         {'d', NULL, "packet_duplication", "VALUE", "Packet duplication frequency (0-1)"},
         {'p', NULL, "ping", "VALUE", "Ping in seconds"},
@@ -139,6 +160,9 @@ int Soak_ReadCommandLine(int argc, char *argv[])
             soak_options.message_count = atoi(cag_option_get_value(&context));
             break;
 #endif
+        case 'c':
+            soak_options.channel_count = atoi(cag_option_get_value(&context));
+            break;
         case 'l':
             soak_options.packet_loss = atof(cag_option_get_value(&context));
             break;
@@ -157,14 +181,20 @@ int Soak_ReadCommandLine(int argc, char *argv[])
         }
     }
 
+    if (soak_options.channel_count > SOAK_MAX_CHANNELS)
+    {
+        Soak_LogError("Too many channels (max: %d)", SOAK_MAX_CHANNELS);
+        return -1;
+    }
+
     return 0;
 }
 
-int Soak_MainLoop(int (*Tick)(void))
+int Soak_MainLoop(int (*Tick)(void *), void *data)
 {
     while (running)
     {
-        int ret = Tick();
+        int ret = Tick(data);
 
         if (ret < 0) // Error
             return 1;
