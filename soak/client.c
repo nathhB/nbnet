@@ -43,6 +43,7 @@ typedef struct
 
 typedef struct
 {
+    unsigned int message_count;
     unsigned int sent_message_count;
     unsigned int next_msg_id;
     unsigned int last_recved_message_id;
@@ -61,7 +62,7 @@ static void GenerateRandomBytes(uint8_t *data, unsigned int length)
 
 static int SendSoakMessages(SoakChannel *channel, uint8_t channel_id)
 {
-    unsigned int msg_count = Soak_GetOptions().message_count;
+    unsigned int msg_count = channel->message_count;
 
     if (channel->sent_message_count < msg_count)
     {
@@ -144,7 +145,7 @@ static int HandleReceivedSoakMessage(SoakMessage *msg, uint8_t channel_id, SoakC
 
     if (msg->id != channel->last_recved_message_id + 1)
     {
-        Soak_LogError("Expected to receive message %d but received message %d", channel->last_recved_message_id + 1, msg->id);
+        Soak_LogError("Expected to receive message %d but received message %d (channel_id: %d)", channel->last_recved_message_id + 1, msg->id, channel_id);
 
         return -1;
     }
@@ -156,7 +157,7 @@ static int HandleReceivedSoakMessage(SoakMessage *msg, uint8_t channel_id, SoakC
 
     if (memcmp(msg->data, entry->data, msg->data_length) != 0)
     {
-        Soak_LogError("Received invalid data for message %d (data length: %d)", msg->id, msg->data_length);
+        Soak_LogError("Received invalid data for message %d (data length: %d, channel_id: %d)", msg->id, msg->data_length, channel_id);
 
         return -1;
     }
@@ -166,14 +167,13 @@ static int HandleReceivedSoakMessage(SoakMessage *msg, uint8_t channel_id, SoakC
     channel->last_recved_message_id = msg->id;
 
     SoakOptions options = Soak_GetOptions();
-    unsigned int msg_count = options.message_count;
     unsigned int channel_count = options.channel_count;
 
-    Soak_LogInfo("Received soak message (length: %d, %d/%d)", msg->data_length, msg->id, msg_count);
+    Soak_LogInfo("Received soak message (length: %d, %d/%d) on channel %d", msg->data_length, msg->id, channel->message_count, channel_id);
 
     SoakMessage_Destroy(msg);
 
-    if (channel->last_recved_message_id == msg_count)
+    if (channel->last_recved_message_id == channel->message_count)
     {
         Soak_LogInfo("Received all soak message echoes on channel %d", channel_id);
         done_channel_count++;
@@ -200,7 +200,7 @@ static int HandleReceivedMessage(SoakChannel *channels)
             return HandleReceivedSoakMessage((SoakMessage *)msg.data, msg.channel_id, channels);
 
         default:
-            Soak_LogError("Received unexpected message (type: %d)", msg.type);
+            Soak_LogError("Received unexpected message (type: %d, channel_id: %d)", msg.type, msg.channel_id);
 
             return -1;
     }
@@ -285,7 +285,11 @@ int main(int argc, char *argv[])
         return 1;
     } 
 
-    unsigned int channel_count = Soak_GetOptions().channel_count;
+    SoakOptions options = Soak_GetOptions();
+    unsigned int channel_count = options.channel_count;
+    unsigned int message_count = options.message_count;
+    unsigned int message_per_channel = message_count / channel_count;
+    unsigned int leftover_message_count = message_count % channel_count;
     SoakChannel *channels = malloc(sizeof(SoakChannel) * channel_count);
 
     if (NBN_GameClient_Start() < 0)
@@ -297,7 +301,7 @@ int main(int argc, char *argv[])
 #else
         return 1;
 #endif
-    } 
+    }
 
     for (int c = 0; c < channel_count; c++)
     {
@@ -307,12 +311,15 @@ int main(int argc, char *argv[])
         channel->sent_message_count = 0;
         channel->last_recved_message_id = 0;
         channel->last_sent_message_id = 0;
+        channel->message_count = message_per_channel;
 
         for (int i = 0; i < SOAK_CLIENT_MAX_PENDING_MESSAGES; i++)
         {
             channel->messages[i].free = true;
         }
     }
+
+    channels[channel_count - 1].message_count += leftover_message_count;
 
     NBN_GameClient_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue); 
 

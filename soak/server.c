@@ -204,7 +204,7 @@ static int HandleReceivedSoakMessage(SoakMessage *msg, NBN_Connection *sender, u
         return -1;
     }
 
-    Soak_LogInfo("Received soak message %d from client %d", msg->id, sender->id);
+    Soak_LogInfo("Received soak message %d from client %d on channel %d", msg->id, sender->id, channel_id);
 
     channel->recved_messages_count++;
     channel->last_recved_message_id = msg->id;
@@ -236,7 +236,7 @@ static void HandleReceivedMessage(void)
             break;
 
         default:
-            Soak_LogError("Received unexpected message (type: %d)", msg.type);
+            Soak_LogError("Received unexpected message (type: %d, channel_id: %d)", msg.type, msg.channel_id);
 
             NBN_GameServer_CloseClient(msg.sender);
             break;
@@ -298,16 +298,16 @@ static void SigintHandler(int dummy)
     if (created_outgoing_message_count != destroyed_outgoing_message_count)
     {
         Soak_LogError("created_outgoing_message_count != destroyed_outgoing_message_count (potential memory leak !)");
-        return;
     }
-
-    if (created_incoming_message_count != destroyed_incoming_message_count)
+    else if (created_incoming_message_count != destroyed_incoming_message_count)
     {
         Soak_LogError("created_incoming_message_count != destroyed_incoming_message_count (potential memory leak !)");
-        return;
+    }
+    else
+    {
+        Soak_LogInfo("No memory leak detected! Cool... cool cool cool");
     }
 
-    Soak_LogInfo("No memory leak detected! Cool... cool cool cool");
     Soak_Stop();
 }
 

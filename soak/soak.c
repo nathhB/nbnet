@@ -42,6 +42,19 @@ static unsigned int created_incoming_soak_message_count = 0;
 static unsigned int destroyed_outgoing_soak_message_count = 0;
 static unsigned int destroyed_incoming_soak_message_count = 0;
 
+static void Usage(void)
+{
+#ifdef SOAK_CLIENT
+        printf("Usage: client --message_count=<value> --channel_count=<value> [--packet_loss=<value>] \
+[--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
+#endif // SOAK_CLIENT
+
+#ifdef SOAK_SERVER
+        printf("Usage: server --channel_count=<value> [--packet_loss=<value>] \
+[--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
+#endif
+}
+
 int Soak_Init(int argc, char *argv[])
 {
     srand(SOAK_SEED);
@@ -117,69 +130,78 @@ void Soak_Deinit(void)
 
 int Soak_ReadCommandLine(int argc, char *argv[])
 {
-#ifdef SOAK_CLIENT
-    if (argc < 3)
-    {
-        printf("Usage: client --message_count=<value> --channel_count=<value> [--packet_loss=<value>] \
-[--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
-
-        return -1;
-    }
-#endif // SOAK_CLIENT
-
-#ifdef SOAK_SERVER
-    if (argc < 2)
-    {
-        printf("Usage: client --channel_count=<value> [--packet_loss=<value>] \
-[--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
-
-        return -1;
-    }
-#endif
-
     struct cag_option options[] = {
 #ifdef SOAK_CLIENT
         {'m', NULL, "message_count", "VALUE", "Number of messages to send"},
 #endif
-        {'c', NULL, "channel_count", "VALUE", "Number of channels (0-NBN_MAX_CHANNELS)"},
+        {'c', NULL, "channel_count", "VALUE", "Number of channels (1-NBN_MAX_CHANNELS)"},
         {'l', NULL, "packet_loss", "VALUE", "Packet loss frenquency (0-1)"},
         {'d', NULL, "packet_duplication", "VALUE", "Packet duplication frequency (0-1)"},
         {'p', NULL, "ping", "VALUE", "Ping in seconds"},
         {'j', NULL, "jitter", "VALUE", "Jitter in seconds"}
     };
+
     cag_option_context context;
 
     cag_option_prepare(&context, options, CAG_ARRAY_SIZE(options), argc, argv);
 
     while (cag_option_fetch(&context))
     {
-        switch (cag_option_get(&context))
-        {
+        char option = cag_option_get(&context);
+
 #ifdef SOAK_CLIENT
-        case 'm':
-            soak_options.message_count = atoi(cag_option_get_value(&context));
-            break;
+        if (option == 'm')
+        {
+            const char *val = cag_option_get_value(&context);
+
+            if (val)
+            {
+                soak_options.message_count = atoi(val);
+            }
+        }
+#else
+        if (false) {}
 #endif
-        case 'c':
-            soak_options.channel_count = atoi(cag_option_get_value(&context));
-            break;
-        case 'l':
+        else if (option == 'c')
+        {
+            const char *val = cag_option_get_value(&context);
+
+            if (val)
+            {
+                soak_options.channel_count = atoi(val);
+            }
+        }
+        else if (option == 'l')
+        {
             soak_options.packet_loss = atof(cag_option_get_value(&context));
-            break;
-
-        case 'd':
+        }
+        else if (option == 'd')
+        {
             soak_options.packet_duplication = atof(cag_option_get_value(&context));
-            break;
-
-        case 'p':
+        }
+        else if (option == 'p')
+        {
             soak_options.ping = atof(cag_option_get_value(&context));
-            break;
-
-        case 'j':
+        }
+        else if (option == 'j')
+        {
             soak_options.jitter = atof(cag_option_get_value(&context));
-            break;
         }
     }
+
+    if (soak_options.channel_count <= 0)
+    {
+        Usage();
+        return -1;
+    }
+
+#ifdef SOAK_CLIENT
+    if (soak_options.message_count <= 0)
+    {
+        Usage();
+        return -1;
+    }
+#endif
 
     if (soak_options.channel_count > SOAK_MAX_CHANNELS)
     {
