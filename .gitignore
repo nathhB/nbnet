@@ -12,3 +12,4 @@ examples/echo/*.wasm
 .vscode
 .ccls
 **/node_modules
+.idea
