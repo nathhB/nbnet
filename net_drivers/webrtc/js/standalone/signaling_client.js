@@ -16,7 +16,7 @@ SignalingClient.prototype.connect = function(host, port) {
 
         const WebSocket = require('websocket').w3cwebsocket
 
-        this.ws = new WebSocket(uri)
+        this.ws = new WebSocket(uri, this.protocol)
 
         this.ws.onclose = (ev) => {
             if (this.connected) {

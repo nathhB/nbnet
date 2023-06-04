@@ -32,7 +32,7 @@ SignalingServer.prototype.start = function(port) {
             this.logger.info('New connection')
 
             try {
-                this.onConnection(new Connection(request.accept(request.origin)))
+                this.onConnection(new Connection(request.accept(this.protocol, request.origin)))
             } catch (err) {
                 this.logger.error('Connection rejected: %s', err)
             }
