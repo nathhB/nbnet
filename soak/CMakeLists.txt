@@ -87,7 +87,25 @@ if (UNIX)
 endif (UNIX)
 
 if (EMSCRIPTEN)
-  set(ASYNCIFY_IMPORTS "[\"__js_game_server_start\", \"__js_game_client_start\", \"__js_game_client_close\"]")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s ALLOW_MEMORY_GROWTH=1 -s TOTAL_MEMORY=30MB -s USE_PTHREADS=1 -s PTHREAD_POOL_SIZE=4 -s EXIT_RUNTIME=1 -s ASSERTIONS=1 -s ASYNCIFY -s ASYNCIFY_IMPORTS=\"${ASYNCIFY_IMPORTS}\"")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --js-library ${CMAKE_CURRENT_SOURCE_DIR}/../net_drivers/webrtc/js/api.js")
+    set(ASYNCIFY_IMPORTS "[\"__js_game_server_start\", \"__js_game_client_start\", \"__js_game_client_close\"]")
+
+    set_target_properties(server PROPERTIES LINK_FLAGS "--js-library ${CMAKE_CURRENT_SOURCE_DIR}/../net_drivers/webrtc/js/api.js \
+    -s ALLOW_MEMORY_GROWTH=1 \
+    -s TOTAL_MEMORY=30MB \
+    -s USE_PTHREADS=1 \
+    -s PTHREAD_POOL_SIZE=4 \
+    -s EXIT_RUNTIME=1 \
+    -s ASSERTIONS=1 \
+    -s ASYNCIFY \
+    -s ASYNCIFY_IMPORTS=\"${ASYNCIFY_IMPORTS}\"")
+
+    set_target_properties(client PROPERTIES LINK_FLAGS "--js-library ${CMAKE_CURRENT_SOURCE_DIR}/../net_drivers/webrtc/js/api.js \
+    -s ALLOW_MEMORY_GROWTH=1 \
+    -s TOTAL_MEMORY=30MB \
+    -s USE_PTHREADS=1 \
+    -s PTHREAD_POOL_SIZE=4 \
+    -s EXIT_RUNTIME=1 \
+    -s ASSERTIONS=1 \
+    -s ASYNCIFY \
+    -s ASYNCIFY_IMPORTS=\"${ASYNCIFY_IMPORTS}\"")
 endif()
