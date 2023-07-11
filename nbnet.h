@@ -4128,6 +4128,8 @@ NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(void)
     channel->base.OnOutgoingMessageAcked = NULL;
     channel->base.OnOutgoingMessageSent = UnreliableOrderedChannel_OnMessageSent;
 
+    memset(channel->base.outgoing_message_pool, 0, sizeof(channel->base.outgoing_message_pool));
+
     channel->last_received_message_id = 0;
     channel->next_outgoing_message_slot = 0;
 
@@ -4236,6 +4238,7 @@ NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(void)
     channel->base.OnOutgoingMessageSent = NULL;
 
     memset(channel->base.recved_message_slot_buffer, 0, sizeof(channel->base.recved_message_slot_buffer));
+    memset(channel->base.outgoing_message_pool, 0, sizeof(channel->base.outgoing_message_pool));
 
     for (int i = 0; i < NBN_CHANNEL_BUFFER_SIZE; i++)
         channel->ack_buffer[i] = false;
