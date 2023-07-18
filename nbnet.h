@@ -118,7 +118,7 @@ typedef uint32_t Word;
 #define WORD_BITS (WORD_BYTES * 8)
 #define BITS_REQUIRED(min, max) (min == max) ? 0 : GetRequiredNumberOfBitsFor(max - min)
 
-#define B_MASK(n) (1 << (n))
+#define B_MASK(n) (1u << (n))
 #define B_SET(mask, n) (mask |= B_MASK(n))
 #define B_UNSET(mask, n) (mask &= ~B_MASK(n))
 #define B_IS_SET(mask, n) ((B_MASK(n) & mask) == B_MASK(n))
