@@ -438,7 +438,7 @@ static NBN_Connection *FindOrCreateClientConnectionById(uint32_t id)
         fifo_conn = (NBN_IPC_Connection *)NBN_Allocator(sizeof(NBN_IPC_Connection));
 
         fifo_conn->id = id;
-        fifo_conn->conn = NBN_GameServer_CreateClientConnection(fifo_conn->id, NBN_IPC_DRIVER_ID, fifo_conn);
+        fifo_conn->conn = NBN_GameServer_CreateClientConnection(fifo_conn->id, NBN_IPC_DRIVER_ID, fifo_conn, id);
 
         NBN_IPC_HTable_Add(nbn_fifo_connections, id, fifo_conn);
 

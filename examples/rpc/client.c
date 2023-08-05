@@ -33,7 +33,7 @@ static bool running = true;
 static bool connected = false;
 static bool disconnected = false;
 
-static void TestRPC2(unsigned int param_count, NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT], NBN_Connection *sender)
+static void TestRPC2(unsigned int param_count, NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT], NBN_ConnectionHandle sender)
 {
     Log(LOG_INFO, "TestRPC2 called !");
     Log(LOG_INFO, "Parameter 1 (float): %f", NBN_RPC_GetFloat(params, 0));

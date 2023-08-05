@@ -3,32 +3,36 @@
 This is a very basic echo client server example, the server accepts a single client at a time and echoes all
 messages it receives.
 
-Here is how to compile it with gcc:
+Use the CMake script to compile the example:
 
-`gcc client.c shared.c -lm -o client`
-
-`gcc server.c shared.c -lm -o server`
+```
+cmake .
+make
+```
 
 To run the server simply do:
 
-`./server`
+`./echo_server`
 
 and to run the client:
 
-`./client "some message"`
+`./echo_client "some message"`
 
-The client will run indefinitely and send the given string to the server every tick (30 times per second).
+The client will run indefinitely and send the provided string to the server every tick (30 times per second).
 
-## WebRTC
+## WebRTC (JS driver)
 
-Here is how to copile this example with the WebRTC driver:
+Use the CMake script to compile the example:
 
-`emcc -s EXIT_RUNTIME=1 -s ASSERTIONS=1 -s ASYNCIFY -s ASYNCIFY_IMPORTS="[\"__js_game_server_start\"]" --js-library "../../net_drivers/webrtc/js/api.js" server.c shared.c -o server.js`
-`emcc -s EXIT_RUNTIME=1 -s ASSERTIONS=1 -s ASYNCIFY -s ASYNCIFY_IMPORTS="[\"__js_game_client_start\", \"__js_game_client_close\"]" --js-library "../../net_drivers/webrtc/js/api.js" client.c shared.c -o client.js`
+```
+EMSCRIPTEN=1 cmake .
+make
+npm install
+```
 
 To run this example you need to have nodejs installed (see the package.json file).
 
-To run the server:
+To run the server simply do:
 
 `npm run server`
 

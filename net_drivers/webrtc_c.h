@@ -481,7 +481,7 @@ static void NBN_WebRTC_C_OnWsOpen(ws_s *ws)
     peer->id = peer_id;
     peer->channel_id = channel_id;
     peer->ws = ws;
-    peer->conn = NBN_GameServer_CreateClientConnection(NBN_WEBRTC_C_DRIVER_ID, peer);
+    peer->conn = NBN_GameServer_CreateClientConnection(NBN_WEBRTC_C_DRIVER_ID, peer, peer_id);
 
     websocket_udata_set(ws, peer); // save a pointer to the peer in websocket's user data
     NBN_WebRTC_C_HTable_Add(nbn_wrtc_c_peers, peer_id, peer);

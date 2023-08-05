@@ -314,9 +314,15 @@ SoakMessage *SoakMessage_CreateOutgoing(void)
 void SoakMessage_Destroy(SoakMessage *msg)
 {
     if (msg->outgoing)
+    {
         destroyed_outgoing_soak_message_count++;
+        Soak_LogDebug("Destroying outgoing soak message (destroyed count: %d, created count: %d)",
+                      destroyed_outgoing_soak_message_count, created_outgoing_soak_message_count);
+    }
     else
+    {
         destroyed_incoming_soak_message_count++;
+    }
 
     free(msg);
 }

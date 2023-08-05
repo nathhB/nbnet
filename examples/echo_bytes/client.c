@@ -198,7 +198,7 @@ int main(int argc, char *argv[])
         }
 
         // Cap the client tick rate
-        Sleep(dt);
+        EchoSleep(dt);
     }
 
     // Stop the client

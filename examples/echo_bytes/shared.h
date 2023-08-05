@@ -58,6 +58,6 @@ void Log(int, const char *, ...);
 #include "../../net_drivers/udp.h"
 #endif
 
-void Sleep(double);
+void EchoSleep(double);
 
 #endif /* ECHO_EXAMPLE_SHARED_H */

@@ -210,7 +210,7 @@ static int HandleReceivedMessage(SoakChannel *channels)
 
 static int Tick(void *data)
 {
-    SoakChannel *channels = data;
+    SoakChannel *channels = (SoakChannel *)data;
     NBN_GameClient_AddTime(SOAK_TICK_DT);
 
     int ev;
@@ -290,7 +290,7 @@ int main(int argc, char *argv[])
     unsigned int message_count = options.message_count;
     unsigned int message_per_channel = message_count / channel_count;
     unsigned int leftover_message_count = message_count % channel_count;
-    SoakChannel *channels = malloc(sizeof(SoakChannel) * channel_count);
+    SoakChannel *channels = (SoakChannel *)malloc(sizeof(SoakChannel) * channel_count);
 
     if (NBN_GameClient_Start() < 0)
     {

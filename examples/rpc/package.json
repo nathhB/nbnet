@@ -1,7 +1,7 @@
 {
     "scripts": {
-        "server": "node server.js",
-        "client": "node client.js"
+        "server": "node rpc_server.js",
+        "client": "node rpc_client.js"
     },
     "dependencies": {
         "nbnet": "file:../../net_drivers/webrtc"

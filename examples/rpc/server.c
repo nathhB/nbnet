@@ -33,9 +33,9 @@ static NBN_Connection *client = NULL;
 
 static bool error = false;
 
-static void TestRPC(unsigned int param_count, NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT], NBN_Connection *sender)
+static void TestRPC(unsigned int param_count, NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT], NBN_ConnectionHandle sender)
 {
-    Log(LOG_INFO, "TestRPC called ! (Sender: %d)", sender->id);
+    Log(LOG_INFO, "TestRPC called ! (Sender: %d)", sender);
     Log(LOG_INFO, "Parameter 1 (int): %d", NBN_RPC_GetInt(params, 0));
     Log(LOG_INFO, "Parameter 2 (float): %f", NBN_RPC_GetFloat(params, 1));
     Log(LOG_INFO, "Parameter 3 (bool): %d", NBN_RPC_GetBool(params, 2));

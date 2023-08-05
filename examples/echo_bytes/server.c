@@ -29,7 +29,7 @@
 
 #include "shared.h"
 
-static NBN_Connection *client = NULL;
+static NBN_ConnectionHandle client = 0;
 
 // Echo the received message
 static int EchoReceivedMessage(void)
@@ -107,13 +107,13 @@ int main(void)
                 // New connection request...
                 case NBN_NEW_CONNECTION:
                     // Echo server work with one single client at a time
-                    if (client != NULL)
+                    if (client)
                     {
                         NBN_GameServer_RejectIncomingConnectionWithCode(ECHO_SERVER_BUSY_CODE);
                     }
                     else
                     {
-                        client = NBN_GameServer_GetIncomingConnection();
+                        NBN_GameServer_GetIncomingConnection(&client, NULL);
 
                         NBN_GameServer_AcceptIncomingConnection();
                     }
@@ -122,9 +122,9 @@ int main(void)
 
                     // The client has disconnected
                 case NBN_CLIENT_DISCONNECTED:
-                    assert(NBN_GameServer_GetDisconnectedClient()->id == client->id);
+                    assert(NBN_GameServer_GetDisconnectedClient() == client);
 
-                    client = NULL;
+                    client = 0;
                     break;
 
                     // A message has been received from the client
@@ -151,7 +151,7 @@ int main(void)
         }
 
         // Cap the server tick rate
-        Sleep(dt);
+        EchoSleep(dt);
     }
 
     // Stop the server

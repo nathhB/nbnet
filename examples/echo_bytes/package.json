@@ -1,7 +1,7 @@
 {
     "scripts": {
-        "server": "node echo_server.js",
-        "client": "node echo_client.js"
+        "server": "node echo_bytes_server.js",
+        "client": "node echo_bytes_client.js"
     },
     "dependencies": {
         "nbnet": "file:../../net_drivers/webrtc"

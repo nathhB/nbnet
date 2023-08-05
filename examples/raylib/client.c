@@ -110,6 +110,7 @@ static bool ClientExists(uint32_t client_id)
 
 static void CreateClient(ClientState state)
 {
+    TraceLog(LOG_DEBUG, "CreateClient %d", state.client_id);
     assert(client_count < MAX_CLIENTS - 1);
 
     ClientState *client = NULL;

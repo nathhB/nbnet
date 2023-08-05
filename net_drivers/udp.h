@@ -440,7 +440,7 @@ static char *GetLastErrorMessage(void)
 #pragma region Game server
 
 static NBN_UDP_HTable *nbn_udp_connections = NULL;
-static uint32_t next_conn_id = 0;
+static uint32_t next_conn_id = 1; // nbnet connection ids start at 1
 
 static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress);
 
@@ -554,7 +554,7 @@ static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress addre
 
         udp_conn->id = next_conn_id++;
         udp_conn->address = address;
-        udp_conn->conn = NBN_GameServer_CreateClientConnection(NBN_UDP_DRIVER_ID, udp_conn);
+        udp_conn->conn = NBN_GameServer_CreateClientConnection(NBN_UDP_DRIVER_ID, udp_conn, udp_conn->id);
 
         NBN_UDP_HTable_Add(nbn_udp_connections, address, udp_conn);
 
