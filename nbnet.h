@@ -3603,7 +3603,13 @@ static void Connection_InitOutgoingPacket(
 static NBN_PacketEntry *Connection_InsertOutgoingPacketEntry(NBN_Connection *connection, uint16_t seq_number)
 {
     uint16_t index = seq_number % NBN_MAX_PACKET_ENTRIES;
-    NBN_PacketEntry entry = { false, false, 0, 0, .messages = { {0, 0} } };
+    NBN_PacketEntry entry = {
+            .acked = false,
+            .flagged_as_lost = false,
+            .messages_count = 0,
+            .send_time = 0,
+            .messages = { {0, 0} }
+    };
 
     connection->packet_send_seq_buffer[index] = seq_number;
     connection->packet_send_buffer[index] = entry;
@@ -4488,8 +4494,11 @@ static void Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_ser
         endpoint->message_serializers[i] = NULL;
     }
 
+    NBN_RPC temp_rpc = {.id = UINT_MAX};
     for (int i = 0; i < NBN_RPC_MAX; i++)
-        endpoint->rpcs[i] = (NBN_RPC){.id = UINT_MAX};
+    {
+        endpoint->rpcs[i] = temp_rpc;
+    }
 
     NBN_EventQueue_Init(&endpoint->event_queue);
 
@@ -4657,7 +4666,8 @@ static int Endpoint_RegisterRPC(NBN_Endpoint *endpoint, int id, NBN_RPC_Signatur
         return NBN_ERROR;
     }
 
-    endpoint->rpcs[id] = (NBN_RPC){.id = (unsigned int) id, .signature = signature, .func = func};
+    NBN_RPC temp_rpc = {.id = (unsigned int) id, .signature = signature, .func = func};
+    endpoint->rpcs[id] = temp_rpc;
 
     NBN_LogDebug("Registered RPC (id: %d, parameter count: %d)", id, signature.param_count);
 

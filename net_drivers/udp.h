@@ -684,10 +684,7 @@ static int NBN_UDP_CliSendPacket(NBN_Packet *packet)
 
 void NBN_UDP_Register(void)
 {
-    NBN_Driver_Register(
-        NBN_UDP_DRIVER_ID,
-        NBN_UDP_DRIVER_NAME,
-        (NBN_DriverImplementation){
+    NBN_DriverImplementation driver_impl = {
             // Client implementation
             NBN_UDP_CliStart,
             NBN_UDP_CliStop,
@@ -700,7 +697,12 @@ void NBN_UDP_Register(void)
             NBN_UDP_ServRecvPackets,
             NBN_UDP_ServSendPacketTo,
             NBN_UDP_ServRemoveClientConnection
-        }
+    };
+
+    NBN_Driver_Register(
+            NBN_UDP_DRIVER_ID,
+            NBN_UDP_DRIVER_NAME,
+            driver_impl
     );
 }
 
