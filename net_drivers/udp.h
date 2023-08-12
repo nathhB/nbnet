@@ -693,8 +693,8 @@ void NBN_UDP_Register(void)
 
         // Server implementation
         NBN_UDP_ServStart,
-	    NBN_UDP_ServStop,
-	    NBN_UDP_ServRecvPackets,
+        NBN_UDP_ServStop,
+        NBN_UDP_ServRecvPackets,
         NBN_UDP_ServSendPacketTo,
         NBN_UDP_ServRemoveClientConnection
     };
