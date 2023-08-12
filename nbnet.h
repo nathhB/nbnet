@@ -4494,10 +4494,10 @@ static void Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_ser
         endpoint->message_serializers[i] = NULL;
     }
 
-    NBN_RPC temp_rpc = {.id = UINT_MAX};
+    NBN_RPC rpc = {.id = UINT_MAX};
     for (int i = 0; i < NBN_RPC_MAX; i++)
     {
-        endpoint->rpcs[i] = temp_rpc;
+        endpoint->rpcs[i] = rpc;
     }
 
     NBN_EventQueue_Init(&endpoint->event_queue);
