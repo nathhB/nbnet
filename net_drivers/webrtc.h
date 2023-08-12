@@ -447,23 +447,25 @@ static int NBN_WebRTC_CliSendPacket(NBN_Packet *packet)
 
 void NBN_WebRTC_Register(void)
 {
+    NBN_DriverImplementation driver_impl = {
+        // Client implementation
+        NBN_WebRTC_CliStart,
+        NBN_WebRTC_CliStop,
+        NBN_WebRTC_CliRecvPackets,
+        NBN_WebRTC_CliSendPacket,
+
+        // Server implementation
+        NBN_WebRTC_ServStart,
+        NBN_WebRTC_ServStop,
+        NBN_WebRTC_ServRecvPackets,
+        NBN_WebRTC_ServSendPacketTo,
+        NBN_WebRTC_ServRemoveClientConnection
+    };
+
     NBN_Driver_Register(
         NBN_WEBRTC_DRIVER_ID,
         NBN_WEBRTC_DRIVER_NAME,
-        (NBN_DriverImplementation){
-            // Client implementation
-            NBN_WebRTC_CliStart,
-            NBN_WebRTC_CliStop,
-            NBN_WebRTC_CliRecvPackets,
-            NBN_WebRTC_CliSendPacket,
-
-            // Server implementation
-            NBN_WebRTC_ServStart,
-            NBN_WebRTC_ServStop,
-            NBN_WebRTC_ServRecvPackets,
-            NBN_WebRTC_ServSendPacketTo,
-            NBN_WebRTC_ServRemoveClientConnection
-        }
+        driver_impl
     );
 }
 
