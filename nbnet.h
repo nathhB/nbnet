@@ -2480,7 +2480,6 @@ int NBN_ReadStream_SerializeInt(NBN_ReadStream *read_stream, int *value, int min
     unsigned int abs_min = MIN(abs(min), abs(max));
     unsigned int abs_max = MAX(abs(min), abs(max));
 
-    isNegative = *value < 0; /* TODO: useless, remove this ? */
     *value = abs(*value);
 
     if (NBN_ReadStream_SerializeBool(read_stream, &isNegative) < 0)
@@ -2503,7 +2502,7 @@ int NBN_ReadStream_SerializeFloat(NBN_ReadStream *read_stream, float *value, flo
     unsigned int mult = pow(10, precision);
     int i_min = min * mult;
     int i_max = max * mult;
-    int i_val;
+    int i_val = 0;
 
     if (NBN_ReadStream_SerializeInt(read_stream, &i_val, i_min, i_max) < 0)
         return NBN_ERROR;
