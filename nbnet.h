@@ -1419,7 +1419,7 @@ bool NBN_GameClient_IsEncryptionEnabled(void);
  * 
  * @return true if packet encryption is enabled, false otherwise
  */
-int NBN_GameClient_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func func);
+int NBN_GameClient_RegisterRPC(unsigned int id, NBN_RPC_Signature signature, NBN_RPC_Func func);
 
 /**
  * Call a previously registered RPC on the game server.
@@ -1758,7 +1758,7 @@ bool NBN_GameServer_IsEncryptionEnabled(void);
  * 
  * @return true if packet encryption is enabled, false otherwise
  */
-int NBN_GameServer_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func func);
+int NBN_GameServer_RegisterRPC(unsigned int id, NBN_RPC_Signature signature, NBN_RPC_Func func);
 
 /**
  * Call a previously registered RPC on a given client.
@@ -4690,7 +4690,7 @@ static void Endpoint_RegisterMessageBuilder(NBN_Endpoint *, NBN_MessageBuilder, 
 static void Endpoint_RegisterMessageDestructor(NBN_Endpoint *, NBN_MessageDestructor, uint8_t);
 static void Endpoint_RegisterMessageSerializer(NBN_Endpoint *, NBN_MessageSerializer, uint8_t);
 static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *, uint32_t, int, void *);
-static int Endpoint_RegisterRPC(NBN_Endpoint *, int id, NBN_RPC_Signature, NBN_RPC_Func);
+static int Endpoint_RegisterRPC(NBN_Endpoint *, unsigned int id, NBN_RPC_Signature, NBN_RPC_Func);
 static uint32_t Endpoint_BuildProtocolId(const char *);
 static void Endpoint_RegisterChannel(NBN_Endpoint *, uint8_t, NBN_ChannelBuilder, NBN_ChannelDestructor);
 static int Endpoint_ProcessReceivedPacket(NBN_Endpoint *, NBN_Packet *, NBN_Connection *);
@@ -4874,7 +4874,7 @@ static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_
     return connection;
 }
 
-static int Endpoint_RegisterRPC(NBN_Endpoint *endpoint, int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
+static int Endpoint_RegisterRPC(NBN_Endpoint *endpoint, unsigned int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
 {
     if (id < 0 || id >= NBN_RPC_MAX)
     {
@@ -4890,8 +4890,9 @@ static int Endpoint_RegisterRPC(NBN_Endpoint *endpoint, int id, NBN_RPC_Signatur
         return NBN_ERROR;
     }
 
-    NBN_RPC temp_rpc = {.id = (unsigned int) id, .signature = signature, .func = func};
-    endpoint->rpcs[id] = temp_rpc;
+    NBN_RPC rpc = { .id = id, .signature = signature, .func = func };
+
+    endpoint->rpcs[id] = rpc;
 
     NBN_LogDebug("Registered RPC (id: %d, parameter count: %d)", id, signature.param_count);
 
@@ -5503,7 +5504,7 @@ bool NBN_GameClient_IsEncryptionEnabled(void)
     return nbn_game_client.endpoint.config.is_encryption_enabled;
 }
 
-int NBN_GameClient_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
+int NBN_GameClient_RegisterRPC(unsigned int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
 {
     return Endpoint_RegisterRPC(&nbn_game_client.endpoint, id, signature, func);
 }
@@ -6178,7 +6179,7 @@ bool NBN_GameServer_IsEncryptionEnabled(void)
     return nbn_game_server.endpoint.config.is_encryption_enabled;
 }
 
-int NBN_GameServer_RegisterRPC(int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
+int NBN_GameServer_RegisterRPC(unsigned int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
 {
     return Endpoint_RegisterRPC(&nbn_game_server.endpoint, id, signature, func);
 }
