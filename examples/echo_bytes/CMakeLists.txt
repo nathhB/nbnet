@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.1)
 
 project(echo_bytes)
 
@@ -8,6 +8,7 @@ option(CPP_COMPILE OFF)
 if (CPP_COMPILE)
   file(GLOB_RECURSE CFILES "${CMAKE_SOURCE_DIR}/*.c")
   SET_SOURCE_FILES_PROPERTIES(${CFILES} PROPERTIES LANGUAGE CXX)
+  set (CMAKE_CXX_STANDARD 20)
 endif (CPP_COMPILE)
 
 unset(CPP_COMPILE)
