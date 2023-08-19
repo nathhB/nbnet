@@ -1,7 +1,7 @@
 {
     "scripts": {
-        "server": "node --experimental-wasm-threads --experimental-wasm-bulk-memory build/server.js",
-        "client": "node --experimental-wasm-threads --experimental-wasm-bulk-memory build/client.js"
+        "server": "node --experimental-wasm-threads build/server.js",
+        "client": "node --experimental-wasm-threads build/client.js"
     },
     "dependencies": {
         "nbnet": "file:../net_drivers/webrtc"
