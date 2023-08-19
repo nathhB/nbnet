@@ -47,22 +47,20 @@ mergeInto(LibraryManager.library, {
         })
     },
 
-    __js_game_server_dequeue_packet: function(peerIdPtr, lenPtr) {
+    __js_game_server_dequeue_packet: function(peerIdPtr, bufferPtr) {
         const packet = this.gameServer.packets.shift()
 
         if (packet) {
 	        const packetData = packet[0]
             const packetSenderId = packet[1]
-            const ptr = stackAlloc(packetData.byteLength)
             const byteArray = new Uint8Array(packetData)
 
             setValue(peerIdPtr, packetSenderId, 'i32')
-            setValue(lenPtr, packetData.byteLength, 'i32')
-            writeArrayToMemory(byteArray, ptr)
+            writeArrayToMemory(byteArray, bufferPtr)
 
-            return ptr
+            return packetData.byteLength
         } else {
-            return null
+            return 0
         }
     },
 
@@ -113,19 +111,17 @@ mergeInto(LibraryManager.library, {
         })
     },
 
-    __js_game_client_dequeue_packet: function(lenPtr) {
+    __js_game_client_dequeue_packet: function(bufferPtr) {
         const packet = this.gameClient.packets.shift()
 
         if (packet) {
-            const ptr = stackAlloc(packet.byteLength)
             const byteArray = new Uint8Array(packet)
 
-            setValue(lenPtr, packet.byteLength, 'i32')
-            writeArrayToMemory(byteArray, ptr)
+            writeArrayToMemory(byteArray, bufferPtr)
 
-            return ptr
+            return packet.byteLength
         } else {
-            return null
+            return 0
         }
     },
 

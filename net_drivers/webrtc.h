@@ -271,7 +271,7 @@ static void NBN_WebRTC_HTable_Grow(NBN_WebRTC_HTable *htable)
 
 NBN_EXTERN void __js_game_server_init(uint32_t, bool, const char *, const char *);
 NBN_EXTERN int __js_game_server_start(uint16_t);
-NBN_EXTERN uint8_t *__js_game_server_dequeue_packet(uint32_t *, unsigned int *);
+NBN_EXTERN int __js_game_server_dequeue_packet(uint32_t *, uint8_t *);
 NBN_EXTERN int __js_game_server_send_packet_to(uint8_t *, unsigned int, uint32_t);
 NBN_EXTERN void __js_game_server_close_client_peer(unsigned int);
 NBN_EXTERN void __js_game_server_stop(void);
@@ -279,6 +279,7 @@ NBN_EXTERN void __js_game_server_stop(void);
 /* --- Driver implementation --- */
 
 static NBN_WebRTC_HTable *nbn_wrtc_peers = NULL;
+static uint8_t nbn_packet_buffer[NBN_PACKET_MAX_SIZE];
 
 static int NBN_WebRTC_ServStart(uint32_t protocol_id, uint16_t port)
 {
@@ -312,11 +313,10 @@ static void NBN_WebRTC_ServStop(void)
 
 static int NBN_WebRTC_ServRecvPackets(void)
 {
-    uint8_t *data;
     uint32_t peer_id;
     unsigned int len;
 
-    while ((data = __js_game_server_dequeue_packet(&peer_id, &len)) != NULL)
+    while ((len = __js_game_server_dequeue_packet(&peer_id, (uint8_t *)nbn_packet_buffer)) > 0)
     {
         NBN_Packet packet;
 
@@ -339,7 +339,7 @@ static int NBN_WebRTC_ServRecvPackets(void)
             NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_CONNECTED, peer->conn);
         }
 
-        if (NBN_Packet_InitRead(&packet, peer->conn, data, len) < 0)
+        if (NBN_Packet_InitRead(&packet, peer->conn, nbn_packet_buffer, len) < 0)
             continue;
 
         packet.sender = peer->conn;
@@ -379,7 +379,7 @@ static int NBN_WebRTC_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *conn)
 
 NBN_EXTERN void __js_game_client_init(uint32_t, bool);
 NBN_EXTERN int __js_game_client_start(const char *, uint16_t);
-NBN_EXTERN uint8_t *__js_game_client_dequeue_packet(unsigned int *);
+NBN_EXTERN int __js_game_client_dequeue_packet(uint8_t *);
 NBN_EXTERN int __js_game_client_send_packet(uint8_t *, unsigned int);
 NBN_EXTERN void __js_game_client_close(void);
 
@@ -413,14 +413,13 @@ static void NBN_WebRTC_CliStop(void)
 
 static int NBN_WebRTC_CliRecvPackets(void)
 {
-    uint8_t *data;
     unsigned int len;
 
-    while ((data = __js_game_client_dequeue_packet(&len)) != NULL)
+    while ((len = __js_game_client_dequeue_packet((uint8_t *)nbn_packet_buffer)) > 0)
     {
         NBN_Packet packet;
 
-        if (NBN_Packet_InitRead(&packet, nbn_wrtc_server, data, len) < 0)
+        if (NBN_Packet_InitRead(&packet, nbn_wrtc_server, nbn_packet_buffer, len) < 0)
             continue;
 
         if (!is_connected_to_server)
