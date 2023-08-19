@@ -106,7 +106,7 @@ jobs:
           emcmake cmake ..
           make
           cd ..
-          npm install 
+          npm install
       - name: Run soak test
         run: |
           cd emsdk
@@ -167,7 +167,7 @@ jobs:
           emcmake cmake ..
           make
           cd ..
-          npm install 
+          npm install
       - name: Run soak test
         run: |
           cd emsdk
@@ -187,7 +187,7 @@ jobs:
           cmake -G "NMake Makefiles" .
           nmake
       - name: Run soak test
-        run: ./bin/github-actions/run_soak.sh 
+        run: ./bin/github-actions/run_soak.sh
 
   compile-examples-linux-c:
     runs-on: ubuntu-latest

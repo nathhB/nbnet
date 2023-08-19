@@ -50,15 +50,15 @@ then
     echo "Soak test completed with success!"
     echo "Printing the end of client logs..."
 
-    cat soak_cli_out | tail -n 150
+    tail -n 150 soak_cli_out
 
     EXIT_CODE=0
 else
     echo "Soak test failed! (code: $RESULT)"
     echo "Printing the end of client logs..."
-    cat soak_cli_out | tail -n 150
+    tail -n 150 soak_cli_out
     echo "Printing the end of server logs..."
-    cat soak_serv_out | tail -n 150
+    tail -n 150 soak_serv_out
 
     EXIT_CODE=1
 fi
