@@ -128,9 +128,8 @@ int main(void)
                     }
                     else
                     {
-                        NBN_GameServer_GetIncomingConnection(&client, NULL);
-
                         NBN_GameServer_AcceptIncomingConnection();
+                        client = NBN_GameServer_GetIncomingConnection();
                     }
 
                     break;

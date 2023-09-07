@@ -127,9 +127,9 @@ int main(int argc, char *argv[])
 
     // Initialize the client with a protocol name (must be the same than the one used by the server), the server ip address and port
 #ifdef NBN_ENCRYPTION
-    NBN_GameClient_Init(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT, true, NULL);
+    NBN_GameClient_Init(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT, true);
 #else
-    NBN_GameClient_Init(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT, false, NULL);
+    NBN_GameClient_Init(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT, false);
 #endif
 
     // Start the client

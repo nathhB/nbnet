@@ -664,7 +664,7 @@ static int NBN_WebRTC_C_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *con
 
 void NBN_WebRTC_C_Register(void)
 {
-    NBN_DriverImplementation driver_impl {
+    NBN_DriverImplementation driver_impl = {
         // Client implementation
         NULL,
         NULL,

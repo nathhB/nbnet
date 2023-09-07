@@ -83,9 +83,7 @@ static void HandleNewConnection(void)
         return;
     }
 
-    NBN_ConnectionHandle connection_handle;
-
-    NBN_GameServer_GetIncomingConnection(&connection_handle, NULL);
+    NBN_ConnectionHandle connection_handle = NBN_GameServer_GetIncomingConnection();
 
     assert(clients[connection_handle - 1] == NULL);
 

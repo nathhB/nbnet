@@ -59,6 +59,21 @@ static Vector2 spawns[] = {
     (Vector2){GAME_WIDTH - 100, GAME_HEIGHT - 100}
 };
 
+static void AcceptConnection(unsigned int x, unsigned int y, NBN_ConnectionHandle conn)
+{
+    NBN_WriteStream ws;
+    uint8_t data[32];
+
+    NBN_WriteStream_Init(&ws, data, sizeof(data));
+
+    NBN_SerializeUInt(((NBN_Stream *)&ws), x, 0, GAME_WIDTH);
+    NBN_SerializeUInt(((NBN_Stream *)&ws), y, 0, GAME_HEIGHT);
+    NBN_SerializeUInt(((NBN_Stream *)&ws), conn, 0, UINT_MAX);
+
+    // Accept the connection
+    NBN_GameServer_AcceptIncomingConnectionWithData(data, sizeof(data));
+}
+
 static int HandleNewConnection(void)
 {
     TraceLog(LOG_INFO, "New connection");
@@ -76,9 +91,8 @@ static int HandleNewConnection(void)
     // Otherwise...
 
     NBN_ConnectionHandle client_handle;
-    NBN_Stream *ws;
 
-    NBN_GameServer_GetIncomingConnection(&client_handle, &ws);
+    client_handle = NBN_GameServer_GetIncomingConnection();
 
     // Get a spawning position for the client
     Vector2 spawn = spawns[client_handle % MAX_CLIENTS];
@@ -88,12 +102,7 @@ static int HandleNewConnection(void)
     unsigned int x = (unsigned int)spawn.x;
     unsigned int y = (unsigned int)spawn.y;
 
-    NBN_SerializeUInt(ws, x, 0, GAME_WIDTH);
-    NBN_SerializeUInt(ws, y, 0, GAME_HEIGHT);
-    NBN_SerializeUInt(ws, client_handle, 0, UINT_MAX);
-    
-    // Accept the connection
-    NBN_GameServer_AcceptIncomingConnection();
+    AcceptConnection(x, y, client_handle);
 
     TraceLog(LOG_INFO, "Connection accepted (ID: %d)", client_handle);
 

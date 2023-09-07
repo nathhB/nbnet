@@ -72,15 +72,19 @@ static void SpawnLocalClient(int x, int y, uint32_t client_id)
 
 static void HandleConnection(void)
 {
-    NBN_Stream *rs = NBN_GameClient_GetAcceptDataReadStream();
+    uint8_t data[32];
+    unsigned int data_len = NBN_GameClient_ReadServerData(data);
+    NBN_ReadStream rs;
+
+    NBN_ReadStream_Init(&rs, data, data_len);
 
     unsigned int x = 0;
     unsigned int y = 0;
     unsigned int client_id = 0;
 
-    NBN_SerializeUInt(rs, x, 0, GAME_WIDTH);
-    NBN_SerializeUInt(rs, y, 0, GAME_HEIGHT);
-    NBN_SerializeUInt(rs, client_id, 0, UINT_MAX);
+    NBN_SerializeUInt(((NBN_Stream *)&rs), x, 0, GAME_WIDTH);
+    NBN_SerializeUInt(((NBN_Stream *)&rs), y, 0, GAME_HEIGHT);
+    NBN_SerializeUInt(((NBN_Stream *)&rs), client_id, 0, UINT_MAX);
 
     SpawnLocalClient(x, y, client_id);
 
@@ -516,9 +520,9 @@ int main(int argc, char *argv[])
 
     // Initialize the client with a protocol name (must be the same than the one used by the server), the server ip address and port
 #ifdef EXAMPLE_ENCRYPTION
-    NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, true, NULL);
+    NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, true);
 #else
-    NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, false, NULL);
+    NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, false);
 #endif
 
     if (NBN_GameClient_Start() < 0)
