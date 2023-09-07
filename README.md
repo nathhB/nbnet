@@ -109,7 +109,7 @@ Provide a driver implementation. For the UDP driver, just add:
 
 after including the nbnet header in the same source file where you defined `NBNET_IMPL`.
 
-nbnet does not provide any logging capacibilities so you have to provide your own:
+nbnet does not provide any logging capabilities so you have to provide your own:
 
 ```
 #define NBN_LogInfo(...) SomeLoggingFunction(__VA_ARGS__)
