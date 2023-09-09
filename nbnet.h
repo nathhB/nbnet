@@ -1016,7 +1016,6 @@ typedef struct
     {
         NBN_MessageInfo message_info;
         NBN_Connection *connection;
-        uint32_t connection_id;
     } data;
 } NBN_Event;
 
@@ -1721,7 +1720,7 @@ NBN_ConnectionHandle NBN_GameServer_GetIncomingConnection(void);
  *
  * @param data the buffer to copy the connection data to
  *
- * @return the length in bytes of the connection data (<= NBN_CONNECTION_DATA_MAX_SIZE)
+ * @return the length in bytes of the connection data
  */
 unsigned int NBN_GameServer_ReadIncomingConnectionData(uint8_t *data);
 
@@ -5983,18 +5982,14 @@ int NBN_GameServer_Poll(void)
         GameServer_RemoveClosedClientConnections();
     }
 
-    while (true)
+    while (NBN_EventQueue_Dequeue(&nbn_game_server.endpoint.event_queue, &nbn_game_server.last_event))
     {
-        bool ret = NBN_EventQueue_Dequeue(&nbn_game_server.endpoint.event_queue, &nbn_game_server.last_event);
-
-        if (!ret)
-            return NBN_NO_EVENT;
-
         int ev = GameServer_HandleEvent();
 
-        if (ev != NBN_SKIP_EVENT)
-            return ev;
+        if (ev != NBN_SKIP_EVENT) return ev;
     }
+
+    return NBN_NO_EVENT;
 }
 
 int NBN_GameServer_SendPackets(void)
@@ -6208,7 +6203,7 @@ NBN_ConnectionHandle NBN_GameServer_GetDisconnectedClient(void)
 {
     assert(nbn_game_server.last_event.type == NBN_CLIENT_DISCONNECTED);
 
-    return nbn_game_server.last_event.data.connection_id;
+    return nbn_game_server.last_event.data.connection->id;
 }
 
 NBN_MessageInfo NBN_GameServer_GetMessageInfo(void)
@@ -6348,7 +6343,7 @@ static int GameServer_CloseClientWithCode(NBN_Connection *client, int code, bool
             NBN_Event e;
 
             e.type = NBN_CLIENT_DISCONNECTED;
-            e.data.connection_id = client->id;
+            e.data.connection = client;
 
             if (!NBN_EventQueue_Enqueue(&nbn_game_server.endpoint.event_queue, e))
                 return NBN_ERROR;
@@ -6546,16 +6541,9 @@ static void GameServer_RemoveClosedClientConnections(void)
 
 static int GameServer_HandleEvent(void)
 {
-    switch (nbn_game_server.last_event.type)
-    {
-    case NBN_CLIENT_MESSAGE_RECEIVED:
-        return GameServer_HandleMessageReceivedEvent();
-
-    default:
-        break;
-    }
-
-    return nbn_game_server.last_event.type;
+    return nbn_game_server.last_event.type == NBN_CLIENT_MESSAGE_RECEIVED ?
+        GameServer_HandleMessageReceivedEvent() :
+        nbn_game_server.last_event.type;
 }
 
 static int GameServer_HandleMessageReceivedEvent(void)
@@ -6584,7 +6572,7 @@ static int GameServer_HandleMessageReceivedEvent(void)
         sender->is_stale = true;
 
         nbn_game_server.last_event.type = NBN_CLIENT_DISCONNECTED;
-        nbn_game_server.last_event.data.connection_id = sender->id;
+        nbn_game_server.last_event.data.connection = sender;
 
         GameServer_RemoveClosedClientConnections();
 
