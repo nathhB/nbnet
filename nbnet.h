@@ -342,11 +342,6 @@ typedef struct
      * On the client side, it will always be 0 (all received messages come from the game server).
     */
     NBN_ConnectionHandle sender;
-
-    /**
-     * User defined data associated with the sender of the message.
-     */
-    void *sender_data;
 } NBN_MessageInfo;
 
 int NBN_Message_SerializeHeader(NBN_MessageHeader *, NBN_Stream *);
@@ -953,7 +948,6 @@ struct NBN_Connection
     NBN_Channel *channels[NBN_MAX_CHANNELS]; /* Messages channeling (sending & receiving) */
     NBN_ConnectionStats stats;
     void *driver_data; /* Data attached to the connection by the underlying driver */
-    void *user_data; /* Used to attach data from the user code */
 
 #ifdef NBN_DEBUG
     /* Debug callbacks */
@@ -1174,7 +1168,6 @@ typedef struct
     NBN_Endpoint endpoint;
     NBN_Connection *server_connection;
     bool is_connected;
-    void *context;
     uint8_t server_data[NBN_SERVER_DATA_MAX_SIZE]; /* Data sent by the server when accepting the client's connection */
     unsigned int server_data_len; /* Length of the received server data in bytes */
     NBN_Event last_event;
@@ -1723,25 +1716,6 @@ NBN_ConnectionHandle NBN_GameServer_GetIncomingConnection(void);
  * @return the length in bytes of the connection data
  */
 unsigned int NBN_GameServer_ReadIncomingConnectionData(uint8_t *data);
-
-/**
- * Set user defined data for a given client.
- *
- * @param connection_handle The client's connection
- * @param user_data User defined data pointer
- *
- * @return 0 if successful, -1 otherwise (if the client does not exist)
- */
-int NBN_GameServer_SetClientUserData(NBN_ConnectionHandle connection_handle, void *user_data);
-
-/**
- * Get the user defined data of a given client.
- *
- * @param connection_handle The client's connection
- *
- * @return The pointer to the user defined data or NULL if the client does not exist
- */
-void *NBN_GameServer_GetClientUserData(NBN_ConnectionHandle connection_handle);
 
 /**
  * Return the last disconnected client.
@@ -3466,7 +3440,6 @@ NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_End
 
     connection->id = id;
     connection->protocol_id = protocol_id;
-    connection->user_data = NULL;
     connection->endpoint = endpoint;
     connection->last_recv_packet_time = 0;
     connection->next_packet_seq_number = 1;
@@ -5615,13 +5588,13 @@ static int GameClient_ProcessReceivedMessage(NBN_Message *message, NBN_Connectio
             return NBN_ERROR;
         }
 
-        NBN_MessageInfo msg_info = {complete_message.header.type, complete_message.header.channel_id, complete_message.data, 0, NULL};
+        NBN_MessageInfo msg_info = {complete_message.header.type, complete_message.header.channel_id, complete_message.data, 0};
 
         ev.data.message_info = msg_info;
     }
     else
     {
-        NBN_MessageInfo msg_info = {message->header.type, message->header.channel_id, message->data, 0, NULL};
+        NBN_MessageInfo msg_info = {message->header.type, message->header.channel_id, message->data, 0};
 
         ev.data.message_info = msg_info;
     }
@@ -6177,28 +6150,6 @@ unsigned int NBN_GameServer_ReadIncomingConnectionData(uint8_t *data)
     return nbn_game_server.last_connection_data_len;
 }
 
-int NBN_GameServer_SetClientUserData(NBN_ConnectionHandle connection_handle, void *user_data)
-{
-    NBN_Connection *client = NBN_ConnectionTable_Get(nbn_game_server.clients_table, connection_handle);
-
-    if (!client)
-    {
-        NBN_LogError("Client %d does not exist", connection_handle);
-        return NBN_ERROR;
-    }
-
-    client->user_data = user_data;
-
-    return 0;
-}
-
-void *NBN_GameServer_GetClientUserData(NBN_ConnectionHandle connection_handle)
-{
-    NBN_Connection *client = NBN_ConnectionTable_Get(nbn_game_server.clients_table, connection_handle);
-
-    return client ? client->user_data : NULL;
-}
-
 NBN_ConnectionHandle NBN_GameServer_GetDisconnectedClient(void)
 {
     assert(nbn_game_server.last_event.type == NBN_CLIENT_DISCONNECTED);
@@ -6433,13 +6384,13 @@ static int GameServer_ProcessReceivedMessage(NBN_Message *message, NBN_Connectio
             return NBN_ERROR;
         }
 
-        NBN_MessageInfo msg_info = {complete_message.header.type, complete_message.header.channel_id, complete_message.data, client->id, client->user_data};
+        NBN_MessageInfo msg_info = {complete_message.header.type, complete_message.header.channel_id, complete_message.data, client->id};
 
         ev.data.message_info = msg_info;
     }
     else
     {
-        NBN_MessageInfo msg_info = {message->header.type, message->header.channel_id, message->data, client->id, client->user_data};
+        NBN_MessageInfo msg_info = {message->header.type, message->header.channel_id, message->data, client->id};
 
         ev.data.message_info = msg_info;
     }
