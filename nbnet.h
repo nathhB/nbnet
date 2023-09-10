@@ -1769,14 +1769,6 @@ int NBN_GameServer_RegisterRPC(unsigned int id, NBN_RPC_Signature signature, NBN
  */
 int NBN_GameServer_CallRPC(unsigned int id, NBN_ConnectionHandle connection_handle, ...);
 
-/**
- * Return if a client is connected or not.
- *
- * @param connection_handle The client's connection
- * @return true if the client is connected, false otherwise
- */
-bool NBN_GameServer_IsClientConnected(NBN_ConnectionHandle connection_handle);
-
 #ifdef NBN_DEBUG
 
 void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
@@ -6057,8 +6049,8 @@ int NBN_GameServer_SendMessageTo(NBN_ConnectionHandle connection_handle, uint8_t
 
     if (client == NULL)
     {
-        NBN_LogError("Client %d does not exist", connection_handle);
-        return NBN_ERROR;
+        NBN_LogWarning("Cannot send message to client %d (does not exist)", connection_handle);
+        return 0;
     }
 
     return GameServer_SendMessageTo(client, msg_type, channel_id, msg_data);
@@ -6222,13 +6214,6 @@ rpc_error:
     va_end(args);
 
     return NBN_ERROR;
-}
-
-bool NBN_GameServer_IsClientConnected(NBN_ConnectionHandle connection_handle)
-{
-    NBN_Connection *client = NBN_ConnectionTable_Get(nbn_game_server.clients_table, connection_handle);
-
-    return client && !client->is_closed;
 }
 
 #ifdef NBN_DEBUG
