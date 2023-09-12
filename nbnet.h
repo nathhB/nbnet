@@ -149,16 +149,16 @@ typedef uint32_t Word;
 }
 
 #define NBN_SerializeUInt(stream, v, min, max) \
-    ASSERTED_SERIALIZE(stream, v, min, max, stream->serialize_uint_func(stream, (unsigned int *)&(v), min, max))
-#define NBN_SerializeUInt64(stream, v) stream->serialize_uint64_func(stream, (uint64_t *)&(v))
+    ASSERTED_SERIALIZE((stream), v, min, max, (stream)->serialize_uint_func((stream), (unsigned int *)&(v), min, max))
+#define NBN_SerializeUInt64(stream, v) (stream)->serialize_uint64_func((stream), (uint64_t *)&(v))
 #define NBN_SerializeInt(stream, v, min, max) \
-    ASSERTED_SERIALIZE(stream, v, min, max, stream->serialize_int_func(stream, &(v), min, max))
+    ASSERTED_SERIALIZE((stream), v, min, max, (stream)->serialize_int_func((stream), &(v), min, max))
 #define NBN_SerializeFloat(stream, v, min, max, precision) \
-    ASSERTED_SERIALIZE(stream, v, min, max, stream->serialize_float_func(stream, &(v), min, max, precision))
-#define NBN_SerializeBool(stream, v) ASSERTED_SERIALIZE(stream, v, 0, 1, stream->serialize_bool_func(stream, &(v)))
-#define NBN_SerializeString(stream, v, length) NBN_SerializeBytes(stream, v, length)
-#define NBN_SerializeBytes(stream, v, length) stream->serialize_bytes_func(stream, (uint8_t *)v, length)
-#define NBN_SerializePadding(stream) stream->serialize_padding_func(stream)
+    ASSERTED_SERIALIZE((stream), v, min, max, (stream)->serialize_float_func((stream), &(v), min, max, precision))
+#define NBN_SerializeBool(stream, v) ASSERTED_SERIALIZE((stream), v, 0, 1, (stream)->serialize_bool_func((stream), &(v)))
+#define NBN_SerializeString(stream, v, length) NBN_SerializeBytes((stream), v, length)
+#define NBN_SerializeBytes(stream, v, length) (stream)->serialize_bytes_func((stream), (uint8_t *)v, length)
+#define NBN_SerializePadding(stream) (stream)->serialize_padding_func(stream)
 
 #pragma region NBN_BitReader
 

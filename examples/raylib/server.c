@@ -66,9 +66,9 @@ static void AcceptConnection(unsigned int x, unsigned int y, NBN_ConnectionHandl
 
     NBN_WriteStream_Init(&ws, data, sizeof(data));
 
-    NBN_SerializeUInt(((NBN_Stream *)&ws), x, 0, GAME_WIDTH);
-    NBN_SerializeUInt(((NBN_Stream *)&ws), y, 0, GAME_HEIGHT);
-    NBN_SerializeUInt(((NBN_Stream *)&ws), conn, 0, UINT_MAX);
+    NBN_SerializeUInt((NBN_Stream *)&ws, x, 0, GAME_WIDTH);
+    NBN_SerializeUInt((NBN_Stream *)&ws, y, 0, GAME_HEIGHT);
+    NBN_SerializeUInt((NBN_Stream *)&ws, conn, 0, UINT_MAX);
 
     // Accept the connection
     NBN_GameServer_AcceptIncomingConnectionWithData(data, sizeof(data));
