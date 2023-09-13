@@ -61,7 +61,7 @@ typedef struct NBN_Driver NBN_Driver;
 
 #pragma region NBN_ConnectionVector
 
-typedef struct
+typedef struct NBN_ConnectionVector
 {
     NBN_Connection **connections;
     unsigned int count;
@@ -88,7 +88,7 @@ typedef struct NBN_MemPoolFreeBlock
     struct NBN_MemPoolFreeBlock *next;
 } NBN_MemPoolFreeBlock;
 
-typedef struct
+typedef struct NBN_MemPool
 {
     uint8_t **blocks;
     size_t block_size;
@@ -97,7 +97,7 @@ typedef struct
     NBN_MemPoolFreeBlock *free;
 } NBN_MemPool;
 
-typedef struct
+typedef struct NBN_MemoryManager
 {
 #ifdef NBN_DISABLE_MEMORY_POOLING
     size_t mem_sizes[16];
@@ -149,7 +149,7 @@ typedef uint32_t Word;
 
 #pragma region NBN_BitReader
 
-typedef struct
+typedef struct NBN_BitReader
 {
     unsigned int size;
     uint8_t *buffer;
@@ -165,7 +165,7 @@ int NBN_BitReader_Read(NBN_BitReader *, Word *, unsigned int);
 
 #pragma region NBN_BitWriter
 
-typedef struct
+typedef struct NBN_BitWriter
 {
     unsigned int size;
     uint8_t *buffer;
@@ -192,7 +192,7 @@ typedef int (*NBN_Stream_SerializeBool)(NBN_Stream *, bool *);
 typedef int (*NBN_Stream_SerializePadding)(NBN_Stream *);
 typedef int (*NBN_Stream_SerializeBytes)(NBN_Stream *, uint8_t *, unsigned int);
 
-typedef enum
+typedef enum NBN_StreamType
 {
     NBN_STREAM_WRITE,
     NBN_STREAM_READ,
@@ -215,7 +215,7 @@ struct NBN_Stream
 
 #pragma region NBN_ReadStream
 
-typedef struct
+typedef struct NBN_ReadStream
 {
     NBN_Stream base;
     NBN_BitReader bit_reader;
@@ -234,7 +234,7 @@ int NBN_ReadStream_SerializeBytes(NBN_ReadStream *, uint8_t *, unsigned int);
 
 #pragma region NBN_WriteStream
 
-typedef struct
+typedef struct NBN_WriteStream
 {
     NBN_Stream base;
     NBN_BitWriter bit_writer;
@@ -254,7 +254,7 @@ int NBN_WriteStream_Flush(NBN_WriteStream *);
 
 #pragma region NBN_MeasureStream
 
-typedef struct
+typedef struct NBN_MeasureStream
 {
     NBN_Stream base;
     unsigned int number_of_bits;
@@ -284,7 +284,7 @@ typedef int (*NBN_MessageSerializer)(void *, NBN_Stream *);
 typedef void *(*NBN_MessageBuilder)(void);
 typedef void (*NBN_MessageDestructor)(void *);
 
-typedef struct
+typedef struct NBN_MessageHeader
 {
     uint16_t id;
     uint8_t type;
@@ -294,14 +294,14 @@ typedef struct
 /*
  * Holds the user message's data as well as a reference count for message recycling
  */
-typedef struct
+typedef struct NBN_OutgoingMessage
 {
     uint8_t type;
     unsigned int ref_count;
     void *data;
 } NBN_OutgoingMessage;
 
-typedef struct
+typedef struct NBN_Message
 {
     NBN_MessageHeader header;
     NBN_Connection *sender;
@@ -312,7 +312,7 @@ typedef struct
 /**
  * Information about a received message.
  */
-typedef struct
+typedef struct NBN_MessageInfo
 {
     /** User defined message's type */
     uint8_t type;
@@ -437,7 +437,7 @@ typedef void* CSPRNG;
 #pragma comment(lib, "advapi32.lib")
 #endif
 
-typedef union
+typedef union CSPRNG_TYPE
 {
     CSPRNG     object;
     HCRYPTPROV hCryptProv;
@@ -448,7 +448,7 @@ CSPRNG_TYPE;
 
 #include <stdio.h>
 
-typedef union
+typedef union CSPRNG_TYPE
 {
     CSPRNG object;
     FILE*  urandom;
@@ -476,7 +476,7 @@ CSPRNG_TYPE;
 #define NBN_RPC_GetBool(params, idx) (params[idx].value.b)
 #define NBN_RPC_GetString(params, idx) (params[idx].value.s)
 
-typedef enum
+typedef enum NBN_RPC_ParamType
 {
     NBN_RPC_PARAM_INT,
     NBN_RPC_PARAM_FLOAT,
@@ -484,26 +484,27 @@ typedef enum
     NBN_RPC_PARAM_STRING
 } NBN_RPC_ParamType;
 
-typedef struct
+typedef struct NBN_RPC_String
 {
     char string[NBN_RPC_STRING_MAX_LENGTH];
     unsigned int length;
 } NBN_RPC_String;
 
-typedef struct
+typedef union NBN_RPC_ParamValue
+{
+    int i;
+    float f;
+    bool b;
+    char s[NBN_RPC_STRING_MAX_LENGTH];
+} NBN_RPC_ParamValue;
+
+typedef struct NBN_RPC_Param
 {
     NBN_RPC_ParamType type;
-
-    union
-    {
-        int i;
-        float f;
-        bool b;
-        char s[NBN_RPC_STRING_MAX_LENGTH];
-    } value;
+    NBN_RPC_ParamValue value;
 } NBN_RPC_Param;
 
-typedef struct
+typedef struct NBN_RPC_Signature
 {
     unsigned int param_count;
     NBN_RPC_ParamType params[NBN_RPC_MAX_PARAM_COUNT];
@@ -511,7 +512,7 @@ typedef struct
 
 typedef void (*NBN_RPC_Func)(unsigned int, NBN_RPC_Param[NBN_RPC_MAX_PARAM_COUNT], NBN_Connection *sender);
 
-typedef struct
+typedef struct NBN_RPC
 {
     unsigned int id;
     NBN_RPC_Signature signature;
@@ -550,13 +551,13 @@ enum
     NBN_PACKET_WRITE_NO_SPACE,
 };
 
-typedef enum
+typedef enum NBN_PacketMode
 {
     NBN_PACKET_MODE_WRITE = 1,
     NBN_PACKET_MODE_READ
 } NBN_PacketMode;
 
-typedef struct
+typedef struct NBN_PacketHeader
 {
     uint32_t protocol_id;
     uint16_t seq_number;
@@ -574,7 +575,7 @@ typedef struct
     uint8_t auth_tag[POLY1305_TAGLEN]; /* Poly1305 auth tag */
 } NBN_PacketHeader;
 
-typedef struct
+typedef struct NBN_Packet
 {
     NBN_PacketHeader header;
     NBN_PacketMode mode;
@@ -617,7 +618,7 @@ void NBN_Packet_ComputePoly1305Key(NBN_Packet *, NBN_Connection *, uint8_t *);
 #define NBN_MESSAGE_CHUNK_SIZE (NBN_PACKET_MAX_USER_DATA_SIZE - sizeof(NBN_MessageHeader) - 2)
 #define NBN_MESSAGE_CHUNK_TYPE (NBN_MAX_MESSAGE_TYPES - 1) /* Reserved message type for chunks */
 
-typedef struct
+typedef struct NBN_MessageChunk
 {
     uint8_t id;
     uint8_t total;
@@ -635,7 +636,7 @@ int NBN_MessageChunk_Serialize(NBN_MessageChunk *, NBN_Stream *);
 
 #define NBN_CLIENT_CLOSED_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 2) /* Reserved message type */
 
-typedef struct
+typedef struct NBN_ClientClosedMessage
 {
     int code;
 } NBN_ClientClosedMessage;
@@ -652,7 +653,7 @@ int NBN_ClientClosedMessage_Serialize(NBN_ClientClosedMessage *, NBN_Stream *);
 #define NBN_ACCEPT_DATA_MAX_SIZE 4096
 #define NBN_CONNECTION_DATA_MAX_SIZE 512
 
-typedef struct
+typedef struct NBN_ClientAcceptedMessage
 {
     uint8_t data[NBN_ACCEPT_DATA_MAX_SIZE];
 } NBN_ClientAcceptedMessage;
@@ -668,7 +669,7 @@ int NBN_ClientAcceptedMessage_Serialize(NBN_ClientAcceptedMessage *, NBN_Stream 
 #define NBN_BYTE_ARRAY_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 4) /* Reserved message type */
 #define NBN_BYTE_ARRAY_MAX_SIZE 4096
 
-typedef struct
+typedef struct NBN_ByteArrayMessage
 {
     uint8_t bytes[NBN_BYTE_ARRAY_MAX_SIZE];
     unsigned int length;
@@ -684,7 +685,7 @@ int NBN_ByteArrayMessage_Serialize(NBN_ByteArrayMessage *, NBN_Stream *);
 
 #define NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 5) /* Reserved message type */
 
-typedef struct
+typedef struct NBN_PublicCryptoInfoMessage
 {
     uint8_t pub_key1[ECC_PUB_KEY_SIZE];
     uint8_t pub_key2[ECC_PUB_KEY_SIZE];
@@ -722,7 +723,7 @@ int NBN_DisconnectionMessage_Serialize(void *, NBN_Stream *);
 
 #define NBN_CONNECTION_REQUEST_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 8) /* Reserved message type */
 
-typedef struct
+typedef struct NBN_ConnectionRequestMessage
 {
     uint8_t data[NBN_CONNECTION_DATA_MAX_SIZE];
 } NBN_ConnectionRequestMessage;
@@ -737,7 +738,7 @@ int NBN_ConnectionRequestMessage_Serialize(NBN_ConnectionRequestMessage *, NBN_S
 
 #define NBN_RPC_MESSAGE_TYPE (NBN_MAX_MESSAGE_TYPES - 9) /* Reserved message type */
 
-typedef struct
+typedef struct NBN_RPC_Message
 {
     unsigned int id;
     unsigned int param_count;
@@ -769,7 +770,7 @@ int NBN_RPC_Message_Serialize(NBN_RPC_Message *, NBN_Stream *);
 typedef NBN_Channel *(*NBN_ChannelBuilder)(void);
 typedef void (*NBN_ChannelDestructor)(NBN_Channel *);
 
-typedef struct
+typedef struct NBN_MessageSlot
 {
     NBN_Message message;
     double last_send_time;
@@ -822,7 +823,7 @@ void NBN_Channel_UpdateMessageLastSendTime(NBN_Channel *, NBN_Message *, double)
    end up getting lost. A good example would be game snaphosts when any newly received snapshot is more up to date
    than the previous one.
    */
-typedef struct
+typedef struct NBN_UnreliableOrderedChannel
 {
     NBN_Channel base;
     uint16_t last_received_message_id;
@@ -837,7 +838,7 @@ NBN_UnreliableOrderedChannel *NBN_UnreliableOrderedChannel_Create(void);
    Will guarantee that all messages will be received in order. Use this when you want to make sure a message
    will be received, for example for chat messages or initial game world state.
    */
-typedef struct
+typedef struct NBN_ReliableOrderedChannel
 {
     NBN_Channel base;
     uint16_t oldest_unacked_message_id;
@@ -851,7 +852,7 @@ NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(void);
 
 #pragma region NBN_Config
 
-typedef struct
+typedef struct NBN_Config
 {
     const char *protocol_name;
     const char *ip_address;
@@ -874,13 +875,13 @@ typedef struct
 /* Number of seconds before the connection is considered stale and get closed */
 #define NBN_CONNECTION_STALE_TIME_THRESHOLD 3
 
-typedef struct
+typedef struct NBN_MessageEntry
 {
     uint16_t id;
     uint8_t channel_id;
 } NBN_MessageEntry;
 
-typedef struct
+typedef struct NBN_PacketEntry
 {
     bool acked;
     bool flagged_as_lost;
@@ -889,7 +890,7 @@ typedef struct
     NBN_MessageEntry messages[NBN_MAX_MESSAGES_PER_PACKET];
 } NBN_PacketEntry;
 
-typedef struct
+typedef struct NBN_ConnectionStats
 {
     double ping;
     unsigned int total_lost_packets;
@@ -900,14 +901,14 @@ typedef struct
 
 #ifdef NBN_DEBUG
 
-typedef enum
+typedef enum NBN_ConnectionDebugCallback
 {
     NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE
 } NBN_ConnectionDebugCallback;
 
 #endif /* NBN_DEBUG */
 
-typedef struct
+typedef struct NBN_ConnectionKeySet
 {
     uint8_t pub_key[ECC_PUB_KEY_SIZE]; /* Public key */
     uint8_t prv_key[ECC_PRV_KEY_SIZE]; /* Private key */
@@ -980,18 +981,19 @@ void NBN_Connection_AddTime(NBN_Connection *, double);
 #define NBN_SKIP_EVENT 1 /* Indicates that the event should be skipped */
 #define NBN_EVENT_QUEUE_CAPACITY 1024
 
-typedef struct
+typedef struct NBN_EventData
+{
+    NBN_MessageInfo message_info;
+    NBN_Connection *connection;
+} NBN_EventData;
+
+typedef struct NBN_Event
 {
     int type;
-
-    union
-    {
-        NBN_MessageInfo message_info;
-        NBN_Connection *connection;
-    } data;
+    NBN_EventData data;
 } NBN_Event;
 
-typedef struct
+typedef struct NBN_EventQueue
 {
     NBN_Event events[NBN_EVENT_QUEUE_CAPACITY];
     unsigned int head;
@@ -1047,7 +1049,7 @@ struct NBN_PacketSimulatorEntry
     struct NBN_PacketSimulatorEntry *prev;
 };
 
-typedef struct
+typedef struct NBN_PacketSimulator
 {
     NBN_PacketSimulatorEntry *head_packet;
     NBN_PacketSimulatorEntry *tail_packet;
@@ -1141,7 +1143,7 @@ enum
     NBN_MESSAGE_RECEIVED
 };
 
-typedef struct
+typedef struct NBN_GameClient
 {
     NBN_Endpoint endpoint;
     NBN_Connection *server_connection;
@@ -1427,13 +1429,13 @@ enum
     NBN_CLIENT_MESSAGE_RECEIVED
 };
 
-typedef struct
+typedef struct NBN_GameServerStats
 {
     float upload_bandwidth; /* Total upload bandwith of the game server */
     float download_bandwidth; /* Total download bandwith of the game server */
 } NBN_GameServerStats;
 
-typedef struct
+typedef struct NBN_GameServer
 {
     NBN_Endpoint endpoint;
     NBN_ConnectionVector *clients;
@@ -1754,7 +1756,7 @@ void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
 
 #define NBN_MAX_DRIVERS 4
 
-typedef enum
+typedef enum NBN_DriverEvent
 {
     // Client events
     NBN_DRIVER_CLI_CONNECTED,
@@ -1775,7 +1777,7 @@ typedef int (*NBN_Driver_ServerStartFunc)(uint32_t, uint16_t);
 typedef int (*NBN_Driver_ServerSendPacketToFunc)(NBN_Packet *, NBN_Connection *);
 typedef void (*NBN_Driver_ServerRemoveConnection)(NBN_Connection *);
 
-typedef struct
+typedef struct NBN_DriverImplementation
 {
     /* Client functions */
     NBN_Driver_ClientStartFunc cli_start;
