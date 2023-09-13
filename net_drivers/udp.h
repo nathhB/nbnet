@@ -397,7 +397,9 @@ static int BindSocket(uint16_t port)
 
 static int ResolveIpAddress(const char *host, uint16_t port, NBN_IPAddress *address)
 {
-    char *dup_host = strdup(host);
+    size_t host_len = strlen(host);
+    char *dup_host = NBN_Allocator(host_len + 1);
+    memcpy(dup_host, host, host_len + 1);
     uint8_t arr[4];
 
     for (int i = 0; i < 4; i++)
