@@ -39,7 +39,8 @@
 #endif
 
 #ifndef NBNET_WINDOWS
-#include <sys/time.h> // gettimeofday
+#include <sys/time.h>
+#include <time.h>
 #endif
 
 #ifndef NBN_Allocator
@@ -5055,15 +5056,15 @@ static void Endpoint_UpdateTime(NBN_Endpoint *endpoint)
 #ifdef NBNET_WINDOWS
     endpoint->time = GetTickCount64() / 1000.0;
 #else
-    static struct timeval tp;
+    static struct timespec tp;
 
-    if (gettimeofday(&tp, NULL) < 0)
+    if (clock_gettime(CLOCK_MONOTONIC_RAW, &tp) < 0)
     {
         NBN_LogError("gettimeofday() failed");
         NBN_Abort();
     }
 
-    endpoint->time = tp.tv_sec + (tp.tv_usec / (double)1e6);
+    endpoint->time = tp.tv_sec + (tp.tv_nsec / (double)1e9);
 #endif // NBNET_WINDOWS
 }
 
