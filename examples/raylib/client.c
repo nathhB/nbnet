@@ -449,8 +449,6 @@ void UpdateAndDraw(void)
     // Simulates as many ticks as we can
     while (acc >= tick_dt)
     {
-        NBN_GameClient_AddTime(tick_dt);
-
         int ev;
 
         while ((ev = NBN_GameClient_Poll()) != NBN_NO_EVENT)

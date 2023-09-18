@@ -157,9 +157,6 @@ int main(int argc, char *argv[])
 
     while (running)
     {
-        // Update client clock
-        NBN_GameClient_AddTime(dt);
-
         int ev;
 
         // Poll for client events

@@ -100,9 +100,6 @@ int main(void)
 
     while (true)
     {
-        // Update the server clock
-        NBN_GameServer_AddTime(dt);
-
         int ev;
 
         // Poll for server events

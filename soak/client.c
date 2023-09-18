@@ -211,7 +211,6 @@ static int HandleReceivedMessage(SoakChannel *channels)
 static int Tick(void *data)
 {
     SoakChannel *channels = (SoakChannel *)data;
-    NBN_GameClient_AddTime(SOAK_TICK_DT);
 
     int ev;
 

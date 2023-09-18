@@ -267,7 +267,6 @@ static void HandleReceivedMessage(void)
 static int Tick(void *data)
 {
     (void)data;
-    NBN_GameServer_AddTime(SOAK_TICK_DT);
 
     int ev;
 

@@ -367,9 +367,6 @@ int main(int argc, char *argv[])
 
     while (running)
     {
-        // Update the server clock
-        NBN_GameServer_AddTime(tick_dt);
-
         int ev;
 
         // Poll for server events
