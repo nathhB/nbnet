@@ -276,19 +276,6 @@ int main(int argc, char *argv[])
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__ 
 
-    if (Soak_Init(argc, argv) < 0)
-    {
-        Soak_LogError("Failed to initialize soak test");
-        return 1;
-    } 
-
-    SoakOptions options = Soak_GetOptions();
-    unsigned int channel_count = options.channel_count;
-    unsigned int message_count = options.message_count;
-    unsigned int message_per_channel = message_count / channel_count;
-    unsigned int leftover_message_count = message_count % channel_count;
-    SoakChannel *channels = (SoakChannel *)malloc(sizeof(SoakChannel) * channel_count);
-
     if (NBN_GameClient_Start(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT) < 0)
     {
         Soak_LogError("Failed to start game client. Exit");
@@ -299,6 +286,19 @@ int main(int argc, char *argv[])
         return 1;
 #endif
     }
+
+    if (Soak_Init(argc, argv) < 0)
+    {
+        Soak_LogError("Failed to initialize soak test");
+        return 1;
+    }
+
+    SoakOptions options = Soak_GetOptions();
+    unsigned int channel_count = options.channel_count;
+    unsigned int message_count = options.message_count;
+    unsigned int message_per_channel = message_count / channel_count;
+    unsigned int leftover_message_count = message_count % channel_count;
+    SoakChannel *channels = (SoakChannel *)malloc(sizeof(SoakChannel) * channel_count);
 
     for (int c = 0; c < channel_count; c++)
     {

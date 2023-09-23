@@ -74,10 +74,6 @@ int Soak_Init(int argc, char *argv[])
         NBN_GameClient_RegisterReliableChannel(i);
     }
 
-#ifdef SOAK_ENCRYPTION
-    NBN_GameClient_EnableEncryption();
-#endif
-
     NBN_GameClient_RegisterMessage(SOAK_MESSAGE,
             (NBN_MessageBuilder)SoakMessage_CreateIncoming,
             (NBN_MessageDestructor)SoakMessage_Destroy,
@@ -91,10 +87,6 @@ int Soak_Init(int argc, char *argv[])
     {
         NBN_GameServer_RegisterReliableChannel(i);
     }
-
-#ifdef SOAK_ENCRYPTION
-    NBN_GameServer_EnableEncryption();
-#endif
 
     NBN_GameServer_RegisterMessage(SOAK_MESSAGE,
             (NBN_MessageBuilder)SoakMessage_CreateIncoming,

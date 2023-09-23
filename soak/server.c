@@ -346,7 +346,14 @@ int main(int argc, char *argv[])
     NBN_WebRTC_C_Register(); // Register native WebRTC driver
 #endif
 
-#endif // __EMSCRIPTEN__ 
+#endif // __EMSCRIPTEN__
+
+    if (NBN_GameServer_Start(SOAK_PROTOCOL_NAME, SOAK_PORT))
+    {
+        Soak_LogError("Failed to start game server");
+
+        return 1;
+    }
 
     if (Soak_Init(argc, argv) < 0)
     {
@@ -355,14 +362,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    NBN_GameServer_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue); 
-
-    if (NBN_GameServer_Start(SOAK_PROTOCOL_NAME, SOAK_PORT))
-    {
-        Soak_LogError("Failed to start game server");
-
-        return 1;
-    }
+    NBN_GameServer_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue);
 
     int ret = Soak_MainLoop(Tick, NULL);
 
