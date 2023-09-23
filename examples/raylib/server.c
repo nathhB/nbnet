@@ -326,14 +326,14 @@ int main(int argc, char *argv[])
 
 #endif // __EMSCRIPTEN__
 
-    // Initialize server with a protocol name and a port, must be done first
 #ifdef EXAMPLE_ENCRYPTION
-    NBN_GameServer_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT, true);
+    bool enable_encryption = true;
 #else
-    NBN_GameServer_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT, false);
+    bool enable_encryption = false;
 #endif
 
-    if (NBN_GameServer_Start() < 0)
+    // Start the server with a protocol name, a port, and with packet encryption on or off
+    if (NBN_GameServer_StartEx(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT, enable_encryption) < 0)
     {
         TraceLog(LOG_ERROR, "Game server failed to start. Exit");
 

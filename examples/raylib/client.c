@@ -518,12 +518,14 @@ int main(int argc, char *argv[])
 
     // Initialize the client with a protocol name (must be the same than the one used by the server), the server ip address and port
 #ifdef EXAMPLE_ENCRYPTION
-    NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, true);
+    bool enable_encryption = true;
 #else
-    NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, false);
+    bool enable_encryption = false;
 #endif
 
-    if (NBN_GameClient_Start() < 0)
+    // Start the client with a protocol name (must be the same than the one used by the server)
+    // the server host and port and with packet encryption on or off
+    if (NBN_GameClient_StartEx(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, enable_encryption, NULL, 0) < 0)
     {
         TraceLog(LOG_WARNING, "Game client failed to start. Exit");
 
@@ -570,11 +572,6 @@ int main(int argc, char *argv[])
         UpdateAndDraw();
     }
 #endif
-
-    if (!disconnected)
-    {
-        NBN_GameClient_Disconnect();
-    }
 
     // Stop the client
     NBN_GameClient_Stop();

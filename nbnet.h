@@ -872,18 +872,6 @@ NBN_ReliableOrderedChannel *NBN_ReliableOrderedChannel_Create(void);
 
 #pragma endregion /* NBN_Channel */
 
-#pragma region NBN_Config
-
-typedef struct
-{
-    char protocol_name[32];
-    char ip_address[16];
-    uint16_t port;
-    bool is_encryption_enabled;
-} NBN_Config;
-
-#pragma endregion
-
 #pragma region NBN_Connection
 
 #define NBN_MAX_PACKET_ENTRIES 1024
@@ -972,6 +960,7 @@ struct NBN_Connection
     /*
      * Encryption related fields
      */
+    bool is_encrypted;
     NBN_ConnectionKeySet keys1; /* Used for message encryption */
     NBN_ConnectionKeySet keys2; /* Used for packets IV */
     NBN_ConnectionKeySet keys3; /* Used for poly1305 keys generation */
@@ -991,7 +980,7 @@ struct NBN_ConnectionListNode
     NBN_ConnectionListNode *prev;
 };
 
-NBN_Connection *NBN_Connection_Create(uint32_t, uint32_t, NBN_Endpoint *, NBN_Driver *, void *);
+NBN_Connection *NBN_Connection_Create(uint32_t, uint32_t, NBN_Endpoint *, NBN_Driver *, void *, bool);
 void NBN_Connection_Destroy(NBN_Connection *);
 int NBN_Connection_ProcessReceivedPacket(NBN_Connection *, NBN_Packet *, double);
 int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *, NBN_Channel *, NBN_Message *);
@@ -1127,7 +1116,6 @@ void NBN_PacketSimulator_Stop(NBN_PacketSimulator *);
 
 struct NBN_Endpoint
 {
-    NBN_Config config;
     NBN_ChannelBuilder channel_builders[NBN_MAX_CHANNELS];
     NBN_ChannelDestructor channel_destructors[NBN_MAX_CHANNELS];
     NBN_MessageBuilder message_builders[NBN_MAX_MESSAGE_TYPES];
@@ -1178,43 +1166,32 @@ typedef struct
 extern NBN_GameClient nbn_game_client;
 
 /**
- * Initialize the game client. This function must be called before any other nbnet functions.
- * 
+ * Start the game client and send a connection request to the server.
+ *
  * @param protocol_name A unique protocol name, the clients and the server must use the same one or they won't be able to communicate
- * @param ip_address IP address to connect to
+ * @param host Host to connect to
  * @param port Port to connect to
- * @param encryption Enable or disable packet encryption
- */
-void NBN_GameClient_Init(const char *protocol_name, const char *ip_address, uint16_t port, bool encryption);
-
-/**
- * Start the game client and send a connection request to the server. This function must be called after NBN_GameClient_Init. 
  *
  * @return 0 when successully started, -1 otherwise
  */
-int NBN_GameClient_Start(void);
+int NBN_GameClient_Start(const char *protocol_name, const char *host, uint16_t port);
 
 /**
- * Start the game client and send a connection request to the server with a user defined data blob. The server can read that data using the NBN_GameServer_ReadIncomingConnectionData function.
- * If you do not wish to send any particular data blob upon connection, use NBN_GameClient_Start instead.
- * This function must be called after NBN_GameClient_Init.
+ * Same as NBN_GameClient_Start but with additional parameters. 
  *
- * @param data the data to send (cannot exceed NBN_CONNECTION_DATA_MAX_SIZE bytes)
- * @param length length of the data in bytes
+ * @param protocol_name A unique protocol name, the clients and the server must use the same one or they won't be able to communicate
+ * @param host Host to connect to
+ * @param port Port to connect to
+ * @param enable_encryption Enable or disable packet encryption
+ * @param data Array of bytes to send to the server upon connection (cannot exceed NBN_CONNECTION_DATA_MAX_SIZE)
+ * @param length length of the array of bytes
  *
  * @return 0 when successully started, -1 otherwise
  */
-int NBN_GameClient_StartWithData(uint8_t *data, unsigned int length);
+int NBN_GameClient_StartEx(const char *protocol_name, const char *host, uint16_t port, bool enable_encryption, uint8_t *data, unsigned int length);
 
 /**
- * Disconnect from the server.
- * 
- * @return 0 when successful, -1 otherwise
- */
-int NBN_GameClient_Disconnect(void);
-
-/**
- * Stop the game client.
+ * Disconnect from the server. The client can be restarted by calling NBN_GameClient_Start or NBN_GameClient_StartWithData again.
  */
 void NBN_GameClient_Stop(void);
 
@@ -1358,7 +1335,7 @@ int NBN_GameClient_SendUnreliableByteArray(uint8_t *bytes, unsigned int length);
  */
 int NBN_GameClient_SendReliableByteArray(uint8_t *bytes, unsigned int length);
 
-NBN_Connection *NBN_GameClient_CreateServerConnection(int driver_id, void *driver_data);
+NBN_Connection *NBN_GameClient_CreateServerConnection(int driver_id, void *driver_data, uint32_t protocol_id, bool is_encrypted);
 
 /**
  * Retrieve the info about the last received message.
@@ -1390,11 +1367,6 @@ int NBN_GameClient_GetServerCloseCode(void);
  * @return true if connected, false otherwise
  */
 bool NBN_GameClient_IsConnected(void);
-
-/**
- * @return true if packet encryption is enabled, false otherwise
- */
-bool NBN_GameClient_IsEncryptionEnabled(void);
 
 /**
  * Register a new RPC on the game client.
@@ -1461,23 +1433,28 @@ typedef struct
 extern NBN_GameServer nbn_game_server;
 
 /**
- * Initialize the game server. This function must be called before any other nbnet functions.
+ * Start the game server.
+ * 
+ * @param protocol_name A unique protocol name, the clients and the server must use the same one or they won't be able to communicate
+ * @param port The server's port
+ *
+ * @return 0 when successfully started, -1 otherwise
+ */
+int NBN_GameServer_Start(const char *protocol_name, uint16_t port);
+
+/**
+ * Same as NBN_GameServer_Start but with additional parameters.
  *
  * @param protocol_name A unique protocol name, the clients and the server must use the same one or they won't be able to communicate
  * @param port The server's port
- * @param encryption Enable or disable packet encryption
- */
-void NBN_GameServer_Init(const char *protocol_name, uint16_t port, bool encryption);
-
-/**
- * Start the game server. This function must be called after NBN_GameServer_Init.
- * 
+ * @param enable_encryption Enable or disable packet encryption
+ *
  * @return 0 when successfully started, -1 otherwise
  */
-int NBN_GameServer_Start(void);
+int NBN_GameServer_StartEx(const char *protocol_name, uint16_t port, bool enable_encryption);
 
 /**
- * Stop the game server.
+ * Stop the game server and clean everything up.
  */
 void NBN_GameServer_Stop(void);
 
@@ -1544,7 +1521,7 @@ int NBN_GameServer_SendPackets(void);
 /**
  * For drivers only! NOT MEANT TO BE USED BY USER CODE.
  */
-NBN_Connection *NBN_GameServer_CreateClientConnection(int, void *, uint32_t);
+NBN_Connection *NBN_GameServer_CreateClientConnection(int, void *, uint32_t, uint32_t, bool);
 
 /**
  * Close a client's connection without a specific code (default code is -1)
@@ -1725,11 +1702,6 @@ NBN_MessageInfo NBN_GameServer_GetMessageInfo(void);
 NBN_GameServerStats NBN_GameServer_GetStats(void);
 
 /**
- * @return true if packet encryption is enabled, false otherwise
- */
-bool NBN_GameServer_IsEncryptionEnabled(void);
-
-/**
  * Register a new RPC on the game server.
  * 
  * The same RPC must be register on both the game server and the game clients.
@@ -1765,7 +1737,6 @@ void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
 typedef enum
 {
     // Client events
-    NBN_DRIVER_CLI_CONNECTED,
     NBN_DRIVER_CLI_PACKET_RECEIVED,
 
     // Server events
@@ -1776,10 +1747,10 @@ typedef enum
 typedef void (*NBN_Driver_StopFunc)(void);
 typedef int (*NBN_Driver_RecvPacketsFunc)(void);
 
-typedef int (*NBN_Driver_ClientStartFunc)(uint32_t, const char *, uint16_t);
+typedef int (*NBN_Driver_ClientStartFunc)(uint32_t, const char *, uint16_t, bool);
 typedef int (*NBN_Driver_ClientSendPacketFunc)(NBN_Packet *);
 
-typedef int (*NBN_Driver_ServerStartFunc)(uint32_t, uint16_t);
+typedef int (*NBN_Driver_ServerStartFunc)(uint32_t, uint16_t, bool);
 typedef int (*NBN_Driver_ServerSendPacketToFunc)(NBN_Packet *, NBN_Connection *);
 typedef void (*NBN_Driver_ServerRemoveConnection)(NBN_Connection *);
 
@@ -2879,7 +2850,7 @@ int NBN_Packet_InitRead(
     if (Packet_SerializeHeader(&packet->header, (NBN_Stream *)&header_r_stream) < 0)
         return NBN_ERROR;
 
-    if (sender->endpoint->config.is_encryption_enabled && packet->header.is_encrypted)
+    if (sender->is_encrypted && packet->header.is_encrypted)
     {
         if (!sender->can_decrypt)
         {
@@ -2961,7 +2932,7 @@ int NBN_Packet_Seal(NBN_Packet *packet, NBN_Connection *connection)
     if (NBN_WriteStream_Flush(&packet->w_stream) < 0)
         return NBN_ERROR;
 
-    bool is_encrypted = connection->endpoint->config.is_encryption_enabled && connection->can_encrypt;
+    bool is_encrypted = connection->is_encrypted && connection->can_encrypt;
 
     packet->header.is_encrypted = is_encrypted;
     packet->size += NBN_PACKET_HEADER_SIZE;
@@ -3407,7 +3378,7 @@ static CSPRNG csprng_create();
 static CSPRNG csprng_destroy(CSPRNG object);
 static int csprng_get(CSPRNG, void*, unsigned long long);
 
-NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_Endpoint *endpoint, NBN_Driver *driver, void *driver_data)
+NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_Endpoint *endpoint, NBN_Driver *driver, void *driver_data, bool is_encrypted)
 {
     NBN_Connection *connection = (NBN_Connection*)MemoryManager_Alloc(NBN_MEM_CONNECTION);
 
@@ -3424,6 +3395,7 @@ NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_End
     connection->is_stale = false;
     connection->is_closed = false;
     connection->vector_pos = -1;
+    connection->is_encrypted = is_encrypted;
 
     for (int i = 0; i < NBN_MAX_CHANNELS; i++)
         connection->channels[i] = NULL;
@@ -3442,7 +3414,7 @@ NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_End
     connection->can_decrypt = false;
     connection->can_encrypt = false;
 
-    if (endpoint->config.is_encryption_enabled)
+    if (is_encrypted)
     {
         if (Connection_GenerateKeys(connection)  < 0)
         {
@@ -4638,12 +4610,12 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *event_queue)
 
 #pragma region NBN_Endpoint
 
-static void Endpoint_Init(NBN_Endpoint *, NBN_Config, bool);
+static void Endpoint_Init(NBN_Endpoint *, bool);
 static void Endpoint_Deinit(NBN_Endpoint *);
 static void Endpoint_RegisterMessageBuilder(NBN_Endpoint *, NBN_MessageBuilder, uint8_t);
 static void Endpoint_RegisterMessageDestructor(NBN_Endpoint *, NBN_MessageDestructor, uint8_t);
 static void Endpoint_RegisterMessageSerializer(NBN_Endpoint *, NBN_MessageSerializer, uint8_t);
-static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *, uint32_t, int, void *);
+static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *, uint32_t, uint32_t, int, void *, bool);
 static int Endpoint_RegisterRPC(NBN_Endpoint *, unsigned int id, NBN_RPC_Signature, NBN_RPC_Func);
 static uint32_t Endpoint_BuildProtocolId(const char *);
 static void Endpoint_RegisterChannel(NBN_Endpoint *, uint8_t, NBN_ChannelBuilder, NBN_ChannelDestructor);
@@ -4653,11 +4625,10 @@ static int Endpoint_SplitMessageIntoChunks(
     NBN_Message *, NBN_OutgoingMessage *, NBN_Channel *, NBN_MessageSerializer, unsigned int, NBN_MessageChunk **);
 static void Endpoint_UpdateTime(NBN_Endpoint *);
 
-static void Endpoint_Init(NBN_Endpoint *endpoint, NBN_Config config, bool is_server)
+static void Endpoint_Init(NBN_Endpoint *endpoint, bool is_server)
 {
     MemoryManager_Init();
 
-    endpoint->config = config;
     endpoint->is_server = is_server;
 
     for (int i = 0; i < NBN_MAX_CHANNELS; i++)
@@ -4797,14 +4768,13 @@ static void Endpoint_RegisterMessageSerializer(
     endpoint->message_serializers[msg_type] = msg_serializer;
 }
 
-static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_t id, int driver_id, void *driver_data)
+static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_t id, uint32_t protocol_id, int driver_id, void *driver_data, bool is_encrypted)
 {
     NBN_Driver *driver = &nbn_drivers[driver_id];
 
     assert(driver->id >= 0);
 
-    NBN_Connection *connection = NBN_Connection_Create(
-        id, Endpoint_BuildProtocolId(endpoint->config.protocol_name), endpoint, driver, driver_data);
+    NBN_Connection *connection = NBN_Connection_Create(id, protocol_id, endpoint, driver, driver_data, is_encrypted);
 
     for (unsigned int chan_id = 0; chan_id < NBN_MAX_CHANNELS; chan_id++)
     {
@@ -5072,7 +5042,6 @@ static void Endpoint_UpdateTime(NBN_Endpoint *endpoint)
 
 #pragma region Network driver
 
-static void ClientDriver_OnConnected(void);
 static void ClientDriver_OnPacketReceived(NBN_Packet *packet);
 static int ServerDriver_OnClientConnected(NBN_Connection *);
 static int ServerDriver_OnClientPacketReceived(NBN_Packet *);
@@ -5100,10 +5069,6 @@ int NBN_Driver_RaiseEvent(NBN_DriverEvent ev, void *data)
 {
     switch (ev)
     {
-    case NBN_DRIVER_CLI_CONNECTED:
-        ClientDriver_OnConnected();
-        break;
-
     case NBN_DRIVER_CLI_PACKET_RECEIVED:
         ClientDriver_OnPacketReceived((NBN_Packet *)data);
         break;
@@ -5130,41 +5095,12 @@ static int GameClient_HandleMessageReceivedEvent(void);
 static int GameClient_SendCryptoPublicInfo(void);
 static void GameClient_StartEncryption(void);
 
-void NBN_GameClient_Init(const char *protocol_name, const char *ip_address, uint16_t port, bool encryption)
+int NBN_GameClient_Start(const char *protocol_name, const char *host, uint16_t port)
 {
-    NBN_Config config = {.port = port, .is_encryption_enabled = encryption};
-    size_t protocol_name_max_length = sizeof(config.protocol_name);
-
-    if (strnlen(protocol_name, protocol_name_max_length) >= protocol_name_max_length)
-    {
-        NBN_LogError("Protocol name is too long (max length: %d)", protocol_name_max_length);
-        NBN_Abort();
-    }
-
-    size_t ip_address_max_length = sizeof(config.ip_address);
-
-    if (strnlen(ip_address, ip_address_max_length) >= ip_address_max_length)
-    {
-        NBN_LogError("IP address is too long (max length: %d)", ip_address_max_length);
-        NBN_Abort();
-    }
-
-    strncpy((char *)config.protocol_name, protocol_name, protocol_name_max_length);
-    strncpy((char *)config.ip_address, ip_address, ip_address_max_length);
-
-    Endpoint_Init(&nbn_game_client.endpoint, config, false);
-
-    nbn_game_client.server_connection = NULL;
-    nbn_game_client.is_connected = false;
-    nbn_game_client.closed_code = -1;
+    return NBN_GameClient_StartEx(protocol_name, host, port, false, NULL, 0);
 }
 
-int NBN_GameClient_Start(void)
-{
-    return NBN_GameClient_StartWithData(NULL, 0);
-}
-
-int NBN_GameClient_StartWithData(uint8_t *data, unsigned int length)
+int NBN_GameClient_StartEx(const char *protocol_name, const char *host, uint16_t port, bool enable_encryption, uint8_t *data, unsigned int length)
 {
     if (nbn_driver_count < 1)
     {
@@ -5178,7 +5114,11 @@ int NBN_GameClient_StartWithData(uint8_t *data, unsigned int length)
         NBN_Abort();
     }
 
-    NBN_Config config = nbn_game_client.endpoint.config;
+    Endpoint_Init(&nbn_game_client.endpoint, false);
+
+    nbn_game_client.server_connection = NULL;
+    nbn_game_client.is_connected = false;
+    nbn_game_client.closed_code = -1;
 
     for (unsigned int i = 0; i < NBN_MAX_DRIVERS; i++)
     {
@@ -5186,7 +5126,7 @@ int NBN_GameClient_StartWithData(uint8_t *data, unsigned int length)
 
         if (driver->id < 0) continue;
 
-        if (driver->impl.cli_start(Endpoint_BuildProtocolId(config.protocol_name), config.ip_address, config.port) < 0)
+        if (driver->impl.cli_start(Endpoint_BuildProtocolId(protocol_name), host, port, enable_encryption) < 0)
         {
             NBN_LogError("Failed to start driver %s", driver->name);
             return NBN_ERROR;
@@ -5210,45 +5150,37 @@ int NBN_GameClient_StartWithData(uint8_t *data, unsigned int length)
     return 0;
 }
 
-int NBN_GameClient_Disconnect(void)
-{
-    NBN_LogInfo("Disconnecting...");
-
-    if (nbn_game_client.server_connection->is_closed || nbn_game_client.server_connection->is_stale)
-    {
-        NBN_LogInfo("Not connected");
-
-        return 0;
-    }
-
-    if (NBN_GameClient_SendMessage(NBN_DISCONNECTION_MESSAGE_TYPE, NBN_CHANNEL_RESERVED_LIBRARY_MESSAGES, NULL) < 0)
-        return NBN_ERROR;
-
-    if (NBN_GameClient_SendPackets() < 0)
-        return NBN_ERROR;
-
-    nbn_game_client.server_connection->is_closed = true;
-
-    NBN_LogInfo("Disconnected");
-
-    return 0;
-}
-
-unsigned int NBN_GameClient_ReadServerData(uint8_t *data)
-{
-    memcpy(data, nbn_game_client.server_data, nbn_game_client.server_data_len);
-
-    return nbn_game_client.server_data_len;
-}
-
 void NBN_GameClient_Stop(void)
 {
-    NBN_GameClient_Poll(); /* Poll one last time to clear remaining events */
-
     if (nbn_game_client.server_connection)
-        NBN_Connection_Destroy(nbn_game_client.server_connection);
+    {
+        if (!nbn_game_client.server_connection->is_closed && !nbn_game_client.server_connection->is_stale)
+        {
+            NBN_LogInfo("Disconnecting...");
 
-    Endpoint_Deinit(&nbn_game_client.endpoint);
+            if (NBN_GameClient_SendMessage(NBN_DISCONNECTION_MESSAGE_TYPE, NBN_CHANNEL_RESERVED_LIBRARY_MESSAGES, NULL) < 0)
+            {
+                NBN_LogError("Failed to send disconnection message");
+            }
+
+            if (NBN_GameClient_SendPackets() < 0)
+            {
+                NBN_LogError("Failed to send packets");
+            }
+
+            nbn_game_client.server_connection->is_closed = true;
+
+            NBN_LogInfo("Disconnected");
+        }
+
+        NBN_Connection_Destroy(nbn_game_client.server_connection);
+        nbn_game_client.server_connection = NULL;
+    }
+
+    // Poll remaining events to clear the event queue
+    while (NBN_GameClient_Poll() != NBN_NO_EVENT) {}
+
+    NBN_LogInfo("Stopping all drivers...");
 
     for (unsigned int i = 0; i < NBN_MAX_DRIVERS; i++)
     {
@@ -5259,7 +5191,21 @@ void NBN_GameClient_Stop(void)
         driver->impl.cli_stop();
     }
 
+    nbn_game_client.is_connected = false;
+    nbn_game_client.closed_code = -1;
+    nbn_game_client.server_data_len = 0;
+
+    memset(nbn_game_client.server_data, 0, sizeof(nbn_game_client.server_data));
+    Endpoint_Deinit(&nbn_game_client.endpoint);
+
     NBN_LogInfo("Stopped");
+}
+
+unsigned int NBN_GameClient_ReadServerData(uint8_t *data)
+{
+    memcpy(data, nbn_game_client.server_data, nbn_game_client.server_data_len);
+
+    return nbn_game_client.server_data_len;
 }
 
 void NBN_GameClient_RegisterMessage(
@@ -5437,9 +5383,9 @@ int NBN_GameClient_SendReliableByteArray(uint8_t *bytes, unsigned int length)
 /**
  * For drivers only! NOT MEANT TO BE USED BY USER CODE.
  */
-NBN_Connection *NBN_GameClient_CreateServerConnection(int driver_id, void *driver_data)
+NBN_Connection *NBN_GameClient_CreateServerConnection(int driver_id, void *driver_data, uint32_t protocol_id, bool is_encrypted)
 {
-    NBN_Connection *server_connection = Endpoint_CreateConnection(&nbn_game_client.endpoint, 0, driver_id, driver_data);
+    NBN_Connection *server_connection = Endpoint_CreateConnection(&nbn_game_client.endpoint, 0, protocol_id, driver_id, driver_data, is_encrypted);
 
 #ifdef NBN_DEBUG
     server_connection->OnMessageAddedToRecvQueue = nbn_game_client.endpoint.OnMessageAddedToRecvQueue;
@@ -5470,11 +5416,6 @@ int NBN_GameClient_GetServerCloseCode(void)
 bool NBN_GameClient_IsConnected(void)
 {
     return nbn_game_client.is_connected;
-}
-
-bool NBN_GameClient_IsEncryptionEnabled(void)
-{
-    return nbn_game_client.endpoint.config.is_encryption_enabled;
 }
 
 int NBN_GameClient_RegisterRPC(unsigned int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
@@ -5607,7 +5548,7 @@ static int GameClient_HandleMessageReceivedEvent(void)
         memcpy(nbn_game_client.server_data, accepted_msg->data, accepted_msg->length);
         nbn_game_client.server_data_len = accepted_msg->length;
     }
-    else if (NBN_GameClient_IsEncryptionEnabled() && message_info.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
+    else if (nbn_game_client.server_connection->is_encrypted && message_info.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
     {
         NBN_LogDebug("Received server's crypto public info");
 
@@ -5642,7 +5583,7 @@ static int GameClient_HandleMessageReceivedEvent(void)
         memcpy(nbn_game_client.server_connection->aes_iv, pub_crypto_msg->aes_iv, AES_BLOCKLEN);
         nbn_game_client.server_connection->can_decrypt = true;
     }
-    else if (NBN_GameClient_IsEncryptionEnabled() && message_info.type == NBN_START_ENCRYPT_MESSAGE_TYPE)
+    else if (nbn_game_client.server_connection->is_encrypted && message_info.type == NBN_START_ENCRYPT_MESSAGE_TYPE)
     {
         GameClient_StartEncryption();
     }
@@ -5690,16 +5631,14 @@ static void GameClient_StartEncryption(void)
 
 #pragma region Game client driver
 
-static void ClientDriver_OnConnected(void)
-{
-}
-
 static void ClientDriver_OnPacketReceived(NBN_Packet *packet)
 {
-    int ret = Endpoint_ProcessReceivedPacket(&nbn_game_client.endpoint, packet, nbn_game_client.server_connection);
-
-    /* packets from server should always be valid */
-    assert(ret == 0);
+    // packets from server should always be valid
+    if (Endpoint_ProcessReceivedPacket(&nbn_game_client.endpoint, packet, nbn_game_client.server_connection) < 0)
+    {
+        NBN_LogError("Received invalid packet from server");
+        NBN_Abort();
+    }
 }
 
 #pragma endregion /* Game Client driver */
@@ -5721,20 +5660,20 @@ static int GameServer_HandleMessageReceivedEvent(void);
 static int GameServer_SendCryptoPublicInfoTo(NBN_Connection *);
 static int GameServer_StartEncryption(NBN_Connection *);
 
-void NBN_GameServer_Init(const char *protocol_name, uint16_t port, bool encryption)
+int NBN_GameServer_Start(const char *protocol_name, uint16_t port)
 {
-    NBN_Config config = {.port = port, .is_encryption_enabled = encryption};
-    size_t protocol_name_max_length = sizeof(config.protocol_name);
+    return NBN_GameServer_StartEx(protocol_name, port, false);
+}
 
-    if (strnlen(protocol_name, protocol_name_max_length) >= protocol_name_max_length)
+int NBN_GameServer_StartEx(const char *protocol_name, uint16_t port, bool enable_encryption)
+{
+    if (nbn_driver_count < 1)
     {
-        NBN_LogError("Protocol name is too long (max length: %d)", protocol_name_max_length);
+        NBN_LogError("At least one network driver has to be registered");
         NBN_Abort();
     }
 
-    strncpy((char *)config.protocol_name, protocol_name, protocol_name_max_length);
-
-    Endpoint_Init(&nbn_game_server.endpoint, config, true);
+    Endpoint_Init(&nbn_game_server.endpoint, true);
 
     if ((nbn_game_server.clients = NBN_ConnectionVector_Create()) == NULL)
     {
@@ -5749,17 +5688,6 @@ void NBN_GameServer_Init(const char *protocol_name, uint16_t port, bool encrypti
     }
 
     nbn_game_server.closed_clients_head = NULL;
-}
-
-int NBN_GameServer_Start(void)
-{
-    if (nbn_driver_count < 1)
-    {
-        NBN_LogError("At least one network driver has to be registered");
-        NBN_Abort();
-    }
-
-    NBN_Config config = nbn_game_server.endpoint.config;
 
     for (unsigned int i = 0; i < NBN_MAX_DRIVERS; i++)
     {
@@ -5767,7 +5695,7 @@ int NBN_GameServer_Start(void)
 
         if (driver->id < 0) continue;
 
-        if (driver->impl.serv_start(Endpoint_BuildProtocolId(config.protocol_name), config.port) < 0)
+        if (driver->impl.serv_start(Endpoint_BuildProtocolId(protocol_name), port, enable_encryption) < 0)
         {
             NBN_LogError("Failed to start driver %s", driver->name);
             return NBN_ERROR;
@@ -5781,7 +5709,8 @@ int NBN_GameServer_Start(void)
 
 void NBN_GameServer_Stop(void)
 {
-    NBN_GameServer_Poll(); /* Poll one last time to clear remaining events */
+    // Poll remaning events to clear the event queue
+    while (NBN_GameServer_Poll() != NBN_NO_EVENT) {}
 
     Endpoint_Deinit(&nbn_game_server.endpoint);
 
@@ -5946,11 +5875,11 @@ int NBN_GameServer_SendPackets(void)
     return 0;
 }
 
-NBN_Connection *NBN_GameServer_CreateClientConnection(int driver_id, void *driver_data, uint32_t conn_id)
+NBN_Connection *NBN_GameServer_CreateClientConnection(int driver_id, void *driver_data, uint32_t protocol_id, uint32_t conn_id, bool is_encrypted)
 {
     assert(conn_id > 0); // Connection IDs start at 1
 
-    NBN_Connection *client = Endpoint_CreateConnection(&nbn_game_server.endpoint, conn_id, driver_id, driver_data);
+    NBN_Connection *client = Endpoint_CreateConnection(&nbn_game_server.endpoint, conn_id, protocol_id, driver_id, driver_data, is_encrypted);
 
 #ifdef NBN_DEBUG
     client->OnMessageAddedToRecvQueue = nbn_game_server.endpoint.OnMessageAddedToRecvQueue;
@@ -6127,11 +6056,6 @@ NBN_MessageInfo NBN_GameServer_GetMessageInfo(void)
 NBN_GameServerStats NBN_GameServer_GetStats(void)
 {
     return nbn_game_server.stats;
-}
-
-bool NBN_GameServer_IsEncryptionEnabled(void)
-{
-    return nbn_game_server.endpoint.config.is_encryption_enabled;
 }
 
 int NBN_GameServer_RegisterRPC(unsigned int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
@@ -6485,7 +6409,7 @@ static int GameServer_HandleMessageReceivedEvent(void)
 
     int ret = NBN_CLIENT_MESSAGE_RECEIVED;
 
-    if (NBN_GameServer_IsEncryptionEnabled() && message_info.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
+    if (sender->is_encrypted && message_info.type == NBN_PUBLIC_CRYPTO_INFO_MESSAGE_TYPE)
     {
         ret = NBN_NO_EVENT;
 
@@ -6559,7 +6483,7 @@ static int ServerDriver_OnClientConnected(NBN_Connection *client)
         return NBN_ERROR;
     }
 
-    if (NBN_GameServer_IsEncryptionEnabled())
+    if (client->is_encrypted)
     {
         if (GameServer_SendCryptoPublicInfoTo(client) < 0)
         {

@@ -70,12 +70,12 @@ int main(int argc, char *argv[])
 
     // Initialize the client with a protocol name (must be the same than the one used by the server), the server ip address and port
 #ifdef NBN_ENCRYPTION
-    NBN_GameClient_Init(RPC_PROTOCOL_NAME, "127.0.0.1", RPC_EXAMPLE_PORT, true);
+    bool enable_encryption = true;
 #else
-    NBN_GameClient_Init(RPC_PROTOCOL_NAME, "127.0.0.1", RPC_EXAMPLE_PORT, false);
+    bool enable_encryption = false;
 #endif
 
-    if (NBN_GameClient_Start() < 0)
+    if (NBN_GameClient_StartEx(RPC_PROTOCOL_NAME, "127.0.0.1", RPC_EXAMPLE_PORT, enable_encryption, NULL, 0) < 0)
     {
         Log(LOG_ERROR, "Failed to start client");
 

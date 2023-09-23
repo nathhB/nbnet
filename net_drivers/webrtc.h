@@ -280,8 +280,10 @@ NBN_EXTERN void __js_game_server_stop(void);
 
 static NBN_WebRTC_HTable *nbn_wrtc_peers = NULL;
 static uint8_t nbn_packet_buffer[NBN_PACKET_MAX_SIZE];
+static uint32_t nbn_protocol_id;
+static bool nbn_server_is_encrypted = false;
 
-static int NBN_WebRTC_ServStart(uint32_t protocol_id, uint16_t port)
+static int NBN_WebRTC_ServStart(uint32_t protocol_id, uint16_t port, bool enable_encryption)
 {
 #ifdef NBN_USE_HTTPS
 
@@ -301,6 +303,8 @@ static int NBN_WebRTC_ServStart(uint32_t protocol_id, uint16_t port)
         return -1;
 
     nbn_wrtc_peers = NBN_WebRTC_HTable_Create();
+    nbn_server_is_encrypted = enable_encryption;
+    nbn_protocol_id = protocol_id;
 
     return 0;
 }
@@ -332,7 +336,7 @@ static int NBN_WebRTC_ServRecvPackets(void)
             peer = (NBN_WebRTC_Peer *)NBN_Allocator(sizeof(NBN_WebRTC_Peer));
 
             peer->id = peer_id; 
-            peer->conn = NBN_GameServer_CreateClientConnection(NBN_WEBRTC_DRIVER_ID, peer, peer_id);
+            peer->conn = NBN_GameServer_CreateClientConnection(NBN_WEBRTC_DRIVER_ID, peer, nbn_protocol_id, peer_id, nbn_server_is_encrypted);
 
             NBN_WebRTC_HTable_Add(nbn_wrtc_peers, peer_id, peer);
 
@@ -388,7 +392,7 @@ NBN_EXTERN void __js_game_client_close(void);
 static NBN_Connection *nbn_wrtc_server = NULL;
 static bool is_connected_to_server = false;
 
-static int NBN_WebRTC_CliStart(uint32_t protocol_id, const char *host, uint16_t port)
+static int NBN_WebRTC_CliStart(uint32_t protocol_id, const char *host, uint16_t port, bool enable_encryption)
 {
 #ifdef NBN_USE_HTTPS
     __js_game_client_init(protocol_id, true);
@@ -396,7 +400,7 @@ static int NBN_WebRTC_CliStart(uint32_t protocol_id, const char *host, uint16_t 
     __js_game_client_init(protocol_id, false);
 #endif // NBN_USE_HTTPS
 
-    nbn_wrtc_server = NBN_GameClient_CreateServerConnection(NBN_WEBRTC_DRIVER_ID, NULL);
+    nbn_wrtc_server = NBN_GameClient_CreateServerConnection(NBN_WEBRTC_DRIVER_ID, NULL, protocol_id, enable_encryption);
 
     int res;
 
@@ -424,8 +428,6 @@ static int NBN_WebRTC_CliRecvPackets(void)
 
         if (!is_connected_to_server)
         {
-            NBN_Driver_RaiseEvent(NBN_DRIVER_CLI_CONNECTED, NULL);
-
             is_connected_to_server = true;
         }
 

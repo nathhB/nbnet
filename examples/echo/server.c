@@ -67,17 +67,16 @@ int main(void)
     NBN_WebRTC_Register(); // Register the WebRTC driver
 #else
     NBN_UDP_Register(); // Register the UDP driver
-#endif // __EMSCRIPTEN__
+#endif // __EMSCRIPTEN__ 
 
-    // Initialize the server with a protocol name and a port, must be done first
 #ifdef NBN_ENCRYPTION
-    NBN_GameServer_Init(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, true);
+    bool enable_encryption = true;
 #else
-    NBN_GameServer_Init(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, false);
+    bool enable_encryption = false;
 #endif
 
-    // Start the server
-    if (NBN_GameServer_Start() < 0)
+    // Start the server with a protocol name, a port, and with packet encryption on or off
+    if (NBN_GameServer_StartEx(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, enable_encryption) < 0)
     {
         Log(LOG_ERROR, "Failed to start the server");
 

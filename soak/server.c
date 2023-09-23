@@ -348,8 +348,6 @@ int main(int argc, char *argv[])
 
 #endif // __EMSCRIPTEN__ 
 
-    NBN_GameServer_Init(SOAK_PROTOCOL_NAME, SOAK_PORT, false); 
-
     if (Soak_Init(argc, argv) < 0)
     {
         Soak_LogError("Failed to initialize soak test");
@@ -359,7 +357,7 @@ int main(int argc, char *argv[])
 
     NBN_GameServer_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue); 
 
-    if (NBN_GameServer_Start())
+    if (NBN_GameServer_Start(SOAK_PROTOCOL_NAME, SOAK_PORT))
     {
         Soak_LogError("Failed to start game server");
 

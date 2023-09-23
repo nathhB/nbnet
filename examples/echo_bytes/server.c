@@ -64,11 +64,8 @@ int main(void)
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__
 
-    // Initialize the server with a protocol name and a port, must be done first
-    NBN_GameServer_Init(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, false);
-
-    // Start the server
-    if (NBN_GameServer_Start() < 0)
+    // Start the server with a protocol name, a port, and with packet encryption on or off
+    if (NBN_GameServer_Start(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT) < 0)
     {
         Log(LOG_ERROR, "Failed to start the server");
 

@@ -95,8 +95,8 @@ typedef struct
     NBN_Connection *conn; // nbnet connection associated to this UDP connection
 } NBN_UDP_Connection;
 
-static SOCKET udp_sock;
-static uint32_t protocol_id;
+static SOCKET nbn_udp_sock;
+static uint32_t nbn_protocol_id;
 
 static bool CompareIPAddresses(NBN_IPAddress ip_addr1, NBN_IPAddress ip_addr2);
 
@@ -342,13 +342,13 @@ static int InitSocket(void)
     }
 #endif
 
-    if ((udp_sock = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET)
+    if ((nbn_udp_sock = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET)
         return NBN_ERROR;
 
 #if defined(PLATFORM_WINDOWS)
     DWORD non_blocking = 1;
 
-    if (ioctlsocket(udp_sock, FIONBIO, &non_blocking) != 0)
+    if (ioctlsocket(nbn_udp_sock, FIONBIO, &non_blocking) != 0)
     {
         NBN_LogError("ioctlsocket() failed: %s", GetLastErrorMessage());
 
@@ -357,7 +357,7 @@ static int InitSocket(void)
 #elif defined(PLATFORM_MAC) || defined(PLATFORM_UNIX)
     int non_blocking = 1;
 
-    if (fcntl(udp_sock, F_SETFL, O_NONBLOCK, non_blocking) < 0)
+    if (fcntl(nbn_udp_sock, F_SETFL, O_NONBLOCK, non_blocking) < 0)
     {
         NBN_LogError("fcntl() failed: %s", GetLastErrorMessage());
 
@@ -370,7 +370,7 @@ static int InitSocket(void)
 
 static void DeinitSocket(void)
 {
-    closesocket(udp_sock);
+    closesocket(nbn_udp_sock);
 
 #ifdef PLATFORM_WINDOWS
     WSACleanup();
@@ -385,7 +385,7 @@ static int BindSocket(uint16_t port)
     sin.sin_family = AF_INET;
     sin.sin_port = htons(port);
 
-    if (bind(udp_sock, (SOCKADDR *)&sin, sizeof(sin)) < 0)
+    if (bind(nbn_udp_sock, (SOCKADDR *)&sin, sizeof(sin)) < 0)
     {
         NBN_LogError("bind() failed: %s", GetLastErrorMessage());
 
@@ -441,12 +441,14 @@ static char *GetLastErrorMessage(void)
 
 static NBN_UDP_HTable *nbn_udp_connections = NULL;
 static uint32_t next_conn_id = 1; // nbnet connection ids start at 1
+static bool nbn_server_is_encrypted = false;
 
 static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress);
 
-static int NBN_UDP_ServStart(uint32_t proto_id, uint16_t port)
+static int NBN_UDP_ServStart(uint32_t protocol_id, uint16_t port, bool enable_encryption)
 {
-    protocol_id = proto_id;
+    nbn_protocol_id = protocol_id;
+    nbn_server_is_encrypted = enable_encryption;
     nbn_udp_connections = NBN_UDP_HTable_Create();
 
     if (InitSocket() < 0)
@@ -473,7 +475,7 @@ static int NBN_UDP_ServRecvPackets(void)
 
     while (true)
     {
-        int bytes = recvfrom(udp_sock, (char *)buffer, sizeof(buffer), 0, (SOCKADDR *)&src_addr, &src_addr_len);
+        int bytes = recvfrom(nbn_udp_sock, (char *)buffer, sizeof(buffer), 0, (SOCKADDR *)&src_addr, &src_addr_len);
 
         if (bytes <= 0)
             break;
@@ -481,7 +483,7 @@ static int NBN_UDP_ServRecvPackets(void)
         ip_address.host = ntohl(src_addr.sin_addr.s_addr);
         ip_address.port = ntohs(src_addr.sin_port);
 
-        if (NBN_Packet_ReadProtocolId(buffer, bytes) != protocol_id)
+        if (NBN_Packet_ReadProtocolId(buffer, bytes) != nbn_protocol_id)
             continue; /* not matching the protocol of the receiver */ 
 
         NBN_Connection *conn = FindOrCreateClientConnectionByAddress(ip_address);
@@ -529,7 +531,7 @@ static int NBN_UDP_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *connecti
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(udp_conn->address.port);
 
-    if (sendto(udp_sock, (const char *)packet->buffer, packet->size, 0, (SOCKADDR *)&dest_addr, sizeof(dest_addr)) == SOCKET_ERROR)
+    if (sendto(nbn_udp_sock, (const char *)packet->buffer, packet->size, 0, (SOCKADDR *)&dest_addr, sizeof(dest_addr)) == SOCKET_ERROR)
     {
         NBN_LogError("sendto() failed: %s", GetLastErrorMessage());
 
@@ -554,7 +556,7 @@ static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress addre
 
         udp_conn->id = next_conn_id++;
         udp_conn->address = address;
-        udp_conn->conn = NBN_GameServer_CreateClientConnection(NBN_UDP_DRIVER_ID, udp_conn, udp_conn->id);
+        udp_conn->conn = NBN_GameServer_CreateClientConnection(NBN_UDP_DRIVER_ID, udp_conn, nbn_protocol_id, udp_conn->id, nbn_server_is_encrypted);
 
         NBN_UDP_HTable_Add(nbn_udp_connections, address, udp_conn);
 
@@ -585,11 +587,11 @@ static bool is_connected_to_server = false;
 
 static int ResolveIpAddress(const char *, uint16_t, NBN_IPAddress *);
 
-static int NBN_UDP_CliStart(uint32_t proto_id, const char *host, uint16_t port)
+static int NBN_UDP_CliStart(uint32_t protocol_id, const char *host, uint16_t port, bool enable_encryption)
 {
-    NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection*)NBN_Allocator(sizeof(NBN_Connection));
+    NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)NBN_Allocator(sizeof(NBN_Connection));
 
-    protocol_id = proto_id;
+    nbn_protocol_id = protocol_id;
 
     if (ResolveIpAddress(host, port, &udp_conn->address) < 0)
     {
@@ -604,26 +606,29 @@ static int NBN_UDP_CliStart(uint32_t proto_id, const char *host, uint16_t port)
     if (BindSocket(0) < 0)
         return NBN_ERROR;
 
-    server_connection = NBN_GameClient_CreateServerConnection(NBN_UDP_DRIVER_ID, udp_conn);
+    server_connection = NBN_GameClient_CreateServerConnection(NBN_UDP_DRIVER_ID, udp_conn, protocol_id, enable_encryption);
 
     return 0;
 }
 
 static void NBN_UDP_CliStop(void)
 {
+    NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)server_connection->driver_data;
+
+    NBN_Deallocator(udp_conn);
     DeinitSocket();
 }
 
 static int NBN_UDP_CliRecvPackets(void)
 {
-    NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection*)server_connection->driver_data;
+    NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)server_connection->driver_data;
     uint8_t buffer[NBN_PACKET_MAX_SIZE] = {0};
     SOCKADDR_IN src_addr;
     socklen_t src_addr_len = sizeof(src_addr);
 
     while (true)
     {
-        int bytes = recvfrom(udp_sock, (char *)buffer, sizeof(buffer), 0, (SOCKADDR *)&src_addr, &src_addr_len);
+        int bytes = recvfrom(nbn_udp_sock, (char *)buffer, sizeof(buffer), 0, (SOCKADDR *)&src_addr, &src_addr_len);
 
         if (bytes <= 0)
             break;
@@ -637,7 +642,7 @@ static int NBN_UDP_CliRecvPackets(void)
         if (ip_address.host != udp_conn->address.host || ip_address.port != udp_conn->address.port)
             continue;
 
-        if (NBN_Packet_ReadProtocolId(buffer, bytes) != protocol_id)
+        if (NBN_Packet_ReadProtocolId(buffer, bytes) != nbn_protocol_id)
             continue; /* not matching the protocol of the receiver */
 
         NBN_Packet packet;
@@ -648,8 +653,6 @@ static int NBN_UDP_CliRecvPackets(void)
         /* First received packet from server triggers the client connected event */
         if (!is_connected_to_server)
         {
-            NBN_Driver_RaiseEvent(NBN_DRIVER_CLI_CONNECTED, NULL);
-
             is_connected_to_server = true;
         }
 
@@ -668,7 +671,7 @@ static int NBN_UDP_CliSendPacket(NBN_Packet *packet)
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(udp_conn->address.port);
 
-    if (sendto(udp_sock, (const char *)packet->buffer, packet->size, 0, (SOCKADDR *)&dest_addr, sizeof(dest_addr)) == SOCKET_ERROR)
+    if (sendto(nbn_udp_sock, (const char *)packet->buffer, packet->size, 0, (SOCKADDR *)&dest_addr, sizeof(dest_addr)) == SOCKET_ERROR)
     {
         NBN_LogError("sendto() failed: %s", GetLastErrorMessage());
 
