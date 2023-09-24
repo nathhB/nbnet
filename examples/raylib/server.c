@@ -340,7 +340,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // Register messages, have to be done after NBN_GameServer_Init and before NBN_GameServer_Start
+    // Register messages, have to be done after NBN_GameServer_StartEx
     NBN_GameServer_RegisterMessage(
             CHANGE_COLOR_MESSAGE,
             (NBN_MessageBuilder)ChangeColorMessage_Create,

@@ -532,7 +532,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // Register messages, have to be done after NBN_GameClient_Start
+    // Register messages, have to be done after NBN_GameClient_StartEx
     // Messages need to be registered on both client and server side
     NBN_GameClient_RegisterMessage(
         CHANGE_COLOR_MESSAGE,

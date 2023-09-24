@@ -88,7 +88,7 @@ int main(void)
 #endif
     }
 
-    // Registering messages, have to be done after NBN_GameServer_Init and before NBN_GameServer_Start
+    // Registering messages, have to be done after NBN_GameServer_StartEx
     NBN_GameServer_RegisterMessage(ECHO_MESSAGE_TYPE,
             (NBN_MessageBuilder)EchoMessage_Create,
             (NBN_MessageDestructor)EchoMessage_Destroy,

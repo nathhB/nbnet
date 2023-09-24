@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
 #endif 
     }
 
-    // Registering messages, have to be done after NBN_GameClient_Init and before NBN_GameClient_Start
+    // Registering messages, have to be done after NBN_GameClient_StartEx
     // Messages need to be registered on both client and server side
     NBN_GameClient_RegisterMessage(ECHO_MESSAGE_TYPE,
             (NBN_MessageBuilder)EchoMessage_Create,
