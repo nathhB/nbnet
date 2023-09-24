@@ -425,9 +425,10 @@ typedef struct NBN_WebRTC_C_Server
     uint16_t ws_port;
     uint32_t protocol_id;
     fio_tls_s *tls;
+    char packet_buffer[NBN_PACKET_MAX_SIZE];
 } NBN_WebRTC_C_Server;
 
-static NBN_WebRTC_C_Server nbn_wrtc_c_serv = {NULL, false, 0, 0, NULL};
+static NBN_WebRTC_C_Server nbn_wrtc_c_serv = {NULL, false, 0, 0, NULL, {0}};
 
 static void NBN_WebRTC_C_DestroyPeer(NBN_WebRTC_C_Peer *peer)
 {
@@ -626,7 +627,6 @@ static void NBN_WebRTC_C_ServStop(void)
 
 static int NBN_WebRTC_C_ServRecvPackets(void)
 {
-    char buffer[NBN_PACKET_MAX_SIZE];
     int size;
 
     for (unsigned int i = 0; i < nbn_wrtc_c_serv.peers->capacity; i++)
@@ -637,11 +637,11 @@ static int NBN_WebRTC_C_ServRecvPackets(void)
         {
             size = NBN_PACKET_MAX_SIZE;
 
-            while (rtcReceiveMessage(entry->peer->channel_id, buffer, &size) != RTC_ERR_NOT_AVAIL)
+            while (rtcReceiveMessage(entry->peer->channel_id, nbn_wrtc_c_serv.packet_buffer, &size) != RTC_ERR_NOT_AVAIL)
             {
                 NBN_Packet packet;
 
-                if (NBN_Packet_InitRead(&packet, entry->peer->conn, (uint8_t *)buffer, size) < 0)
+                if (NBN_Packet_InitRead(&packet, entry->peer->conn, (uint8_t *)nbn_wrtc_c_serv.packet_buffer, size) < 0)
                     continue;
 
                 packet.sender = entry->peer->conn;
