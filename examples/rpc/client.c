@@ -33,7 +33,7 @@ static bool running = true;
 static bool connected = false;
 static bool disconnected = false;
 
-static void TestRPC2(unsigned int param_count, NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT], NBN_Connection *sender)
+static void TestRPC2(unsigned int param_count, NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT], NBN_ConnectionHandle sender)
 {
     Log(LOG_INFO, "TestRPC2 called !");
     Log(LOG_INFO, "Parameter 1 (float): %f", NBN_RPC_GetFloat(params, 0));
@@ -70,12 +70,12 @@ int main(int argc, char *argv[])
 
     // Initialize the client with a protocol name (must be the same than the one used by the server), the server ip address and port
 #ifdef NBN_ENCRYPTION
-    NBN_GameClient_Init(RPC_PROTOCOL_NAME, "127.0.0.1", RPC_EXAMPLE_PORT, true, NULL);
+    bool enable_encryption = true;
 #else
-    NBN_GameClient_Init(RPC_PROTOCOL_NAME, "127.0.0.1", RPC_EXAMPLE_PORT, false, NULL);
+    bool enable_encryption = false;
 #endif
 
-    if (NBN_GameClient_Start() < 0)
+    if (NBN_GameClient_StartEx(RPC_PROTOCOL_NAME, "127.0.0.1", RPC_EXAMPLE_PORT, enable_encryption, NULL, 0) < 0)
     {
         Log(LOG_ERROR, "Failed to start client");
 
@@ -100,9 +100,6 @@ int main(int argc, char *argv[])
 
     while (running)
     {
-        // Update client clock
-        NBN_GameClient_AddTime(dt);
-
         int ev;
 
         // Poll for client events

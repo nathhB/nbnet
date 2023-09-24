@@ -49,11 +49,7 @@ nbnet supports two WebRTC drivers: one using JS and emscripten and a native one 
 
 This driver requires the code to be compiled with emscripten.
 
-`mkdir build`
-
-`cd build`
-
-`emcmake cmake -DRAYLIB_LIBRARY_PATH=<path to raylib lib file> -DRAYLIB_INCLUDE_PATH=<path to raylib headers folder> ..`
+`emcmake cmake -DRAYLIB_LIBRARY_PATH=<path to raylib lib file> -DRAYLIB_INCLUDE_PATH=<path to raylib headers folder> .`
 
 To run the server:
 
@@ -82,15 +78,15 @@ Some external dependencies are required:
 
 `cd build`
 
-`cmake -DRAYLIB_LIBRARY_PATH=<path to raylib lib file> -DRAYLIB_INCLUDE_PATH=<path to raylib headers folder> -DLIBFACILIO_LIBRARY_PATH=<path libfacil.io lib file> -DLIBCRYPTO_LIBRARY_PATH=<path to libcrypto lib file> -DLIBSSL_LIBRARY_PATH=<path to libssl lib file> -DLIBDATACHANNEL_LIBRARY_PATH=<path to libdatachannel lib file> -DLIBFACILIO_INCLUDE_PATH=<path libfacilio headers folder> -DOPENSSL_INCLUDE_PATH=<path to openssl headers folder> -DLIBDATACHANNEL_INCLUDE_PATH=<path to libdatachannel headers folder> -DWEBRTC_C_DRIVER=ON ..`
+`cmake -DRAYLIB_LIBRARY_PATH=<path to raylib lib file> -DRAYLIB_INCLUDE_PATH=<path to raylib headers folder> -DLIBFACILIO_LIBRARY_PATH=<path libfacil.io lib file> -DLIBCRYPTO_LIBRARY_PATH=<path to libcrypto lib file> -DLIBSSL_LIBRARY_PATH=<path to libssl lib file> -DLIBDATACHANNEL_LIBRARY_PATH=<path to libdatachannel lib file> -DLIBFACILIO_INCLUDE_PATH=<path libfacilio headers folder> -DOPENSSL_INCLUDE_PATH=<path to openssl headers folder> -DLIBDATACHANNEL_INCLUDE_PATH=<path to libdatachannel headers folder> -DWEBRTC_C_DRIVER=ON .`
 
 To run the server:
 
-`./server`
+`./raylib_server`
 
 To run a native client:
 
-`./client`
+`./raylib_client`
 
 To run a web client simply do the same thing as in the previous section.
 

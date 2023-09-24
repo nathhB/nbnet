@@ -417,10 +417,18 @@ static void NBN_WebRTC_C_OnLocalDescriptionCallback(int pc, const char *sdp, con
 
 #pragma region Game server
 
-static NBN_WebRTC_C_HTable *nbn_wrtc_c_peers = NULL;
-static pthread_t thread;
-static uint16_t ws_port;
-static fio_tls_s *tls;
+typedef struct NBN_WebRTC_C_Server
+{
+    NBN_WebRTC_C_HTable *peers;
+    bool is_encrypted;
+    pthread_t thread;
+    uint16_t ws_port;
+    uint32_t protocol_id;
+    fio_tls_s *tls;
+    char packet_buffer[NBN_PACKET_MAX_SIZE];
+} NBN_WebRTC_C_Server;
+
+static NBN_WebRTC_C_Server nbn_wrtc_c_serv = {NULL, false, 0, 0, NULL, {0}};
 
 static void NBN_WebRTC_C_DestroyPeer(NBN_WebRTC_C_Peer *peer)
 {
@@ -481,10 +489,15 @@ static void NBN_WebRTC_C_OnWsOpen(ws_s *ws)
     peer->id = peer_id;
     peer->channel_id = channel_id;
     peer->ws = ws;
-    peer->conn = NBN_GameServer_CreateClientConnection(NBN_WEBRTC_C_DRIVER_ID, peer);
+    peer->conn = NBN_GameServer_CreateClientConnection(
+            NBN_WEBRTC_C_DRIVER_ID,
+            peer,
+            nbn_wrtc_c_serv.protocol_id,
+            peer_id,
+            nbn_wrtc_c_serv.is_encrypted);
 
     websocket_udata_set(ws, peer); // save a pointer to the peer in websocket's user data
-    NBN_WebRTC_C_HTable_Add(nbn_wrtc_c_peers, peer_id, peer);
+    NBN_WebRTC_C_HTable_Add(nbn_wrtc_c_serv.peers, peer_id, peer);
     NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_CONNECTED, peer->conn);
 }
 
@@ -553,10 +566,10 @@ static void *NBN_WebRTC_C_HttpServerThread(void *data)
 {
     char port_str[16];
 
-    snprintf(port_str, sizeof(port_str), "%d", ws_port);
+    snprintf(port_str, sizeof(port_str), "%d", nbn_wrtc_c_serv.ws_port);
 
     if (http_listen(port_str, NULL,
-        .tls = tls,
+        .tls = nbn_wrtc_c_serv.tls,
         .on_request = NBN_WebRTC_C_OnHttpRequest,
         .on_upgrade = NBN_WebRTC_C_OnHttpUpgrade) < 0)
     {
@@ -568,17 +581,19 @@ static void *NBN_WebRTC_C_HttpServerThread(void *data)
     return NULL;
 }
 
-static int NBN_WebRTC_C_ServStart(uint32_t protocol_id, uint16_t port)
+static int NBN_WebRTC_C_ServStart(uint32_t protocol_id, uint16_t port, bool enable_encryption)
 {
     // protocol_id is not used
 
-    ws_port = port;
-    nbn_wrtc_c_peers = NBN_WebRTC_C_HTable_Create();
-    tls = NULL;
+    nbn_wrtc_c_serv.ws_port = port;
+    nbn_wrtc_c_serv.peers = NBN_WebRTC_C_HTable_Create();
+    nbn_wrtc_c_serv.is_encrypted = enable_encryption;
+    nbn_wrtc_c_serv.protocol_id = protocol_id;
+    nbn_wrtc_c_serv.tls = NULL;
 
 #ifdef NBN_USE_HTTPS
 
-    tls = fio_tls_new(
+    nbn_wrtc_c_serv.tls = fio_tls_new(
         NBN_HTTPS_SERVER_NAME,
         NBN_HTTPS_CERT_PEM,
         NBN_HTTPS_KEY_PEM,
@@ -589,7 +604,7 @@ static int NBN_WebRTC_C_ServStart(uint32_t protocol_id, uint16_t port)
 
 #endif // NBN_USE_HTTPS
 
-    if (pthread_create(&thread, NULL, NBN_WebRTC_C_HttpServerThread, tls) < 0)
+    if (pthread_create(&nbn_wrtc_c_serv.thread, NULL, NBN_WebRTC_C_HttpServerThread, nbn_wrtc_c_serv.tls) < 0)
     {
         NBN_LogError("Failed to start HTTP server thread");
         return NBN_ERROR;
@@ -600,34 +615,33 @@ static int NBN_WebRTC_C_ServStart(uint32_t protocol_id, uint16_t port)
 
 static void NBN_WebRTC_C_ServStop(void)
 {
-    pthread_join(thread, NULL);
-    NBN_WebRTC_C_HTable_Destroy(nbn_wrtc_c_peers);
+    pthread_join(nbn_wrtc_c_serv.thread, NULL);
+    NBN_WebRTC_C_HTable_Destroy(nbn_wrtc_c_serv.peers);
     rtcCleanup();
 
-    if (tls)
+    if (nbn_wrtc_c_serv.tls)
     {
-        fio_tls_destroy(tls);
+        fio_tls_destroy(nbn_wrtc_c_serv.tls);
     }
 }
 
 static int NBN_WebRTC_C_ServRecvPackets(void)
 {
-    char buffer[NBN_PACKET_MAX_SIZE];
     int size;
 
-    for (unsigned int i = 0; i < nbn_wrtc_c_peers->capacity; i++)
+    for (unsigned int i = 0; i < nbn_wrtc_c_serv.peers->capacity; i++)
     {
-        NBN_WebRTC_C_HTableEntry *entry = nbn_wrtc_c_peers->internal_array[i];
+        NBN_WebRTC_C_HTableEntry *entry = nbn_wrtc_c_serv.peers->internal_array[i];
 
         if (entry)
         {
             size = NBN_PACKET_MAX_SIZE;
 
-            while (rtcReceiveMessage(entry->peer->channel_id, buffer, &size) != RTC_ERR_NOT_AVAIL)
+            while (rtcReceiveMessage(entry->peer->channel_id, nbn_wrtc_c_serv.packet_buffer, &size) != RTC_ERR_NOT_AVAIL)
             {
                 NBN_Packet packet;
 
-                if (NBN_Packet_InitRead(&packet, entry->peer->conn, (uint8_t *)buffer, size) < 0)
+                if (NBN_Packet_InitRead(&packet, entry->peer->conn, (uint8_t *)nbn_wrtc_c_serv.packet_buffer, size) < 0)
                     continue;
 
                 packet.sender = entry->peer->conn;
@@ -642,7 +656,7 @@ static void NBN_WebRTC_C_ServRemoveClientConnection(NBN_Connection *conn)
 {
     NBN_WebRTC_C_Peer *peer = conn->driver_data;
 
-    NBN_WebRTC_C_HTable_Remove(nbn_wrtc_c_peers, peer->id);
+    NBN_WebRTC_C_HTable_Remove(nbn_wrtc_c_serv.peers, peer->id);
     NBN_WebRTC_C_DestroyPeer(peer);
 }
 
@@ -664,7 +678,7 @@ static int NBN_WebRTC_C_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *con
 
 void NBN_WebRTC_C_Register(void)
 {
-    NBN_DriverImplementation driver_impl {
+    NBN_DriverImplementation driver_impl = {
         // Client implementation
         NULL,
         NULL,

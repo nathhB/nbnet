@@ -125,15 +125,16 @@ int main(int argc, char *argv[])
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__
 
-    // Initialize the client with a protocol name (must be the same than the one used by the server), the server ip address and port
+    // Initialize the client 
 #ifdef NBN_ENCRYPTION
-    NBN_GameClient_Init(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT, true, NULL);
+    bool enable_encryption = true;
 #else
-    NBN_GameClient_Init(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT, false, NULL);
+    bool enable_encryption = false;
 #endif
 
-    // Start the client
-    if (NBN_GameClient_Start() < 0)
+    // Start the client with a protocol name (must be the same than the one used by the server)
+    // the server host and port and with packet encryption on or off
+    if (NBN_GameClient_StartEx(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT, enable_encryption, NULL, 0) < 0)
     {
         Log(LOG_ERROR, "Failed to start client");
 
@@ -145,7 +146,7 @@ int main(int argc, char *argv[])
 #endif 
     }
 
-    // Registering messages, have to be done after NBN_GameClient_Init and before NBN_GameClient_Start
+    // Registering messages, have to be done after NBN_GameClient_StartEx
     // Messages need to be registered on both client and server side
     NBN_GameClient_RegisterMessage(ECHO_MESSAGE_TYPE,
             (NBN_MessageBuilder)EchoMessage_Create,
@@ -157,9 +158,6 @@ int main(int argc, char *argv[])
 
     while (running)
     {
-        // Update client clock
-        NBN_GameClient_AddTime(dt);
-
         int ev;
 
         // Poll for client events
@@ -219,10 +217,10 @@ int main(int argc, char *argv[])
         }
 
         // Cap the client tick rate
-        Sleep(dt);
+        EchoSleep(dt);
     }
 
-    // Stop the client
+    // Stop and deinitialize the client
     NBN_GameClient_Stop();
 
 #ifdef __EMSCRIPTEN__

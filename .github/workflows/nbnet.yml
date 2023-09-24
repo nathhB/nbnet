@@ -1,0 +1,260 @@
+name: nbnet
+
+on:
+  push:
+    branches: [ master, github-actions, release-2.0 ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  unit-tests-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install prerequisites
+        run: sudo apt-get install build-essential cmake -y
+      - name: Compile tests
+        run: |
+          cd tests
+          cmake .
+          make
+      - name: Run tests
+        run: |
+          cd tests
+          ctest
+
+  unit-tests-osx:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install prerequisites
+        run: brew install cmake
+      - name: Compile tests
+        run: |
+          cd tests
+          cmake .
+          make
+      - name: Run tests
+        run: |
+          cd tests
+          ctest
+
+  unit-tests-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Compile tests
+        run: |
+          cd tests
+          cmake -G "NMake Makefiles" .
+          nmake
+      # FIXME: string_tests hangs forever
+      # - name: Run tests
+      # run: ctest
+
+  soak-test-linux-c:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install prerequisites
+        run: sudo apt-get install build-essential cmake -y
+      - name: Compile soak test
+        run: |
+          cd soak
+          cmake -DCMAKE_BUILD_TYPE=Debug .
+          make
+      - name: Run soak test
+        run: timeout 240 ./bin/github-actions/run_soak.sh
+
+  soak-test-linux-cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install prerequisites
+        run: sudo apt-get install build-essential cmake -y
+      - name: Compile soak test
+        run: |
+          cd soak
+          cmake -DCMAKE_BUILD_TYPE=Debug -DCPP_COMPILE=ON .
+          make
+      - name: Run soak test
+        run: timeout 240 ./bin/github-actions/run_soak.sh
+
+  soak-test-linux-emcc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install prerequisites
+        run: sudo apt-get install build-essential cmake git python2 g++ -y
+      - name: Install emsdk
+        run: ./bin/github-actions/install_emsdk.sh
+      - name: Install nbnet NPM dependencies
+        run: |
+          npm update
+          npm install -g node-pre-gyp
+          npm install -g node-gyp
+          cd net_drivers/webrtc
+          npm install --build-from-resource
+      - name: Compile soak test
+        run: |
+          cd emsdk
+          source ./emsdk_env.sh
+          cd ../soak
+          mkdir build
+          cd build
+          emcmake cmake ..
+          make
+          cd ..
+          npm install
+      - name: Run soak test
+        run: |
+          cd emsdk
+          source ./emsdk_env.sh
+          cd ..
+          EMSCRIPTEN=1 timeout 240 ./bin/github-actions/run_soak.sh
+
+  soak-test-osx-c:
+    runs-on: macos-latest 
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install prerequisites
+        run: brew install cmake coreutils
+      - name: Compile soak test
+        run: |
+          cd soak
+          cmake -DCMAKE_BUILD_TYPE=Debug .
+          make
+      - name: Run soak test
+        run: gtimeout 240 ./bin/github-actions/run_soak.sh
+
+  soak-test-osx-cpp:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install prerequisites
+        run: brew install cmake coreutils
+      - name: Compile soak test
+        run: |
+          cd soak
+          cmake -DCMAKE_BUILD_TYPE=Debug -DCPP_COMPILE=ON .
+          make
+      - name: Run soak test
+        run: gtimeout 240 ./bin/github-actions/run_soak.sh
+
+  soak-test-osx-emcc:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install prerequisites
+        run: brew install cmake coreutils
+      - name: Install emsdk
+        run: ./bin/github-actions/install_emsdk.sh
+      - name: Install nbnet NPM dependencies
+        run: |
+          npm update
+          npm install -g node-pre-gyp
+          npm install -g node-gyp
+          cd net_drivers/webrtc
+          npm install --build-from-resource
+      - name: Compile soak test
+        run: |
+          cd emsdk
+          source ./emsdk_env.sh
+          cd ../soak
+          mkdir build
+          cd build
+          emcmake cmake ..
+          make
+          cd ..
+          npm install
+      - name: Run soak test
+        run: |
+          cd emsdk
+          source ./emsdk_env.sh
+          cd ..
+          EMSCRIPTEN=1 gtimeout 240 ./bin/github-actions/run_soak.sh
+
+
+  soak-test-windows-c:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Compile soak test
+        run: |
+          cd soak
+          cmake -G "NMake Makefiles" .
+          nmake
+      - name: Run soak test
+        run: ./bin/github-actions/run_soak.sh
+
+  compile-examples-linux-c:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install prerequisites
+        run: sudo apt-get install build-essential cmake -y
+      - name: Compile examples
+        run: |
+          cd examples
+          cmake .
+          make
+
+  compile-examples-linux-cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install prerequisites
+        run: sudo apt-get install build-essential cmake -y
+      - name: Compile examples
+        run: |
+          cd examples
+          cmake -DCPP_COMPILE=ON .
+          make
+
+  compile-examples-osx-c:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install prerequisites
+        run: brew install cmake
+      - name: Compile examples
+        run: |
+          cd examples
+          cmake .
+          make
+
+  compile-examples-osx-cpp:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install prerequisites
+        run: brew install cmake
+      - name: Compile examples
+        run: |
+          cd examples
+          cmake -DCPP_COMPILE=ON .
+          make
+
+  compile-examples-windows-c:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Compile examples
+        run: |
+          cd examples
+          cmake -G "NMake Makefiles" .
+          nmake
+
+  compile-examples-windows-cpp:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Compile examples
+        run: |
+          cd examples
+          cmake -G "NMake Makefiles" -DCPP_COMPILE=ON .
+          nmake

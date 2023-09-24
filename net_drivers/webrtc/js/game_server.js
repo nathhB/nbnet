@@ -27,7 +27,7 @@ function GameServer(signalingServer) {
     this.signalingServer = signalingServer
     this.peers = {}
     this.packets = []
-    this.nextPeerId = 0;
+    this.nextPeerId = 1; // nbnet connection ids start at 1
     this.logger = loggerFactory.createLogger('GameServer')
 }
 
@@ -124,11 +124,12 @@ function handleConnection(gameServer, connection) {
 }
 
 function removePeer(gameServer, peer) {
-    gameServer.logger.info('Remove peer %d', peer.id)
+    gameServer.logger.info('Removing peer %d', peer.id)
 
-    for (const key in gameServer.peers) {
-        if (gameServer.peers.hasOwnProperty(key) && gameServer.peers[key].id === peer.id) {
-            delete gameServer.peers[key]
+    for (const peerId in gameServer.peers) {
+        if (gameServer.peers.hasOwnProperty(peerId) && gameServer.peers[peerId].id === peer.id) {
+            delete gameServer.peers[peerId]
+            return
         }
     }
 }

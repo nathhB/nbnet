@@ -116,10 +116,9 @@ int main(int argc, char *argv[])
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__
 
-    // Initialize the client with a protocol name (must be the same than the one used by the server), the server ip address and port
-    NBN_GameClient_Init(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT, false, NULL);
-
-    if (NBN_GameClient_Start() < 0)
+    // Start the client with a protocol name (must be the same than the one used by the server)
+    // the server host and port
+    if (NBN_GameClient_Start(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT) < 0)
     {
         Log(LOG_ERROR, "Failed to start client");
 
@@ -136,9 +135,6 @@ int main(int argc, char *argv[])
 
     while (running)
     {
-        // Update client clock
-        NBN_GameClient_AddTime(dt);
-
         int ev;
 
         // Poll for client events
@@ -198,7 +194,7 @@ int main(int argc, char *argv[])
         }
 
         // Cap the client tick rate
-        Sleep(dt);
+        EchoSleep(dt);
     }
 
     // Stop the client

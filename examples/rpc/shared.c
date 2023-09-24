@@ -28,6 +28,8 @@
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/emscripten.h>
 #elif defined(_WIN32) || defined(_WIN64)
+#include <winsock2.h>
+#include <windows.h>
 #include <synchapi.h>
 #else
 #include <time.h>

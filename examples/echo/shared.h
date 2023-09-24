@@ -69,6 +69,6 @@ EchoMessage *EchoMessage_Create(void);
 void EchoMessage_Destroy(EchoMessage *);
 int EchoMessage_Serialize(EchoMessage *, NBN_Stream *);
 
-void Sleep(double);
+void EchoSleep(double);
 
 #endif /* ECHO_EXAMPLE_SHARED_H */

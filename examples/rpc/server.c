@@ -33,9 +33,9 @@ static NBN_Connection *client = NULL;
 
 static bool error = false;
 
-static void TestRPC(unsigned int param_count, NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT], NBN_Connection *sender)
+static void TestRPC(unsigned int param_count, NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT], NBN_ConnectionHandle sender)
 {
-    Log(LOG_INFO, "TestRPC called ! (Sender: %d)", sender->id);
+    Log(LOG_INFO, "TestRPC called ! (Sender: %d)", sender);
     Log(LOG_INFO, "Parameter 1 (int): %d", NBN_RPC_GetInt(params, 0));
     Log(LOG_INFO, "Parameter 2 (float): %f", NBN_RPC_GetFloat(params, 1));
     Log(LOG_INFO, "Parameter 3 (bool): %d", NBN_RPC_GetBool(params, 2));
@@ -55,14 +55,13 @@ int main(void)
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__
 
-    // Initialize the server with a protocol name and a port, must be done first
 #ifdef NBN_ENCRYPTION
-    NBN_GameServer_Init(RPC_PROTOCOL_NAME, RPC_EXAMPLE_PORT, true);
+    bool enable_encryption = true;
 #else
-    NBN_GameServer_Init(RPC_PROTOCOL_NAME, RPC_EXAMPLE_PORT, false);
+    bool enable_encryption = false;
 #endif
 
-    if (NBN_GameServer_Start() < 0)
+    if (NBN_GameServer_StartEx(RPC_PROTOCOL_NAME, RPC_EXAMPLE_PORT, enable_encryption) < 0)
     {
         Log(LOG_ERROR, "Failed to start the server");
 
@@ -87,9 +86,6 @@ int main(void)
 
     while (true)
     {
-        // Update the server clock
-        NBN_GameServer_AddTime(dt);
-
         int ev;
 
         // Poll for server events

@@ -26,6 +26,8 @@
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/emscripten.h> 
 #elif defined(_WIN32) || defined(_WIN64)
+#include <winsock2.h>
+#include <windows.h>
 #include <synchapi.h> 
 #else
 #include <time.h>
@@ -36,8 +38,8 @@
 // A simple structure to represent connected clients
 typedef struct
 {
-    // Underlying nbnet connection of that client, used to send messages to that particular client
-    NBN_Connection *connection;
+    // Underlying nbnet connection handle, used to send messages to that particular client
+    NBN_ConnectionHandle client_handle;
 
     // Client state
     ClientState state;
@@ -57,6 +59,21 @@ static Vector2 spawns[] = {
     (Vector2){GAME_WIDTH - 100, GAME_HEIGHT - 100}
 };
 
+static void AcceptConnection(unsigned int x, unsigned int y, NBN_ConnectionHandle conn)
+{
+    NBN_WriteStream ws;
+    uint8_t data[32];
+
+    NBN_WriteStream_Init(&ws, data, sizeof(data));
+
+    NBN_SerializeUInt((NBN_Stream *)&ws, x, 0, GAME_WIDTH);
+    NBN_SerializeUInt((NBN_Stream *)&ws, y, 0, GAME_HEIGHT);
+    NBN_SerializeUInt((NBN_Stream *)&ws, conn, 0, UINT_MAX);
+
+    // Accept the connection
+    NBN_GameServer_AcceptIncomingConnectionWithData(data, sizeof(data));
+}
+
 static int HandleNewConnection(void)
 {
     TraceLog(LOG_INFO, "New connection");
@@ -73,26 +90,21 @@ static int HandleNewConnection(void)
 
     // Otherwise...
 
-    NBN_Connection *connection = NBN_GameServer_GetIncomingConnection(); 
+    NBN_ConnectionHandle client_handle;
+
+    client_handle = NBN_GameServer_GetIncomingConnection();
 
     // Get a spawning position for the client
-    Vector2 spawn = spawns[connection->id % MAX_CLIENTS];
+    Vector2 spawn = spawns[client_handle % MAX_CLIENTS];
 
     // Build some "initial" data that will be sent to the connected client
-
-    NBN_Stream *ws = NBN_GameServer_GetConnectionAcceptDataWriteStream(connection);
 
     unsigned int x = (unsigned int)spawn.x;
     unsigned int y = (unsigned int)spawn.y;
 
-    NBN_SerializeUInt(ws, x, 0, GAME_WIDTH);
-    NBN_SerializeUInt(ws, y, 0, GAME_HEIGHT);
-    NBN_SerializeUInt(ws, connection->id, 0, UINT_MAX);
-    
-    // Accept the connection
-    NBN_GameServer_AcceptIncomingConnection();
+    AcceptConnection(x, y, client_handle);
 
-    TraceLog(LOG_INFO, "Connection accepted (ID: %d)", connection->id);
+    TraceLog(LOG_INFO, "Connection accepted (ID: %d)", client_handle);
 
     Client *client = NULL;
 
@@ -110,10 +122,10 @@ static int HandleNewConnection(void)
 
     assert(client != NULL);
 
-    client->connection = connection; // Store the nbnet connection
+    client->client_handle = client_handle; // Store the nbnet connection ID
 
     // Fill the client state with initial spawning data
-    client->state = (ClientState){.client_id = connection->id, .x = 200, .y = 400, .color = CLI_RED, .val = 0};
+    client->state = (ClientState){.client_id = client_handle, .x = 200, .y = 400, .color = CLI_RED, .val = 0};
 
     client_count++;
 
@@ -148,16 +160,15 @@ static void DestroyClient(Client *client)
 
 static void HandleClientDisconnection()
 {
-    NBN_Connection *cli_conn = NBN_GameServer_GetDisconnectedClient(); // Get the disconnected client
+    NBN_ConnectionHandle client_handle = NBN_GameServer_GetDisconnectedClient(); // Get the disconnected client
 
-    TraceLog(LOG_INFO, "Client has disconnected (id: %d)", cli_conn->id);
+    TraceLog(LOG_INFO, "Client has disconnected (id: %d)", client_handle);
 
-    Client *client = FindClientById(cli_conn->id);
+    Client *client = FindClientById(client_handle);
 
     assert(client);
 
     DestroyClient(client);
-    NBN_Connection_Destroy(cli_conn);
 
     client_count--;
 }
@@ -186,7 +197,7 @@ static void HandleReceivedMessage(void)
     NBN_MessageInfo msg_info = NBN_GameServer_GetMessageInfo();
 
     // Find the client that sent the message
-    Client *sender = FindClientById(msg_info.sender->id);
+    Client *sender = FindClientById(msg_info.sender);
 
     assert(sender != NULL);
 
@@ -215,7 +226,7 @@ static int HandleGameServerEvent(int ev)
             break;
 
         case NBN_CLIENT_DISCONNECTED:
-            // A previsouly connected client has disconnected
+            // A previously connected client has disconnected
             HandleClientDisconnection();
             break;
 
@@ -234,34 +245,43 @@ static int BroadcastGameState(void)
     ClientState client_states[MAX_CLIENTS];
     unsigned int client_index = 0;
 
-    // Loop over the clients array and build an array of ClientState
+    // Loop over the clients and build an array of ClientState
     for (int i = 0; i < MAX_CLIENTS; i++)
     {
         Client *client = clients[i];
 
-        if (client == NULL)
-            continue;
+        if (client == NULL) continue;
 
-        client_states[client_index] = (ClientState){
-            .client_id = client->state.client_id,
+        client_states[client_index] = (ClientState) {
+                .client_id = client->state.client_id,
                 .x = client->state.x,
                 .y = client->state.y,
                 .val = client->state.val,
-                .color = client->state.color};
-
-        GameStateMessage *msg = GameStateMessage_Create();
-
-        // Fill message data
-        msg->client_count = client_index;
-        memcpy(msg->client_states, client_states, sizeof(ClientState) * MAX_CLIENTS);
-
-        // Unreliably send the message to all connected clients
-        NBN_GameServer_SendUnreliableMessageTo(client->connection, GAME_STATE_MESSAGE, msg);
-
+                .color = client->state.color
+        };
         client_index++;
     }
 
     assert(client_index == client_count);
+
+    // Broadcast the game state to all clients
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        Client *client = clients[i];
+
+        if (client == NULL) continue;
+
+        GameStateMessage *msg = GameStateMessage_Create();
+
+        // Fill message data
+        msg->client_count = client_count;
+        memcpy(msg->client_states, client_states, sizeof(ClientState) * client_count);
+
+        // Unreliably send the message to all connected clients
+        NBN_GameServer_SendUnreliableMessageTo(client->client_handle, GAME_STATE_MESSAGE, msg);
+
+        // TraceLog(LOG_DEBUG, "Sent game state to client %d (%d, %d)", client->client_id, client_count, client_index);
+    }
 
     return 0;
 }
@@ -306,21 +326,21 @@ int main(int argc, char *argv[])
 
 #endif // __EMSCRIPTEN__
 
-    // Initialize server with a protocol name and a port, must be done first
 #ifdef EXAMPLE_ENCRYPTION
-    NBN_GameServer_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT, true);
+    bool enable_encryption = true;
 #else
-    NBN_GameServer_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT, false);
+    bool enable_encryption = false;
 #endif
 
-    if (NBN_GameServer_Start() < 0)
+    // Start the server with a protocol name, a port, and with packet encryption on or off
+    if (NBN_GameServer_StartEx(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT, enable_encryption) < 0)
     {
         TraceLog(LOG_ERROR, "Game server failed to start. Exit");
 
         return 1;
     }
 
-    // Register messages, have to be done after NBN_GameServer_Init and before NBN_GameServer_Start
+    // Register messages, have to be done after NBN_GameServer_StartEx
     NBN_GameServer_RegisterMessage(
             CHANGE_COLOR_MESSAGE,
             (NBN_MessageBuilder)ChangeColorMessage_Create,
@@ -347,9 +367,6 @@ int main(int argc, char *argv[])
 
     while (running)
     {
-        // Update the server clock
-        NBN_GameServer_AddTime(tick_dt);
-
         int ev;
 
         // Poll for server events

@@ -20,7 +20,6 @@
 
 */
 
-#include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -29,7 +28,7 @@
 
 #include "shared.h"
 
-static NBN_Connection *client = NULL;
+static NBN_ConnectionHandle client = 0;
 
 // Echo the received message
 static int EchoReceivedMessage(void)
@@ -68,17 +67,16 @@ int main(void)
     NBN_WebRTC_Register(); // Register the WebRTC driver
 #else
     NBN_UDP_Register(); // Register the UDP driver
-#endif // __EMSCRIPTEN__
+#endif // __EMSCRIPTEN__ 
 
-    // Initialize the server with a protocol name and a port, must be done first
 #ifdef NBN_ENCRYPTION
-    NBN_GameServer_Init(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, true);
+    bool enable_encryption = true;
 #else
-    NBN_GameServer_Init(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, false);
+    bool enable_encryption = false;
 #endif
 
-    // Start the server
-    if (NBN_GameServer_Start() < 0)
+    // Start the server with a protocol name, a port, and with packet encryption on or off
+    if (NBN_GameServer_StartEx(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, enable_encryption) < 0)
     {
         Log(LOG_ERROR, "Failed to start the server");
 
@@ -90,7 +88,7 @@ int main(void)
 #endif
     }
 
-    // Registering messages, have to be done after NBN_GameServer_Init and before NBN_GameServer_Start
+    // Registering messages, have to be done after NBN_GameServer_StartEx
     NBN_GameServer_RegisterMessage(ECHO_MESSAGE_TYPE,
             (NBN_MessageBuilder)EchoMessage_Create,
             (NBN_MessageDestructor)EchoMessage_Destroy,
@@ -101,9 +99,6 @@ int main(void)
 
     while (true)
     {
-        // Update the server clock
-        NBN_GameServer_AddTime(dt);
-
         int ev;
 
         // Poll for server events
@@ -123,24 +118,23 @@ int main(void)
                 // New connection request...
                 case NBN_NEW_CONNECTION:
                     // Echo server work with one single client at a time
-                    if (client != NULL)
+                    if (client)
                     {
                         NBN_GameServer_RejectIncomingConnectionWithCode(ECHO_SERVER_BUSY_CODE);
                     }
                     else
                     {
-                        client = NBN_GameServer_GetIncomingConnection();
-
                         NBN_GameServer_AcceptIncomingConnection();
+                        client = NBN_GameServer_GetIncomingConnection();
                     }
 
                     break;
 
                     // The client has disconnected
                 case NBN_CLIENT_DISCONNECTED:
-                    assert(NBN_GameServer_GetDisconnectedClient()->id == client->id);
+                    assert(NBN_GameServer_GetDisconnectedClient() == client);
 
-                    client = NULL;
+                    client = 0;
                     break;
 
                     // A message has been received from the client
@@ -167,7 +161,7 @@ int main(void)
         }
 
         // Cap the server tick rate
-        Sleep(dt);
+        EchoSleep(dt);
     }
 
     // Stop the server
