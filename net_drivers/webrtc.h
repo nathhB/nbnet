@@ -278,10 +278,15 @@ NBN_EXTERN void __js_game_server_stop(void);
 
 /* --- Driver implementation --- */
 
-static NBN_WebRTC_HTable *nbn_wrtc_peers = NULL;
-static uint8_t nbn_packet_buffer[NBN_PACKET_MAX_SIZE];
-static uint32_t nbn_protocol_id;
-static bool nbn_server_is_encrypted = false;
+typedef struct NBN_WebRTC_Server
+{
+    NBN_WebRTC_HTable *peers;
+    uint8_t packet_buffer[NBN_PACKET_MAX_SIZE];
+    uint32_t protocol_id;
+    bool is_encrypted;
+} NBN_WebRTC_Server;
+
+static NBN_WebRTC_Server nbn_wrtc_serv = {NULL, {0}, 0, false};
 
 static int NBN_WebRTC_ServStart(uint32_t protocol_id, uint16_t port, bool enable_encryption)
 {
@@ -302,9 +307,9 @@ static int NBN_WebRTC_ServStart(uint32_t protocol_id, uint16_t port, bool enable
     if (__js_game_server_start(port) < 0)
         return -1;
 
-    nbn_wrtc_peers = NBN_WebRTC_HTable_Create();
-    nbn_server_is_encrypted = enable_encryption;
-    nbn_protocol_id = protocol_id;
+    nbn_wrtc_serv.peers = NBN_WebRTC_HTable_Create();
+    nbn_wrtc_serv.is_encrypted = enable_encryption;
+    nbn_wrtc_serv.protocol_id = protocol_id;
 
     return 0;
 }
@@ -312,7 +317,7 @@ static int NBN_WebRTC_ServStart(uint32_t protocol_id, uint16_t port, bool enable
 static void NBN_WebRTC_ServStop(void)
 {
     __js_game_server_stop();
-    NBN_WebRTC_HTable_Destroy(nbn_wrtc_peers);
+    NBN_WebRTC_HTable_Destroy(nbn_wrtc_serv.peers);
 }
 
 static int NBN_WebRTC_ServRecvPackets(void)
@@ -320,11 +325,11 @@ static int NBN_WebRTC_ServRecvPackets(void)
     uint32_t peer_id;
     unsigned int len;
 
-    while ((len = __js_game_server_dequeue_packet(&peer_id, (uint8_t *)nbn_packet_buffer)) > 0)
+    while ((len = __js_game_server_dequeue_packet(&peer_id, (uint8_t *)nbn_wrtc_serv.packet_buffer)) > 0)
     {
         NBN_Packet packet;
 
-        NBN_WebRTC_Peer *peer = NBN_WebRTC_HTable_Get(nbn_wrtc_peers, peer_id);
+        NBN_WebRTC_Peer *peer = NBN_WebRTC_HTable_Get(nbn_wrtc_serv.peers, peer_id);
 
         if (peer == NULL)
         {
@@ -336,14 +341,19 @@ static int NBN_WebRTC_ServRecvPackets(void)
             peer = (NBN_WebRTC_Peer *)NBN_Allocator(sizeof(NBN_WebRTC_Peer));
 
             peer->id = peer_id; 
-            peer->conn = NBN_GameServer_CreateClientConnection(NBN_WEBRTC_DRIVER_ID, peer, nbn_protocol_id, peer_id, nbn_server_is_encrypted);
+            peer->conn = NBN_GameServer_CreateClientConnection(
+                    NBN_WEBRTC_DRIVER_ID,
+                    peer,
+                    nbn_wrtc_serv.protocol_id,
+                    peer_id,
+                    nbn_wrtc_serv.is_encrypted);
 
-            NBN_WebRTC_HTable_Add(nbn_wrtc_peers, peer_id, peer);
+            NBN_WebRTC_HTable_Add(nbn_wrtc_serv.peers, peer_id, peer);
 
             NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_CONNECTED, peer->conn);
         }
 
-        if (NBN_Packet_InitRead(&packet, peer->conn, nbn_packet_buffer, len) < 0)
+        if (NBN_Packet_InitRead(&packet, peer->conn, nbn_wrtc_serv.packet_buffer, len) < 0)
             continue;
 
         packet.sender = peer->conn;
@@ -360,7 +370,7 @@ static void NBN_WebRTC_ServRemoveClientConnection(NBN_Connection *conn)
 
     __js_game_server_close_client_peer(conn->id);
 
-    NBN_WebRTC_Peer *peer = NBN_WebRTC_HTable_Remove(nbn_wrtc_peers, ((NBN_WebRTC_Peer *)conn->driver_data)->id);
+    NBN_WebRTC_Peer *peer = NBN_WebRTC_HTable_Remove(nbn_wrtc_serv.peers, ((NBN_WebRTC_Peer *)conn->driver_data)->id);
 
     if (peer)
     {
@@ -389,8 +399,12 @@ NBN_EXTERN void __js_game_client_close(void);
 
 /* --- Driver implementation --- */
 
-static NBN_Connection *nbn_wrtc_server = NULL;
-static bool is_connected_to_server = false;
+typedef struct NBN_WebRTC_Client
+{
+    NBN_Connection *server_conn;
+} NBN_WebRTC_Client;
+
+static NBN_WebRTC_Client nbn_wrtc_cli = {NULL};
 
 static int NBN_WebRTC_CliStart(uint32_t protocol_id, const char *host, uint16_t port, bool enable_encryption)
 {
@@ -400,7 +414,7 @@ static int NBN_WebRTC_CliStart(uint32_t protocol_id, const char *host, uint16_t 
     __js_game_client_init(protocol_id, false);
 #endif // NBN_USE_HTTPS
 
-    nbn_wrtc_server = NBN_GameClient_CreateServerConnection(NBN_WEBRTC_DRIVER_ID, NULL, protocol_id, enable_encryption);
+    nbn_wrtc_cli.server_conn = NBN_GameClient_CreateServerConnection(NBN_WEBRTC_DRIVER_ID, NULL, protocol_id, enable_encryption);
 
     int res;
 
@@ -419,17 +433,12 @@ static int NBN_WebRTC_CliRecvPackets(void)
 {
     unsigned int len;
 
-    while ((len = __js_game_client_dequeue_packet((uint8_t *)nbn_packet_buffer)) > 0)
+    while ((len = __js_game_client_dequeue_packet((uint8_t *)nbn_wrtc_serv.packet_buffer)) > 0)
     {
         NBN_Packet packet;
 
-        if (NBN_Packet_InitRead(&packet, nbn_wrtc_server, nbn_packet_buffer, len) < 0)
+        if (NBN_Packet_InitRead(&packet, nbn_wrtc_cli.server_conn, nbn_wrtc_serv.packet_buffer, len) < 0)
             continue;
-
-        if (!is_connected_to_server)
-        {
-            is_connected_to_server = true;
-        }
 
         NBN_Driver_RaiseEvent(NBN_DRIVER_CLI_PACKET_RECEIVED, &packet);
     }
