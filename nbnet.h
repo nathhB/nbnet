@@ -299,6 +299,7 @@ void NBN_MeasureStream_Reset(NBN_MeasureStream *);
 #pragma region NBN_Message
 
 #define NBN_MAX_CHANNELS 8
+#define NBN_LIBRARY_RESERVED_CHANNELS 3
 #define NBN_MAX_MESSAGE_TYPES 255 /* Maximum value of uint8_t, see message header */
 #define NBN_MESSAGE_RESEND_DELAY 0.1 /* Number of seconds before a message is resent (reliable messages redundancy) */
 
@@ -782,6 +783,8 @@ int NBN_RPC_Message_Serialize(NBN_RPC_Message *, NBN_Stream *);
 #define NBN_CHANNEL_RW_CHUNK_BUFFER_INITIAL_SIZE 2048
 #define NBN_CHANNEL_OUTGOING_MESSAGE_POOL_SIZE 512
 
+/* IMPORTANT: if you add a library reserved channel below, make sure to update NBN_LIBRARY_RESERVED_CHANNELS */
+
 /* Library reserved unreliable ordered channel */
 #define NBN_CHANNEL_RESERVED_UNRELIABLE (NBN_MAX_CHANNELS - 1)
 
@@ -1004,6 +1007,7 @@ typedef struct
     {
         NBN_MessageInfo message_info;
         NBN_Connection *connection;
+        NBN_ConnectionHandle connection_handle;
     } data;
 } NBN_Event;
 
@@ -1218,35 +1222,6 @@ void NBN_GameClient_RegisterMessage(
     NBN_MessageBuilder msg_builder,
     NBN_MessageDestructor msg_destructor,
     NBN_MessageSerializer msg_serializer);
-
-/**
- * Create a new custom channel on the game client.
- * 
- * The channel must be created on both the client and the server.
- * 
- * @param id A unique ID between 0 and 25 (26 to 31 are reserved by nbnet, see NBN_MAX_CHANNELS for the maximum number of channels)
- * @param builder A pointer to a function that builds the channel
- * @param destructor A pointer to a function that destroys the channel (this method is expected to release all memory allocated by the channel builder method)
- */
-void NBN_GameClient_RegisterChannel(uint8_t id, NBN_ChannelBuilder builder, NBN_ChannelDestructor destructor);
-
-/**
- * Create a new reliable ordered channel on the game client.
- *
- * The channel must be created on both the client and the server.
- *
- * @param id A unique ID between 0 and 25 (26 to 31 are reserved by nbnet, see NBN_MAX_CHANNELS for the maximum number of channels)
- */
-void NBN_GameClient_RegisterReliableChannel(uint8_t id);
-
-/**
- * Create a new unreliable channel on the game client.
- *
- * The channel must be created on both the client and the server.
- *
- * @param id A unique ID between 0 and 25 (26 to 31 are reserved by nbnet, see NBN_MAX_CHANNELS for the maximum number of channels)
- */
-void NBN_GameClient_RegisterUnreliableChannel(uint8_t id);
 
 /**
  * Poll game client events.
@@ -1469,35 +1444,6 @@ void NBN_GameServer_Stop(void);
  */
 void NBN_GameServer_RegisterMessage(
     uint8_t msg_type, NBN_MessageBuilder msg_builder, NBN_MessageDestructor msg_destructor, NBN_MessageSerializer msg_serializer);
-
-/**
- * Create a new custom channel on the game server.
- * 
- * The channel must be created on both the client and the server.
- * 
- * @param id A unique ID between 0 and 25 (26 to 31 are reserved by nbnet, see NBN_MAX_CHANNELS for the maximum number of channels)
- * @param builder A pointer to a function that builds the channel
- * @param destructor A pointer to a function that destroys the channel (this method is expected to release all memory allocated by the channel builder method)
- */
-void NBN_GameServer_RegisterChannel(uint8_t id, NBN_ChannelBuilder builder, NBN_ChannelDestructor destructor);
-
-/**
- * Create a new reliable ordered channel on the game server.
- * 
- * The channel must be created on both the client and the server.
- * 
- * @param id A unique ID between 0 and 25 (26 to 31 are reserved by nbnet, see NBN_MAX_CHANNELS for the maximum number of channels)
- */
-void NBN_GameServer_RegisterReliableChannel(uint8_t id);
-
-/**
- * Create a new unreliable channel on the game server.
- *
- * The channel must be created on both the client and the server.
- *
- * @param id A unique ID between 0 and 25 (26 to 31 are reserved by nbnet, see NBN_MAX_CHANNELS for the maximum number of channels)
- */
-void NBN_GameServer_RegisterUnreliableChannel(uint8_t id);
 
 /**
  * Poll game server events.
@@ -4652,10 +4598,16 @@ static void Endpoint_Init(NBN_Endpoint *endpoint, bool is_server)
 
     NBN_EventQueue_Init(&endpoint->event_queue);
 
-    /* Register library reserved channels */
+    /* Register library reserved reliable channel */
     Endpoint_RegisterChannel(endpoint, NBN_CHANNEL_RESERVED_UNRELIABLE, (NBN_ChannelBuilder)NBN_UnreliableOrderedChannel_Create, (NBN_ChannelDestructor)NBN_Channel_Destroy);
     Endpoint_RegisterChannel(endpoint, NBN_CHANNEL_RESERVED_RELIABLE, (NBN_ChannelBuilder)NBN_ReliableOrderedChannel_Create, (NBN_ChannelDestructor)NBN_Channel_Destroy);
     Endpoint_RegisterChannel(endpoint, NBN_CHANNEL_RESERVED_LIBRARY_MESSAGES, (NBN_ChannelBuilder)NBN_ReliableOrderedChannel_Create, (NBN_ChannelDestructor)NBN_Channel_Destroy);
+
+    /* Register general purposes reliable channels */
+    for (int i = 0; i < NBN_MAX_CHANNELS - NBN_LIBRARY_RESERVED_CHANNELS; i++)
+    {
+        Endpoint_RegisterChannel(endpoint, i, (NBN_ChannelBuilder)NBN_ReliableOrderedChannel_Create, (NBN_ChannelDestructor)NBN_Channel_Destroy);
+    }
 
     /* Register NBN_MessageChunk library message */
     Endpoint_RegisterMessageBuilder(
@@ -5152,6 +5104,9 @@ int NBN_GameClient_StartEx(const char *protocol_name, const char *host, uint16_t
 
 void NBN_GameClient_Stop(void)
 {
+    // Poll remaining events to clear the event queue
+    while (NBN_GameClient_Poll() != NBN_NO_EVENT) {}
+
     if (nbn_game_client.server_connection)
     {
         if (!nbn_game_client.server_connection->is_closed && !nbn_game_client.server_connection->is_stale)
@@ -5175,10 +5130,7 @@ void NBN_GameClient_Stop(void)
 
         NBN_Connection_Destroy(nbn_game_client.server_connection);
         nbn_game_client.server_connection = NULL;
-    }
-
-    // Poll remaining events to clear the event queue
-    while (NBN_GameClient_Poll() != NBN_NO_EVENT) {}
+    } 
 
     NBN_LogInfo("Stopping all drivers...");
 
@@ -5223,27 +5175,6 @@ void NBN_GameClient_RegisterMessage(
     Endpoint_RegisterMessageBuilder(&nbn_game_client.endpoint, msg_builder, msg_type);
     Endpoint_RegisterMessageDestructor(&nbn_game_client.endpoint, msg_destructor, msg_type);
     Endpoint_RegisterMessageSerializer(&nbn_game_client.endpoint, msg_serializer, msg_type);
-}
-
-void NBN_GameClient_RegisterChannel(uint8_t id, NBN_ChannelBuilder builder, NBN_ChannelDestructor destructor)
-{
-    if (id == NBN_CHANNEL_RESERVED_UNRELIABLE || id == NBN_CHANNEL_RESERVED_RELIABLE || id == NBN_CHANNEL_RESERVED_LIBRARY_MESSAGES)
-    {
-        NBN_LogError("Channel id %d is reserved by the library", id);
-        NBN_Abort();
-    }
-
-    Endpoint_RegisterChannel(&nbn_game_client.endpoint, id, builder, destructor);
-}
-
-void NBN_GameClient_RegisterReliableChannel(uint8_t id)
-{
-    NBN_GameClient_RegisterChannel(id, (NBN_ChannelBuilder)NBN_ReliableOrderedChannel_Create, (NBN_ChannelDestructor)NBN_Channel_Destroy);
-}
-
-void NBN_GameClient_RegisterUnreliableChannel(uint8_t id)
-{
-    NBN_GameClient_RegisterChannel(id, (NBN_ChannelBuilder)NBN_UnreliableOrderedChannel_Create, (NBN_ChannelDestructor)NBN_Channel_Destroy);
 }
 
 int NBN_GameClient_Poll(void)
@@ -5712,8 +5643,6 @@ void NBN_GameServer_Stop(void)
     // Poll remaning events to clear the event queue
     while (NBN_GameServer_Poll() != NBN_NO_EVENT) {}
 
-    Endpoint_Deinit(&nbn_game_server.endpoint);
-
     for (unsigned int i = 0; i < nbn_game_server.clients->count; i++)
     {
         NBN_Connection_Destroy(nbn_game_server.clients->connections[i]);
@@ -5744,6 +5673,7 @@ void NBN_GameServer_Stop(void)
     }
 
     nbn_game_server.closed_clients_head = NULL;
+    Endpoint_Deinit(&nbn_game_server.endpoint);
 
     NBN_LogInfo("Stopped");
 }
@@ -5763,27 +5693,6 @@ void NBN_GameServer_RegisterMessage(
     Endpoint_RegisterMessageBuilder(&nbn_game_server.endpoint, msg_builder, msg_type);
     Endpoint_RegisterMessageDestructor(&nbn_game_server.endpoint, msg_destructor, msg_type);
     Endpoint_RegisterMessageSerializer(&nbn_game_server.endpoint, msg_serializer, msg_type);
-}
-
-void NBN_GameServer_RegisterChannel(uint8_t id, NBN_ChannelBuilder builder, NBN_ChannelDestructor destructor)
-{
-    if (id == NBN_CHANNEL_RESERVED_UNRELIABLE || id == NBN_CHANNEL_RESERVED_RELIABLE || id == NBN_CHANNEL_RESERVED_LIBRARY_MESSAGES)
-    {
-        NBN_LogError("Channel id %d is reserved by the library", id);
-        NBN_Abort();
-    }
-
-    Endpoint_RegisterChannel(&nbn_game_server.endpoint, id, builder, destructor);
-}
-
-void NBN_GameServer_RegisterReliableChannel(uint8_t id)
-{
-    NBN_GameServer_RegisterChannel(id, (NBN_ChannelBuilder)NBN_ReliableOrderedChannel_Create, (NBN_ChannelDestructor)NBN_Channel_Destroy);
-}
-
-void NBN_GameServer_RegisterUnreliableChannel(uint8_t id)
-{
-    NBN_GameServer_RegisterChannel(id, (NBN_ChannelBuilder)NBN_UnreliableOrderedChannel_Create, (NBN_ChannelDestructor)NBN_Channel_Destroy);
 }
 
 int NBN_GameServer_Poll(void)
@@ -6043,7 +5952,7 @@ NBN_ConnectionHandle NBN_GameServer_GetDisconnectedClient(void)
 {
     assert(nbn_game_server.last_event.type == NBN_CLIENT_DISCONNECTED);
 
-    return nbn_game_server.last_event.data.connection->id;
+    return nbn_game_server.last_event.data.connection_handle;
 }
 
 NBN_MessageInfo NBN_GameServer_GetMessageInfo(void)
@@ -6400,7 +6309,7 @@ static int GameServer_HandleMessageReceivedEvent(void)
         sender->is_stale = true;
 
         nbn_game_server.last_event.type = NBN_CLIENT_DISCONNECTED;
-        nbn_game_server.last_event.data.connection = sender;
+        nbn_game_server.last_event.data.connection_handle = sender->id;
 
         GameServer_RemoveClosedClientConnections();
 

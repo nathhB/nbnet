@@ -69,11 +69,6 @@ int Soak_Init(int argc, char *argv[])
 
 #ifdef SOAK_CLIENT 
 
-    for (int i = 0; i < options.channel_count; i++)
-    {
-        NBN_GameClient_RegisterReliableChannel(i);
-    }
-
     NBN_GameClient_RegisterMessage(SOAK_MESSAGE,
             (NBN_MessageBuilder)SoakMessage_CreateIncoming,
             (NBN_MessageDestructor)SoakMessage_Destroy,
@@ -82,11 +77,6 @@ int Soak_Init(int argc, char *argv[])
 #endif
 
 #ifdef SOAK_SERVER 
-
-    for (int i = 0; i < options.channel_count; i++)
-    {
-        NBN_GameServer_RegisterReliableChannel(i);
-    }
 
     NBN_GameServer_RegisterMessage(SOAK_MESSAGE,
             (NBN_MessageBuilder)SoakMessage_CreateIncoming,
@@ -187,6 +177,12 @@ int Soak_ReadCommandLine(int argc, char *argv[])
         return -1;
     }
 
+    if (soak_options.channel_count > NBN_MAX_CHANNELS - NBN_LIBRARY_RESERVED_CHANNELS)
+    {
+        Soak_LogError("Channel count cannot exceed %d", NBN_MAX_CHANNELS - NBN_LIBRARY_RESERVED_CHANNELS);
+        return -1;
+    }
+
 #ifdef SOAK_CLIENT
     if (soak_options.message_count <= 0)
     {
@@ -245,7 +241,8 @@ SoakOptions Soak_GetOptions(void)
 
 void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *conn, NBN_Message *msg)
 {
-    if (msg->header.type == NBN_MESSAGE_CHUNK_TYPE)
+    // FIXME
+    /*if (msg->header.type == NBN_MESSAGE_CHUNK_TYPE)
     {
         NBN_MessageChunk *chunk = (NBN_MessageChunk *)msg->data;
 
@@ -258,7 +255,7 @@ void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *conn, NBN_Message *msg)
 
         Soak_LogDebug("Soak message added to recv queue (conn id: %d, msg id: %d, soak msg id: %d)",
                 conn->id, msg->header.id, soak_message->id);
-    }
+    }*/
 }
 
 unsigned int Soak_GetCreatedOutgoingSoakMessageCount(void)
