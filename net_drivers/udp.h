@@ -96,7 +96,6 @@ typedef struct
 } NBN_UDP_Connection;
 
 static SOCKET nbn_udp_sock;
-static uint32_t nbn_protocol_id;
 
 static bool CompareIPAddresses(NBN_IPAddress ip_addr1, NBN_IPAddress ip_addr2);
 
@@ -441,17 +440,23 @@ static char *GetLastErrorMessage(void)
 
 #pragma region Game server
 
-static NBN_UDP_HTable *nbn_udp_connections = NULL;
-static uint32_t next_conn_id = 1; // nbnet connection ids start at 1
-static bool nbn_server_is_encrypted = false;
+typedef struct NBN_UDP_Server
+{
+    NBN_UDP_HTable *connections;
+    uint32_t next_conn_id; // nbnet connection ids start at 1
+    uint32_t protocol_id;
+    bool is_encrypted;
+} NBN_UDP_Server;
+
+static NBN_UDP_Server nbn_udp_serv = {NULL, 1, 0, false};
 
 static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress);
 
 static int NBN_UDP_ServStart(uint32_t protocol_id, uint16_t port, bool enable_encryption)
 {
-    nbn_protocol_id = protocol_id;
-    nbn_server_is_encrypted = enable_encryption;
-    nbn_udp_connections = NBN_UDP_HTable_Create();
+    nbn_udp_serv.protocol_id = protocol_id;
+    nbn_udp_serv.is_encrypted = enable_encryption;
+    nbn_udp_serv.connections = NBN_UDP_HTable_Create();
 
     if (InitSocket() < 0)
         return NBN_ERROR;
@@ -464,7 +469,7 @@ static int NBN_UDP_ServStart(uint32_t protocol_id, uint16_t port, bool enable_en
 
 static void NBN_UDP_ServStop(void)
 {
-    NBN_UDP_HTable_Destroy(nbn_udp_connections);
+    NBN_UDP_HTable_Destroy(nbn_udp_serv.connections);
     DeinitSocket();
 }
 
@@ -485,7 +490,7 @@ static int NBN_UDP_ServRecvPackets(void)
         ip_address.host = ntohl(src_addr.sin_addr.s_addr);
         ip_address.port = ntohs(src_addr.sin_port);
 
-        if (NBN_Packet_ReadProtocolId(buffer, bytes) != nbn_protocol_id)
+        if (NBN_Packet_ReadProtocolId(buffer, bytes) != nbn_udp_serv.protocol_id)
             continue; /* not matching the protocol of the receiver */ 
 
         NBN_Connection *conn = FindOrCreateClientConnectionByAddress(ip_address);
@@ -513,7 +518,7 @@ static void NBN_UDP_ServRemoveClientConnection(NBN_Connection *connection)
 {
     assert(connection != NULL);
 
-    NBN_UDP_Connection *udp_conn = NBN_UDP_HTable_Remove(nbn_udp_connections, ((NBN_UDP_Connection *)connection->driver_data)->address);
+    NBN_UDP_Connection *udp_conn = NBN_UDP_HTable_Remove(nbn_udp_serv.connections, ((NBN_UDP_Connection *)connection->driver_data)->address);
 
     if (udp_conn)
     {
@@ -545,7 +550,7 @@ static int NBN_UDP_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *connecti
 
 static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress address)
 {
-    NBN_UDP_Connection *udp_conn = NBN_UDP_HTable_Get(nbn_udp_connections, address);
+    NBN_UDP_Connection *udp_conn = NBN_UDP_HTable_Get(nbn_udp_serv.connections, address);
 
     if (udp_conn == NULL)
     {
@@ -556,11 +561,11 @@ static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress addre
 
         udp_conn = (NBN_UDP_Connection *)NBN_Allocator(sizeof(NBN_UDP_Connection));
 
-        udp_conn->id = next_conn_id++;
+        udp_conn->id = nbn_udp_serv.next_conn_id++;
         udp_conn->address = address;
-        udp_conn->conn = NBN_GameServer_CreateClientConnection(NBN_UDP_DRIVER_ID, udp_conn, nbn_protocol_id, udp_conn->id, nbn_server_is_encrypted);
+        udp_conn->conn = NBN_GameServer_CreateClientConnection(NBN_UDP_DRIVER_ID, udp_conn, nbn_udp_serv.protocol_id, udp_conn->id, nbn_udp_serv.is_encrypted);
 
-        NBN_UDP_HTable_Add(nbn_udp_connections, address, udp_conn);
+        NBN_UDP_HTable_Add(nbn_udp_serv.connections, address, udp_conn);
 
         NBN_LogDebug("New UDP connection (id: %d)", udp_conn->id);
 
@@ -584,8 +589,13 @@ static bool CompareIPAddresses(NBN_IPAddress ip_addr1, NBN_IPAddress ip_addr2)
 
 #pragma region Game client
 
-static NBN_Connection *server_connection;
-static bool is_connected_to_server = false;
+typedef struct NBN_UDP_Client
+{
+    NBN_Connection *server_conn;
+    uint32_t protocol_id;
+} NBN_UDP_Client;
+
+static NBN_UDP_Client nbn_udp_cli = {NULL, 0};
 
 static int ResolveIpAddress(const char *, uint16_t, NBN_IPAddress *);
 
@@ -593,7 +603,7 @@ static int NBN_UDP_CliStart(uint32_t protocol_id, const char *host, uint16_t por
 {
     NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)NBN_Allocator(sizeof(NBN_Connection));
 
-    nbn_protocol_id = protocol_id;
+    nbn_udp_cli.protocol_id = protocol_id;
 
     if (ResolveIpAddress(host, port, &udp_conn->address) < 0)
     {
@@ -608,14 +618,14 @@ static int NBN_UDP_CliStart(uint32_t protocol_id, const char *host, uint16_t por
     if (BindSocket(0) < 0)
         return NBN_ERROR;
 
-    server_connection = NBN_GameClient_CreateServerConnection(NBN_UDP_DRIVER_ID, udp_conn, protocol_id, enable_encryption);
+    nbn_udp_cli.server_conn = NBN_GameClient_CreateServerConnection(NBN_UDP_DRIVER_ID, udp_conn, protocol_id, enable_encryption);
 
     return 0;
 }
 
 static void NBN_UDP_CliStop(void)
 {
-    NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)server_connection->driver_data;
+    NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)nbn_udp_cli.server_conn->driver_data;
 
     NBN_Deallocator(udp_conn);
     DeinitSocket();
@@ -623,7 +633,7 @@ static void NBN_UDP_CliStop(void)
 
 static int NBN_UDP_CliRecvPackets(void)
 {
-    NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)server_connection->driver_data;
+    NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)nbn_udp_cli.server_conn->driver_data;
     uint8_t buffer[NBN_PACKET_MAX_SIZE] = {0};
     SOCKADDR_IN src_addr;
     socklen_t src_addr_len = sizeof(src_addr);
@@ -644,19 +654,13 @@ static int NBN_UDP_CliRecvPackets(void)
         if (ip_address.host != udp_conn->address.host || ip_address.port != udp_conn->address.port)
             continue;
 
-        if (NBN_Packet_ReadProtocolId(buffer, bytes) != nbn_protocol_id)
+        if (NBN_Packet_ReadProtocolId(buffer, bytes) != nbn_udp_cli.protocol_id)
             continue; /* not matching the protocol of the receiver */
 
         NBN_Packet packet;
 
-        if (NBN_Packet_InitRead(&packet, server_connection, buffer, bytes) < 0)
+        if (NBN_Packet_InitRead(&packet, nbn_udp_cli.server_conn, buffer, bytes) < 0)
             continue; /* not a valid packet */ 
-
-        /* First received packet from server triggers the client connected event */
-        if (!is_connected_to_server)
-        {
-            is_connected_to_server = true;
-        }
 
         NBN_Driver_RaiseEvent(NBN_DRIVER_CLI_PACKET_RECEIVED, &packet);
     }
@@ -666,7 +670,7 @@ static int NBN_UDP_CliRecvPackets(void)
 
 static int NBN_UDP_CliSendPacket(NBN_Packet *packet)
 {
-    NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)server_connection->driver_data;
+    NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)nbn_udp_cli.server_conn->driver_data;
     SOCKADDR_IN dest_addr;
 
     dest_addr.sin_addr.s_addr = htonl(udp_conn->address.host);
