@@ -71,6 +71,12 @@ A little online tank game prototype.
 
 [See on GitHub](https://github.com/nathhB/nb_tanks)
 
+## Bindings
+
+A list of user-contributed bindings (they are not officially supported, so they may be outdated):
+- [nbnet.nim](https://github.com/Tail-Wag-Games/arkana/blob/master/thirdparty/nbnet.nim) by [@zacharycarter](https://github.com/zacharycarter)
+- [nbnet-sunder](https://github.com/ashn-dot-dev/nbnet-sunder) by [@ashn](https://github.com/ashn-dot-dev) ([Sunder](https://github.com/ashn-dot-dev/sunder) is a C-like systems programming language and compiler for x86-64 Linux, ARM64 Linux, and WebAssembly)
+
 ## Drivers
 
 nbnet does not directly implement any low level "transport" code and rely on *drivers*.
@@ -109,7 +115,7 @@ Provide a driver implementation. For the UDP driver, just add:
 
 after including the nbnet header in the same source file where you defined `NBNET_IMPL`.
 
-nbnet does not provide any logging capacibilities so you have to provide your own:
+nbnet does not provide any logging capabilities so you have to provide your own:
 
 ```
 #define NBN_LogInfo(...) SomeLoggingFunction(__VA_ARGS__)
