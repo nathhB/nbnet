@@ -1312,6 +1312,9 @@ int NBN_GameClient_SendUnreliableByteArray(uint8_t *bytes, unsigned int length);
  */
 int NBN_GameClient_SendReliableByteArray(uint8_t *bytes, unsigned int length);
 
+/**
+ * For drivers only! NOT MEANT TO BE USED BY USER CODE.
+ */
 NBN_Connection *NBN_GameClient_CreateServerConnection(int driver_id, void *driver_data, uint32_t protocol_id, bool is_encrypted);
 
 /**
@@ -3333,11 +3336,11 @@ NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_End
     connection->id = id;
     connection->protocol_id = protocol_id;
     connection->endpoint = endpoint;
-    connection->last_recv_packet_time = 0;
+    connection->last_recv_packet_time = endpoint->time;
     connection->next_packet_seq_number = 1;
     connection->last_received_packet_seq_number = 0;
-    connection->last_flush_time = 0;
-    connection->last_read_packets_time = 0;
+    connection->last_flush_time = endpoint->time;
+    connection->last_read_packets_time = endpoint->time;
     connection->downloaded_bytes = 0;
     connection->is_accepted = false;
     connection->is_stale = false;
@@ -5313,9 +5316,6 @@ int NBN_GameClient_SendReliableByteArray(uint8_t *bytes, unsigned int length)
     return NBN_GameClient_SendByteArray(bytes, length, NBN_CHANNEL_RESERVED_RELIABLE);
 }
 
-/**
- * For drivers only! NOT MEANT TO BE USED BY USER CODE.
- */
 NBN_Connection *NBN_GameClient_CreateServerConnection(int driver_id, void *driver_data, uint32_t protocol_id, bool is_encrypted)
 {
     NBN_Connection *server_connection = Endpoint_CreateConnection(&nbn_game_client.endpoint, 0, protocol_id, driver_id, driver_data, is_encrypted);
