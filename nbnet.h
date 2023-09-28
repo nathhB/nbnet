@@ -82,7 +82,7 @@ typedef struct NBN_ConnectionVector
 
 #pragma region NBN_ConnectionTable
 
-typedef struct
+typedef struct NBN_ConnectionTable
 {
     NBN_Connection **connections;
     unsigned int capacity;
