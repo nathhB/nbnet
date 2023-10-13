@@ -220,7 +220,13 @@ One significant difference with running JS code in a web browser compared to run
 
 I recommend using [browserify](https://github.com/browserify/browserify).
 
-Once installed you can run:
+To bundle packages with browserify, you need to first install the required *NodeJS* packages by running:
+
+`npm install`
+
+from the directory containing the same `package.json` file used by your server.
+
+Then you can run:
 
 `browserify net_drivers/webrtc/js/nbnet.js -o nbnet_bundle.js`
 
