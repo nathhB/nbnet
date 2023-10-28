@@ -4835,8 +4835,12 @@ static NBN_OutgoingMessage *Endpoint_CreateOutgoingMessage(NBN_Endpoint *endpoin
     }
 
     NBN_OutgoingMessage *outgoing_message = &channel->outgoing_message_pool[channel->next_outgoing_message_pool_slot];
+    if (outgoing_message->ref_count != 0)
+    {
+        NBN_LogError("Outgoing message pool has run out of space");
 
-    assert(outgoing_message->ref_count == 0); // problem with outgoing message pool
+        return NULL;
+    }
 
     outgoing_message->type = msg_type;
     outgoing_message->data = data;
@@ -5266,6 +5270,14 @@ int NBN_GameClient_SendMessage(uint8_t msg_type, uint8_t channel_id, void *msg_d
             nbn_game_client.server_connection->channels[channel_id],
             msg_type,
             msg_data);
+
+
+    if (outgoing_msg == NULL)
+    {
+        NBN_LogError("Failed to create outgoing message");
+
+        return NBN_ERROR;
+    }
 
     if (Endpoint_EnqueueOutgoingMessage(
             &nbn_game_client.endpoint, nbn_game_client.server_connection, outgoing_msg, channel_id) < 0)
@@ -6036,6 +6048,13 @@ void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, 
 static int GameServer_SendMessageTo(NBN_Connection *client, uint8_t msg_type, uint8_t channel_id, void *msg_data)
 {
     NBN_OutgoingMessage *outgoing_msg = Endpoint_CreateOutgoingMessage(&nbn_game_server.endpoint, client->channels[channel_id], msg_type, msg_data);
+
+    if (outgoing_msg == NULL)
+    {
+        NBN_LogError("Failed to create outgoing message");
+
+        return NBN_ERROR;
+    }
 
     /* The only message type we can send to an unaccepted client is a NBN_ClientAcceptedMessage message
      * or a NBN_PublicCryptoInfoMessage */
