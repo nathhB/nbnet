@@ -28,9 +28,8 @@ freely, subject to the following restrictions:
 
     Dependencies:
 
-        1. facil.io (https://github.com/boazsegev/facil.io)
-        2. libdatachannel (https://github.com/paullouisageneau/libdatachannel)
-        3. json.h (https://github.com/sheredom/json.h)
+        1. libdatachannel (https://github.com/paullouisageneau/libdatachannel)
+        2. json.h (https://github.com/sheredom/json.h)
     
     How to use:
 
@@ -38,10 +37,7 @@ freely, subject to the following restrictions:
         2. Call NBN_WebRTC_C_Register in both your client and server code before calling NBN_GameClient_Start or NBN_GameServer_Start
 */
 
-#include <http.h>
-#include <fio_tls.h>
 #include <rtc/rtc.h>
-#include <pthread.h>
 #include "json.h"
 
 #define NBN_WEBRTC_C_DRIVER_ID 2
@@ -55,7 +51,7 @@ typedef struct
 {
     int id;
     int channel_id;
-    ws_s *ws;
+    int ws;
     NBN_Connection *conn;
 } NBN_WebRTC_C_Peer;
 
@@ -108,7 +104,9 @@ static NBN_WebRTC_C_HTable *NBN_WebRTC_C_HTable_CreateWithCapacity(unsigned int 
     htable->load_factor = 0;
 
     for (unsigned int i = 0; i < htable->capacity; i++)
+    {
         htable->internal_array[i] = NULL;
+    }
 
     return htable;
 }
@@ -396,7 +394,7 @@ static char *NBN_WebRTC_C_EscapeSDP(const char *sdp)
 
 static void NBN_WebRTC_C_OnLocalDescriptionCallback(int pc, const char *sdp, const char *type, void *user_ptr)
 {
-    if (strncmp(type, "answer", 5) != 0) return;
+    /*if (strncmp(type, "answer", 5) != 0) return;
 
     ws_s *ws = user_ptr;
     fio_str_info_s msg;
@@ -410,7 +408,7 @@ static void NBN_WebRTC_C_OnLocalDescriptionCallback(int pc, const char *sdp, con
     msg.data = data;
     msg.len = strnlen(data, sizeof(data)); 
 
-    websocket_write(ws, msg, 1);
+    websocket_write(ws, msg, 1);*/
 }
 
 #pragma endregion /* Signaling */
@@ -419,89 +417,27 @@ static void NBN_WebRTC_C_OnLocalDescriptionCallback(int pc, const char *sdp, con
 
 typedef struct NBN_WebRTC_C_Server
 {
+    int wsserver;
     NBN_WebRTC_C_HTable *peers;
     bool is_encrypted;
-    pthread_t thread;
     uint16_t ws_port;
     uint32_t protocol_id;
-    fio_tls_s *tls;
     char packet_buffer[NBN_PACKET_MAX_SIZE];
 } NBN_WebRTC_C_Server;
 
-static NBN_WebRTC_C_Server nbn_wrtc_c_serv = {NULL, false, 0, 0, NULL, {0}};
+static NBN_WebRTC_C_Server nbn_wrtc_c_serv = {0, NULL, false, 0, 0, {0}};
 
 static void NBN_WebRTC_C_DestroyPeer(NBN_WebRTC_C_Peer *peer)
 {
-    NBN_LogDebug("Destroy peer %d", peer->id);
-    rtcClose(peer->channel_id);
-    rtcDelete(peer->channel_id);
-    rtcClosePeerConnection(peer->id);
+    NBN_LogDebug("Destroying peer %d", peer->id);
+
+    rtcDeleteDataChannel(peer->channel_id);
     rtcDeletePeerConnection(peer->id);
+    rtcDelete(peer->ws);
     NBN_Deallocator(peer);
 }
 
-static void NBN_WebRTC_C_OnWsOpen(ws_s *ws)
-{
-    int peer_id = rtcCreatePeerConnection(&(rtcConfiguration){
-        .iceServers = ice_servers,
-        .iceServersCount = 1,
-        .disableAutoNegotiation = false
-    });
-
-    if (peer_id < 0)
-    {
-        NBN_LogError("Failed to create peer: %d", peer_id);
-        return;
-    }
-
-    // save a pointer to the WS in peer's user data
-    rtcSetUserPointer(peer_id, ws);
-
-    int ret = rtcSetLocalDescriptionCallback(peer_id, NBN_WebRTC_C_OnLocalDescriptionCallback);
-
-    if (ret < 0)
-    {
-        NBN_LogError("Failed to register local description callback for peer %d: %d", peer_id, ret);
-        rtcClosePeerConnection(peer_id);
-        rtcDeletePeerConnection(peer_id);
-        return;
-    }
-
-    int channel_id = rtcCreateDataChannelEx(peer_id, "unreliable", &(rtcDataChannelInit){
-        .reliability = {.unordered = true, .unreliable = true, .maxPacketLifeTime = 1000, .maxRetransmits = 0},
-        .negotiated = true,
-        .manualStream = true,
-        .stream = 0
-    });
-
-    if (channel_id < 0)
-    {
-        NBN_LogError("Failed to create data channel for peer %d: %d", peer_id, channel_id);
-        rtcClosePeerConnection(peer_id);
-        rtcDeletePeerConnection(peer_id);
-        return;
-    }
-
-    NBN_LogDebug("Successfully created data channel for peer %d: %d", peer_id, channel_id);
-
-    NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer *)NBN_Allocator(sizeof(NBN_WebRTC_C_Peer));
-
-    peer->id = peer_id;
-    peer->channel_id = channel_id;
-    peer->ws = ws;
-    peer->conn = NBN_GameServer_CreateClientConnection(
-            NBN_WEBRTC_C_DRIVER_ID,
-            peer,
-            nbn_wrtc_c_serv.protocol_id,
-            peer_id,
-            nbn_wrtc_c_serv.is_encrypted);
-
-    websocket_udata_set(ws, peer); // save a pointer to the peer in websocket's user data
-    NBN_WebRTC_C_HTable_Add(nbn_wrtc_c_serv.peers, peer_id, peer);
-    NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_CONNECTED, peer->conn);
-}
-
-static void NBN_WebRTC_C_OnWsClose(intptr_t uuid, void *udata)
+/*static void NBN_WebRTC_C_OnWsClose(intptr_t uuid, void *udata)
 {
     if (uuid >= 0 && udata)
     {
@@ -532,9 +468,9 @@ static void NBN_WebRTC_C_OnWsMessage(ws_s *ws, fio_str_info_s msg, uint8_t is_te
     }
 
     free(payload.json);
-}
+}*/
 
-static void NBN_WebRTC_C_OnHttpRequest(http_s *request)
+/*static void NBN_WebRTC_C_OnHttpRequest(http_s *request)
 {
     const char *msg = "This is a websocket server\n";
 
@@ -560,69 +496,157 @@ static void NBN_WebRTC_C_OnHttpUpgrade(http_s *request, char *target, size_t len
     {
         http_send_error(request, 400);
     }
-}
+}*/
 
-static void *NBN_WebRTC_C_HttpServerThread(void *data)
+static void NBN_WebRTC_C_OnWsOpen(int ws, void *user_ptr)
 {
-    char port_str[16];
+    NBN_LogDebug("WS %d is open", ws);
 
-    snprintf(port_str, sizeof(port_str), "%d", nbn_wrtc_c_serv.ws_port);
+    int peer_id = rtcCreatePeerConnection(&(rtcConfiguration){
+            .iceServers = ice_servers,
+            .iceServersCount = 1,
+            .disableAutoNegotiation = false
+            });
 
-    if (http_listen(port_str, NULL,
-        .tls = nbn_wrtc_c_serv.tls,
-        .on_request = NBN_WebRTC_C_OnHttpRequest,
-        .on_upgrade = NBN_WebRTC_C_OnHttpUpgrade) < 0)
+    if (peer_id < 0)
     {
-        NBN_LogError("Failed to start websocket server");
-        return NULL;
+        NBN_LogError("Failed to create peer: %d", peer_id);
+        rtcClose(ws);
+        return;
     }
 
-    fio_start(.threads = 1);
-    return NULL;
+    int ret = rtcSetLocalDescriptionCallback(peer_id, NBN_WebRTC_C_OnLocalDescriptionCallback);
+
+    if (ret < 0)
+    {
+        NBN_LogError("Failed to register local description callback for peer %d: %d", peer_id, ret);
+        rtcDeletePeerConnection(peer_id);
+        rtcClose(ws);
+        return;
+    }
+
+    int channel_id = rtcCreateDataChannelEx(peer_id, "unreliable", &(rtcDataChannelInit){
+            .reliability = {.unordered = true, .unreliable = true, .maxPacketLifeTime = 1000, .maxRetransmits = 0},
+            .negotiated = true,
+            .manualStream = true,
+            .stream = 0
+            });
+
+    if (channel_id < 0)
+    {
+        NBN_LogError("Failed to create data channel for peer %d: %d", peer_id, channel_id);
+        rtcDeletePeerConnection(peer_id);
+        rtcClose(ws);
+        return;
+    }
+
+    NBN_LogDebug("Successfully created data channel for peer %d: %d", peer_id, channel_id);
+
+    NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer *)NBN_Allocator(sizeof(NBN_WebRTC_C_Peer));
+
+    peer->id = peer_id;
+    peer->channel_id = channel_id;
+    peer->ws = ws;
+    peer->conn = NBN_GameServer_CreateClientConnection(
+            NBN_WEBRTC_C_DRIVER_ID,
+            peer,
+            nbn_wrtc_c_serv.protocol_id,
+            peer_id,
+            nbn_wrtc_c_serv.is_encrypted);
+
+    rtcSetUserPointer(ws, peer);
+    NBN_WebRTC_C_HTable_Add(nbn_wrtc_c_serv.peers, peer_id, peer);
+    // NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_CONNECTED, peer->conn);
+}
+
+static void NBN_WebRTC_C_OnWsClosed(int ws, void *user_ptr)
+{
+    NBN_LogDebug("WS %d has closed", ws);
+
+    if (user_ptr)
+    {
+        NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer *)user_ptr;
+
+        NBN_LogDebug("Closing WebRTC peer and channel (peer: %d, channel: %d)", peer->id, peer->channel_id);
+
+        rtcClose(peer->channel_id);
+        rtcClosePeerConnection(peer->id);
+    }
+}
+
+static void NBN_WebRTC_C_OnWsError(int ws, const char *err_msg, void *user_ptr)
+{
+    (void)user_ptr;
+
+    NBN_LogError("Error on WS %d: %s", ws, err_msg);
+}
+
+static void NBN_WebRTC_C_OnWsMessage(int ws, const char *msg, int size, void *user_ptr)
+{
+    NBN_LogDebug("Received message on WS %d (size: %d): %s", size, msg);
+}
+
+static void NBN_WebRTC_C_OnWsConnection(int wsserver, int ws, void *user_ptr)
+{
+    NBN_LogDebug("New WS connection %d (user_ptr: %p)", ws, user_ptr);
+
+    rtcSetOpenCallback(ws, NBN_WebRTC_C_OnWsOpen);
+    rtcSetClosedCallback(ws, NBN_WebRTC_C_OnWsClosed);
+    rtcSetErrorCallback(ws, NBN_WebRTC_C_OnWsError);
+    rtcSetMessageCallback(ws, NBN_WebRTC_C_OnWsMessage);
 }
 
 static int NBN_WebRTC_C_ServStart(uint32_t protocol_id, uint16_t port, bool enable_encryption)
 {
-    // protocol_id is not used
-
     nbn_wrtc_c_serv.ws_port = port;
     nbn_wrtc_c_serv.peers = NBN_WebRTC_C_HTable_Create();
     nbn_wrtc_c_serv.is_encrypted = enable_encryption;
     nbn_wrtc_c_serv.protocol_id = protocol_id;
-    nbn_wrtc_c_serv.tls = NULL;
+    nbn_wrtc_c_serv.wsserver = -1;
 
 #ifdef NBN_USE_HTTPS
 
-    nbn_wrtc_c_serv.tls = fio_tls_new(
-        NBN_HTTPS_SERVER_NAME,
-        NBN_HTTPS_CERT_PEM,
-        NBN_HTTPS_KEY_PEM,
-        NULL);
-
-    NBN_LogDebug("Using HTTPS (server name: %s, cert: %s, key: %s)",
-        NBN_HTTPS_SERVER_NAME, NBN_HTTPS_CERT_PEM, NBN_HTTPS_KEY_PEM);
+// TODO
+#error "HTTPS is not supported yet"
 
 #endif // NBN_USE_HTTPS
 
-    if (pthread_create(&nbn_wrtc_c_serv.thread, NULL, NBN_WebRTC_C_HttpServerThread, nbn_wrtc_c_serv.tls) < 0)
+    rtcInitLogger(RTC_LOG_VERBOSE, NULL); // will print on stdout
+    rtcPreload();
+
+    rtcWsServerConfiguration cfg = {
+        .port = port,
+
+        // TODO: https
+        .enableTls = false,
+        .certificatePemFile = NULL,
+        .keyPemFile = NULL,
+        .keyPemPass = NULL
+    };
+
+    int wsserver = rtcCreateWebSocketServer(&cfg, NBN_WebRTC_C_OnWsConnection);
+
+    if (wsserver < 0)
     {
-        NBN_LogError("Failed to start HTTP server thread");
-        return NBN_ERROR;
+        NBN_LogError("Failed to start WS server (code: %d)", wsserver);
+        return -1;
     }
+
+    nbn_wrtc_c_serv.wsserver = wsserver;
 
     return 0;
 }
 
 static void NBN_WebRTC_C_ServStop(void)
 {
-    pthread_join(nbn_wrtc_c_serv.thread, NULL);
     NBN_WebRTC_C_HTable_Destroy(nbn_wrtc_c_serv.peers);
-    rtcCleanup();
 
-    if (nbn_wrtc_c_serv.tls)
+    if (nbn_wrtc_c_serv.wsserver >= 0)
     {
-        fio_tls_destroy(nbn_wrtc_c_serv.tls);
+        rtcDeleteWebSocketServer(nbn_wrtc_c_serv.wsserver);
     }
+
+    rtcCleanup();
 }
 
 static int NBN_WebRTC_C_ServRecvPackets(void)
