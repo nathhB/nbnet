@@ -6101,7 +6101,7 @@ static int GameServer_CloseClientWithCode(NBN_Connection *client, int code, bool
             NBN_Event e;
 
             e.type = NBN_CLIENT_DISCONNECTED;
-            e.data.connection = client;
+            e.data.connection_handle = client->id;
 
             if (!NBN_EventQueue_Enqueue(&nbn_game_server.endpoint.event_queue, e))
                 return NBN_ERROR;
