@@ -425,70 +425,17 @@ static void NBN_WebRTC_C_DestroyPeer(NBN_WebRTC_C_Peer *peer)
     NBN_Deallocator(peer);
 }
 
-/*static void NBN_WebRTC_C_OnWsClose(intptr_t uuid, void *udata)
-{
-    if (uuid >= 0 && udata)
-    {
-        NBN_WebRTC_C_Peer *peer = udata;
-
-        NBN_LogDebug("WebSocket %d closed (peer id %d)", uuid, peer->id);
-    }
-}
-
-static void NBN_WebRTC_C_OnWsMessage(ws_s *ws, fio_str_info_s msg, uint8_t is_text)
-{
-    NBN_WebRTC_C_SignalingPayload payload;
-
-    bool ret = NBN_WebRTC_C_ParseSignalingMessage(msg.data, msg.len, &payload);
-
-    if (!ret) return;
-
-    if (payload.type == NBN_WEBRTC_C_OFFER && payload.sdp)
-    {
-        NBN_WebRTC_C_Peer *peer = websocket_udata_get(ws);
-
-        int ret = rtcSetRemoteDescription(peer->id, payload.sdp, "offer");
-
-        if (ret < 0)
-        {
-            NBN_LogError("Failed to set remote description for peer %d: %d", peer->id, ret);
-        }
-    }
-
-    free(payload.json);
-}*/
-
-/*static void NBN_WebRTC_C_OnHttpRequest(http_s *request)
-{
-    const char *msg = "This is a websocket server\n";
-
-    http_set_header(request, HTTP_HEADER_CONTENT_TYPE, http_mimetype_find("txt", 3));
-    http_send_body(request, (void *)msg, strlen(msg));
-}
-
-static void NBN_WebRTC_C_OnHttpUpgrade(http_s *request, char *target, size_t len)
-{
-    if (len >= 9 && target[1] == 'e')
-    {
-        http_upgrade2ws(
-            request,
-            .on_message = NBN_WebRTC_C_OnWsMessage,
-            .on_open = NBN_WebRTC_C_OnWsOpen,
-            .on_close = NBN_WebRTC_C_OnWsClose);
-    }
-    else if (len >= 3 && target[0] == 's')
-    {
-        http_upgrade2sse(request, .on_open = NULL);
-    }
-    else
-    {
-        http_send_error(request, 400);
-    }
-}*/
-
 static void NBN_WebRTC_C_OnPeerStateChanged(int pc, rtcState state, void *user_ptr)
 {
-    NBN_LogDebug("-----------------------> PEER STATE CHANGED: %d %d", state, RTC_CONNECTED);
+    NBN_LogDebug("Peer state changed to %d", state);
+
+    if (state == RTC_CONNECTED)
+    {
+        NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer *)user_ptr;
+
+        NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_CONNECTED, peer->conn);
+        NBN_LogDebug("Peer %d is connected !", pc);
+    }
 }
 
 static void NBN_WebRTC_C_OnWsOpen(int ws, void *user_ptr)
@@ -560,7 +507,6 @@ static void NBN_WebRTC_C_OnWsOpen(int ws, void *user_ptr)
     rtcSetUserPointer(ws, peer);
     rtcSetUserPointer(peer_id, peer);
     NBN_WebRTC_C_HTable_Add(nbn_wrtc_c_serv.peers, peer_id, peer);
-    // NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_CONNECTED, peer->conn);
 }
 
 static void NBN_WebRTC_C_OnWsClosed(int ws, void *user_ptr)
@@ -598,8 +544,8 @@ static void NBN_WebRTC_C_OnWsMessage(int ws, const char *msg, int size, void *us
 
     if (!ret)
     {
-        NBN_LogError("Failed to parse signaling data for WS %d", ws);
-        rtcClose(ws);
+        NBN_LogWarning("Failed to parse signaling data for WS %d", ws);
+        return;
     }
 
     NBN_LogDebug("Successfully parsed signaling payload (type: %d, sdp: %s)", payload.type, payload.sdp);
