@@ -14,7 +14,6 @@ target_link_libraries(serialization_tests -lm)
 # FIXME: adapt to latest API
 # add_test(message_chunks message_chunks)
 add_test(serialization_tests serialization_tests)
-# FIXME: segfault
-# add_test(string_tests string_tests)
+add_test(string_tests string_tests)
 
 target_compile_definitions(serialization_tests PUBLIC NBN_DEBUG)

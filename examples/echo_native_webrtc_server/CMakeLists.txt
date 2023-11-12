@@ -20,6 +20,6 @@ target_compile_definitions(echo_native_webrtc_server PUBLIC NBN_DEBUG)
 
 option(ENCRYPTION_ENABLED OFF)
 
-target_link_libraries(echo_native_webrtc_server ${LIBDATACHANNEL_LIBRARY_PATH})
+target_link_libraries(echo_native_webrtc_server ${LIBDATACHANNEL_LIBRARY_PATH} m)
 
 target_include_directories(echo_native_webrtc_server PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
