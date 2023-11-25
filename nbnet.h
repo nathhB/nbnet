@@ -1842,20 +1842,13 @@ static uint32_t NBN_ConnectionVector_RemoveAt(NBN_ConnectionVector *vector, unsi
 
     if (conn == NULL) return 0;
 
-    // Rearrange the vector so that connections are stored contiguously in memory
-    for (unsigned int i = position; i < vector->count - 1; i++)
-    {
-        NBN_Connection *conn = vector->connections[i];
-        NBN_Connection *next_conn = vector->connections[i + 1];
+    // Make sure that connections are stored contiguously in memory
 
-        assert(conn->vector_pos == (int)i);
-        assert(next_conn->vector_pos == (int)(i + 1));
+    NBN_Connection *last_conn = vector->connections[vector->count - 1];
 
-        next_conn->vector_pos = i;
-        vector->connections[i] = next_conn;
-    }
-
+    vector->connections[position] = last_conn;
     vector->connections[vector->count - 1] = NULL;
+    last_conn->vector_pos = position; // last connection in the vector is moved to the position of the removed one
     vector->count--;
 
     return conn->id;
