@@ -301,18 +301,6 @@ static void NBN_WebRTC_C_StringReplaceAll(char *res, const char *str, const char
 
 #pragma region Signaling
 
-typedef enum
-{
-    NBN_WEBRTC_C_UNDEFINED,
-    NBN_WEBRTC_C_OFFER
-} NBN_WebRTC_C_SignalingPayloadType;
-
-typedef struct
-{
-    NBN_WebRTC_C_SignalingPayloadType type;
-    char *sdp;
-} NBN_WebRTC_C_SignalingPayload;
-
 #define DEFAULT_ICE_SERVER "stun:stun01.sipphone.com"
 
 #ifndef ICE_SERVERS
@@ -323,53 +311,48 @@ static const char *ice_servers[] = {
    DEFAULT_ICE_SERVER
 };
 
-static bool NBN_WebRTC_C_ParseSignalingMessage(const char *msg, size_t msg_len, NBN_WebRTC_C_SignalingPayload *payload)
+static char *NBN_WebRTC_C_ParseSignalingMessage(const char *msg, size_t msg_len)
 {
+    // start by making sure this is an offer
+    if (!strstr(msg, "\"type\":\"offer\""))
+    {
+        return NULL;
+    }
+
+    char *sdp = NULL;
     struct json_value_s* root = json_parse(msg, msg_len); // this has to be freed
 
     if (root->type != json_type_object)
     {
-        free(root);
-        return false;
+        goto leave_free_root;
     }
 
     struct json_object_s* object = (struct json_object_s*)root->payload;
     struct json_object_element_s *curr = object->start;
 
-    payload->type = NBN_WEBRTC_C_UNDEFINED;
-    payload->sdp = NULL;
-
     while (curr != NULL)
     {
-        if (strncmp(curr->name->string, "type", 4) == 0)
-        {
-            payload->type = NBN_WEBRTC_C_OFFER;
-        }
-        else if (strncmp(curr->name->string, "sdp", 3) == 0)
+        if (strncmp(curr->name->string, "sdp", 3) == 0)
         {
             struct json_string_s *str = json_value_as_string(curr->value);
 
             if (str)
             {
-                // strdup equivalent using NBN_Allocator, make sure this is freed
+                // strdup equivalent using NBN_Allocator, make sure this get freed
                 size_t len = strlen(str->string);
 
-                payload->sdp = NBN_Allocator(len + 1);
-                memcpy(payload->sdp, str->string, len + 1);
+                sdp = NBN_Allocator(len + 1);
+                memcpy(sdp, str->string, len + 1);
             }
         }
 
         curr = curr->next;
     }
 
+leave_free_root:
     free(root);
 
-    if (payload->type == NBN_WEBRTC_C_UNDEFINED)
-    {
-        return false;
-    }
-
-    return true;
+    return sdp;
 }
 
 static char *NBN_WebRTC_C_EscapeSDP(const char *sdp)
@@ -539,32 +522,27 @@ static void NBN_WebRTC_C_OnWsMessage(int ws, const char *msg, int size, void *us
     // that's why I need to use strlen on the msg (I'm assuming it's always null-terminated...)
     size = strlen(msg);
 
-    NBN_WebRTC_C_SignalingPayload payload;
-    bool ret = NBN_WebRTC_C_ParseSignalingMessage(msg, size, &payload);
+    char *sdp = NBN_WebRTC_C_ParseSignalingMessage(msg, size);
 
-    if (!ret)
+    if (!sdp)
     {
         NBN_LogWarning("Failed to parse signaling data for WS %d", ws);
         return;
     }
 
-    NBN_LogDebug("Successfully parsed signaling payload (type: %d, sdp: %s)", payload.type, payload.sdp);
+    NBN_LogDebug("Successfully parsed signaling payload (sdp: %s)", sdp);
 
-    if (payload.type == NBN_WEBRTC_C_OFFER && payload.sdp)
+    NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer *)user_ptr;
+    int ret = rtcSetRemoteDescription(peer->id, sdp, "offer");
+
+    if (ret < 0)
     {
-        NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer *)user_ptr;
-
-        int ret = rtcSetRemoteDescription(peer->id, payload.sdp, "offer");
-
-        if (ret < 0)
-        {
-            NBN_LogError("Failed to set remote description for peer %d (WS: %d): %d", peer->id, ws, ret);
-            rtcClose(ws);
-        }
+        NBN_LogError("Failed to set remote description for peer %d (WS: %d): %d", peer->id, ws, ret);
+        rtcClose(ws);
     }
 
     // IMPORTANT: not sure I can free this because it's passed to rtcSetRemoteDescription
-    NBN_Deallocator(payload.sdp);
+    NBN_Deallocator(sdp);
 }
 
 static void NBN_WebRTC_C_OnWsConnection(int wsserver, int ws, void *user_ptr)
