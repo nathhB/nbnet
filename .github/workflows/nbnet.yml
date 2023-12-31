@@ -62,7 +62,9 @@ jobs:
       - name: Compile soak test
         run: |
           cd soak
-          cmake -DCMAKE_BUILD_TYPE=Debug .
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Debug ..
           make
       - name: Run soak test
         run: timeout 240 ./bin/github-actions/run_soak.sh
@@ -76,7 +78,9 @@ jobs:
       - name: Compile soak test
         run: |
           cd soak
-          cmake -DCMAKE_BUILD_TYPE=Debug -DCPP_COMPILE=ON .
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Debug -DCPP_COMPILE=ON ..
           make
       - name: Run soak test
         run: timeout 240 ./bin/github-actions/run_soak.sh
@@ -112,7 +116,7 @@ jobs:
           cd emsdk
           source ./emsdk_env.sh
           cd ..
-          EMSCRIPTEN=1 timeout 240 ./bin/github-actions/run_soak.sh
+          WEBRTC=1 timeout 240 ./bin/github-actions/run_soak.sh
 
   soak-test-osx-c:
     runs-on: macos-latest 
@@ -123,7 +127,9 @@ jobs:
       - name: Compile soak test
         run: |
           cd soak
-          cmake -DCMAKE_BUILD_TYPE=Debug .
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Debug ..
           make
       - name: Run soak test
         run: gtimeout 240 ./bin/github-actions/run_soak.sh
@@ -137,7 +143,9 @@ jobs:
       - name: Compile soak test
         run: |
           cd soak
-          cmake -DCMAKE_BUILD_TYPE=Debug -DCPP_COMPILE=ON .
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Debug -DCPP_COMPILE=ON ..
           make
       - name: Run soak test
         run: gtimeout 240 ./bin/github-actions/run_soak.sh
@@ -173,8 +181,7 @@ jobs:
           cd emsdk
           source ./emsdk_env.sh
           cd ..
-          EMSCRIPTEN=1 gtimeout 240 ./bin/github-actions/run_soak.sh
-
+          WEBRTC=1 gtimeout 240 ./bin/github-actions/run_soak.sh
 
   soak-test-windows-c:
     runs-on: windows-latest
@@ -184,10 +191,43 @@ jobs:
       - name: Compile soak test
         run: |
           cd soak
-          cmake -G "NMake Makefiles" .
+          mkdir build
+          cd build
+          cmake -G "NMake Makefiles" ..
           nmake
       - name: Run soak test
         run: ./bin/github-actions/run_soak.sh
+
+  soak-test-linux-webrtc-native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install prerequisites
+        run: sudo apt-get install build-essential cmake git -y
+      - name: Download and build libdatachannel
+        run: ./bin/github-actions/download_and_build_libdatachannel.sh
+      - name: Install emsdk
+        run: ./bin/github-actions/install_emsdk.sh
+      - name: Compile soak test (native)
+        run: |
+          cd soak
+          mkdir build
+          cd build
+          cmake -DLIBDATACHANNEL_LIBRARY_PATH=${{ github.workspace }}/libdatachannel/build/libdatachannel.so -DLIBDATACHANNEL_INCLUDE_PATH=${{ github.workspace }}/libdatachannel/include -DWEBRTC_C_DRIVER=ON ..
+          make
+          cd ..
+          npm install
+      - name: Compile soak test (web)
+        run: |
+          cd emsdk
+          source ./emsdk_env.sh
+          cd ../soak
+          mkdir build_web
+          cd build_web
+          emcmake cmake ..
+          make
+      - name: Run soak test
+        run: WEBRTC_NATIVE=1 timeout 240 ./bin/github-actions/run_soak.sh
 
   compile-examples-linux-c:
     runs-on: ubuntu-latest
