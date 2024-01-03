@@ -215,8 +215,6 @@ jobs:
           cd build
           cmake -DLIBDATACHANNEL_LIBRARY_PATH=${{ github.workspace }}/libdatachannel/build/libdatachannel.so -DLIBDATACHANNEL_INCLUDE_PATH=${{ github.workspace }}/libdatachannel/include -DWEBRTC_C_DRIVER=ON ..
           make
-          cd ..
-          npm install
       - name: Compile soak test (web)
         run: |
           cd emsdk
@@ -226,6 +224,8 @@ jobs:
           cd build_web
           emcmake cmake ..
           make
+          cd ..
+          npm install
       - name: Run soak test
         run: WEBRTC_NATIVE=1 timeout 240 ./bin/github-actions/run_soak.sh
 

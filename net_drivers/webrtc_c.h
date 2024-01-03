@@ -610,7 +610,8 @@ static void NBN_WebRTC_C_ServStop(void)
 
 static int NBN_WebRTC_C_ServRecvPackets(void)
 {
-    int size;
+    const int buffer_size = sizeof(nbn_wrtc_c_serv.packet_buffer);
+    int size = buffer_size;
 
     for (unsigned int i = 0; i < nbn_wrtc_c_serv.peers->capacity; i++)
     {
@@ -618,9 +619,7 @@ static int NBN_WebRTC_C_ServRecvPackets(void)
 
         if (entry)
         {
-            size = NBN_PACKET_MAX_SIZE;
-
-            while (rtcReceiveMessage(entry->peer->channel_id, nbn_wrtc_c_serv.packet_buffer, &size) != RTC_ERR_NOT_AVAIL)
+            while (rtcReceiveMessage(entry->peer->channel_id, nbn_wrtc_c_serv.packet_buffer, &size) == RTC_ERR_SUCCESS)
             {
                 NBN_Packet packet;
 
@@ -629,6 +628,7 @@ static int NBN_WebRTC_C_ServRecvPackets(void)
 
                 packet.sender = entry->peer->conn;
                 NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_PACKET_RECEIVED, &packet);
+                size = buffer_size;
             }
         }
     }
