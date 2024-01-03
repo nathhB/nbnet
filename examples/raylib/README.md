@@ -59,7 +59,7 @@ You can pass options to the server like so:
 
 `npm run server -- --packet_loss=<value> ...`
 
-To run the client you need to have an HTTP server running and serving the build directory (it contains the HTML file), then you just have to open `http://localhost:<PORT>/client.html` in your browser.
+To run the client you need to have an HTTP server running and serving the build directory (it contains the HTML file), then you just have to open `http://localhost:<PORT>/raylib_client.html` in your browser.
 
 When compiling the server this way, it will have to run as a nodejs application and only web clients will be able to connect to it. If you want your server to accept both web and native clients, read the next section.
 
