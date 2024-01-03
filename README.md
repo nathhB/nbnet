@@ -122,6 +122,7 @@ nbnet does not provide any logging capabilities so you have to provide your own:
 #define NBN_LogError(...) SomeLoggingFunction(__VA_ARGS__)
 #define NBN_LogDebug(...) SomeLoggingFunction(__VA_ARGS__)
 #define NBN_LogTrace(...) SomeLoggingFunction(__VA_ARGS__)
+#define NBN_LogWarning(...) SomeLoggingFunction(__VA_ARGS__)
 ```
 
 For memory management, nbnet uses `malloc`, `realloc` and `free`. You can redefine it using the following macros:
