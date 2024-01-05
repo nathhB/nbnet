@@ -21,7 +21,7 @@ freely, subject to the following restrictions:
 */
 
 /*
-    --- NBNET C (NATIVE) WEBRTC DRIVER ---
+    --- NBNET NATIVE WEBRTC DRIVER ---
 
     WebRTC driver for the nbnet library, using a single unreliable data channel. As opposed to the other emscripten/JS
     based WebRTC driver (webrtc.h), this one is fully written in C99 and can be compiled as a native application.
@@ -555,6 +555,33 @@ static void NBN_WebRTC_C_OnWsConnection(int wsserver, int ws, void *user_ptr)
     rtcSetMessageCallback(ws, NBN_WebRTC_C_OnWsMessage);
 }
 
+static void NBN_WebRTC_C_Log(rtcLogLevel level, const char *msg)
+{
+    switch (level)
+    {
+        case RTC_LOG_FATAL:
+        case RTC_LOG_ERROR:
+            NBN_LogError(msg);
+            break;
+
+        case RTC_LOG_WARNING:
+            NBN_LogWarning(msg);
+            break;
+
+        case RTC_LOG_INFO:
+            NBN_LogInfo(msg);
+            break;
+
+        case RTC_LOG_DEBUG:
+            NBN_LogDebug(msg);
+            break;
+
+        case RTC_LOG_VERBOSE:
+            NBN_LogTrace(msg);
+            break;
+    }
+}
+
 static int NBN_WebRTC_C_ServStart(uint32_t protocol_id, uint16_t port, bool enable_encryption)
 {
     nbn_wrtc_c_serv.ws_port = port;
@@ -570,7 +597,7 @@ static int NBN_WebRTC_C_ServStart(uint32_t protocol_id, uint16_t port, bool enab
 
 #endif // NBN_USE_HTTPS
 
-    rtcInitLogger(RTC_LOG_VERBOSE, NULL); // will print on stdout
+    rtcInitLogger(RTC_LOG_VERBOSE, NBN_WebRTC_C_Log);
     rtcPreload();
 
     rtcWsServerConfiguration cfg = {
