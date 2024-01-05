@@ -53,6 +53,7 @@ void Log(int, const char *, ...);
 
 #include "../../nbnet.h"
 #include "../../net_drivers/webrtc_c.h"
+#include "../../net_drivers/udp.h"
 
 typedef struct
 {

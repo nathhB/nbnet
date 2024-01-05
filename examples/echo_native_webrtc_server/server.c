@@ -74,6 +74,7 @@ int main(void)
 {
     signal(SIGINT, IntHandler);
 
+    NBN_UDP_Register(); // Register the UDP driver
     NBN_WebRTC_C_Register(); // Register the native WebRTC driver
 
 #ifdef NBN_ENCRYPTION
