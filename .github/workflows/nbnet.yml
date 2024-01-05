@@ -101,16 +101,7 @@ jobs:
           cd net_drivers/webrtc
           npm install --build-from-resource
       - name: Compile soak test
-        run: |
-          cd emsdk
-          source ./emsdk_env.sh
-          cd ../soak
-          mkdir build
-          cd build
-          emcmake cmake ..
-          make
-          cd ..
-          npm install
+        run: ./bin/github-actions/build_soak_web.sh
       - name: Run soak test
         run: |
           cd emsdk
@@ -166,16 +157,7 @@ jobs:
           cd net_drivers/webrtc
           npm install --build-from-resource
       - name: Compile soak test
-        run: |
-          cd emsdk
-          source ./emsdk_env.sh
-          cd ../soak
-          mkdir build
-          cd build
-          emcmake cmake ..
-          make
-          cd ..
-          npm install
+        run: ./bin/github-actions/build_soak_web.sh 
       - name: Run soak test
         run: |
           cd emsdk
@@ -216,18 +198,13 @@ jobs:
           cmake -DLIBDATACHANNEL_LIBRARY_PATH=${{ github.workspace }}/libdatachannel/build/libdatachannel.so -DLIBDATACHANNEL_INCLUDE_PATH=${{ github.workspace }}/libdatachannel/include -DWEBRTC_C_DRIVER=ON ..
           make
       - name: Compile soak test (web)
+        run: ./bin/github-actions/build_soak_web.sh 
+      - name: Run soak test
         run: |
           cd emsdk
           source ./emsdk_env.sh
-          cd ../soak
-          mkdir build_web
-          cd build_web
-          emcmake cmake ..
-          make
           cd ..
-          npm install
-      - name: Run soak test
-        run: WEBRTC_NATIVE=1 timeout 240 ./bin/github-actions/run_soak.sh
+          WEBRTC_NATIVE=1 timeout 240 ./bin/github-actions/run_soak.sh
 
   compile-examples-linux-c:
     runs-on: ubuntu-latest
