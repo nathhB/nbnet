@@ -17,3 +17,4 @@ CTestTestfile.cmake
 _deps
 build
 build_web
+.DS_Store
