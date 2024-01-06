@@ -338,12 +338,13 @@ int main(int argc, char *argv[])
     Soak_SetLogLevel(LOG_TRACE);
 
 #ifdef __EMSCRIPTEN__
-    NBN_WebRTC_Register(); // Register the WebRTC driver
+    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false}); // Register JS WebRTC driver
 #else
     NBN_UDP_Register(); // Register the UDP driver
 
 #ifdef SOAK_WEBRTC_C_DRIVER
-    NBN_WebRTC_C_Register(); // Register the native WebRTC driver
+    // Register native WebRTC driver
+    NBN_WebRTC_C_Register((NBN_WebRTC_Config){.enable_tls = false, .cert_path = NULL, .key_path = NULL, .passphrase = NULL}); 
 #endif
 
 #endif // __EMSCRIPTEN__

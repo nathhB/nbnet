@@ -20,6 +20,7 @@
 
 */
 
+#include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -61,11 +62,29 @@ static int EchoReceivedMessage(void)
 
 static bool error = false;
 
-int main(void)
+int main(int argc, const char **argv)
 {
 #ifdef __EMSCRIPTEN__
-    NBN_WebRTC_Register(); // Register the WebRTC driver
+
+    // Register the WebRTC driver
+#ifdef NBN_TLS 
+
+    if (argc != 3)
+    {
+        printf("Usage: server CERT_PATH KEY_PATH\n");
+        return 1;
+    }
+
+    const char *cert_path = argv[1];
+    const char *key_path = argv[2];
+
+    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = true, .cert_path = cert_path, .key_path = key_path});
 #else
+    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false});
+#endif // NBN_TLS
+
+#else
+
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__ 
 

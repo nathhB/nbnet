@@ -31,7 +31,14 @@ freely, subject to the following restrictions:
         2. Call NBN_WebRTC_Register in both your client and server code before calling NBN_GameClient_Start or NBN_GameServer_Start
 */
 
-void NBN_WebRTC_Register(void);
+typedef struct NBN_WebRTC_Config
+{
+    bool enable_tls;
+    const char *cert_path;
+    const char *key_path;
+} NBN_WebRTC_Config;
+
+void NBN_WebRTC_Register(NBN_WebRTC_Config config);
 
 #ifdef NBNET_IMPL
 
@@ -287,22 +294,11 @@ typedef struct NBN_WebRTC_Server
 } NBN_WebRTC_Server;
 
 static NBN_WebRTC_Server nbn_wrtc_serv = {NULL, {0}, 0, false};
+static NBN_WebRTC_Config nbn_wrtc_cfg;
 
 static int NBN_WebRTC_ServStart(uint32_t protocol_id, uint16_t port, bool enable_encryption)
 {
-#ifdef NBN_USE_HTTPS
-
-#ifndef NBN_HTTPS_KEY_PEM
-#define NBN_HTTPS_KEY_PEM "key.pem"
-#endif
-
-#ifndef NBN_HTTPS_CERT_PEM
-#define NBN_HTTPS_CERT_PEM "cert.pem"
-#endif
-    __js_game_server_init(protocol_id, true, NBN_HTTPS_KEY_PEM, NBN_HTTPS_CERT_PEM);
-#else
-    __js_game_server_init(protocol_id, false, NULL, NULL);
-#endif // NBN_USE_HTTPS
+    __js_game_server_init(protocol_id, nbn_wrtc_cfg.enable_tls, nbn_wrtc_cfg.key_path, nbn_wrtc_cfg.cert_path);
     
     if (__js_game_server_start(port) < 0)
         return -1;
@@ -408,11 +404,7 @@ static NBN_WebRTC_Client nbn_wrtc_cli = {NULL};
 
 static int NBN_WebRTC_CliStart(uint32_t protocol_id, const char *host, uint16_t port, bool enable_encryption)
 {
-#ifdef NBN_USE_HTTPS
-    __js_game_client_init(protocol_id, true);
-#else
-    __js_game_client_init(protocol_id, false);
-#endif // NBN_USE_HTTPS
+    __js_game_client_init(protocol_id, nbn_wrtc_cfg.enable_tls);
 
     nbn_wrtc_cli.server_conn = NBN_GameClient_CreateServerConnection(NBN_WEBRTC_DRIVER_ID, NULL, protocol_id, enable_encryption);
 
@@ -455,7 +447,7 @@ static int NBN_WebRTC_CliSendPacket(NBN_Packet *packet)
 
 #pragma region Driver registering
 
-void NBN_WebRTC_Register(void)
+void NBN_WebRTC_Register(NBN_WebRTC_Config config)
 {
     NBN_DriverImplementation driver_impl = {
         // Client implementation
@@ -471,6 +463,8 @@ void NBN_WebRTC_Register(void)
         NBN_WebRTC_ServSendPacketTo,
         NBN_WebRTC_ServRemoveClientConnection
     };
+
+    nbn_wrtc_cfg = config;
 
     NBN_Driver_Register(
         NBN_WEBRTC_DRIVER_ID,

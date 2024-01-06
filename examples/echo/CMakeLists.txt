@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.1)
 
 project(echo)
+
 option(CPP_COMPILE OFF)
+option(ENABLE_TLS OFF)
 
 # allow to compile as cpp
 if (CPP_COMPILE)
@@ -17,11 +19,16 @@ add_executable(echo_server server.c shared.c)
 
 add_compile_options(-Wall -Wextra -Wpedantic)
 
+if (ENABLE_TLS)
+    message("Compile with TLS enabled")
+    target_compile_definitions(echo_server PUBLIC NBN_TLS)
+    target_compile_definitions(echo_client PUBLIC NBN_TLS)
+endif (ENABLE_TLS)
+
+unset(ENABLE_TLS)
+
 target_compile_definitions(echo_client PUBLIC NBN_DEBUG)
 target_compile_definitions(echo_server PUBLIC NBN_DEBUG)
-
-option(ENCRYPTION_ENABLED OFF)
-option(WEBRTC_DRIVER_C OFF)
 
 if(WIN32)
   target_link_libraries(echo_client ws2_32)

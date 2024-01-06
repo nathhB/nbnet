@@ -271,7 +271,7 @@ int main(int argc, char *argv[])
     Soak_SetLogLevel(LOG_TRACE);
 
 #ifdef __EMSCRIPTEN__
-    NBN_WebRTC_Register(); // Register the WebRTC driver
+    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false}); // Register the WebRTC driver
 #else
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__ 

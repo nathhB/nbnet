@@ -56,7 +56,7 @@ echo "Starting soak server..."
 
 if [ -n "$WEBRTC" ]
 then
-     $NODE_CMD build/server.js --channel_count=$CHANNEL_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION --ping=$PING --jitter=$JITTER &> soak_serv_out &
+     $NODE_CMD build_web/server.js --channel_count=$CHANNEL_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION --ping=$PING --jitter=$JITTER &> soak_serv_out &
 else
     ./build/server --channel_count=$CHANNEL_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION --ping=$PING --jitter=$JITTER &> soak_serv_out &
 fi

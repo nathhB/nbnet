@@ -44,7 +44,15 @@ freely, subject to the following restrictions:
 #define NBN_WEBRTC_C_DRIVER_ID 2
 #define NBN_WEBRTC_C_DRIVER_NAME "WebRTC_C"
 
-void NBN_WebRTC_C_Register(void);
+typedef struct NBN_WebRTC_C_Config
+{
+    bool enable_tls;
+    const char *cert_path;
+    const char *key_path;
+    const char *passphrase;
+} NBN_WebRTC_C_Config;
+
+void NBN_WebRTC_C_Register(NBN_WebRTC_C_Config config);
 
 #ifdef NBNET_IMPL
 
@@ -301,6 +309,7 @@ static void NBN_WebRTC_C_StringReplaceAll(char *res, const char *str, const char
 
 #pragma region Signaling
 
+// TODO: move ice servers in driver config
 #define DEFAULT_ICE_SERVER "stun:stun01.sipphone.com"
 
 #ifndef ICE_SERVERS
@@ -397,6 +406,7 @@ typedef struct NBN_WebRTC_C_Server
 } NBN_WebRTC_C_Server;
 
 static NBN_WebRTC_C_Server nbn_wrtc_c_serv = {0, NULL, false, 0, 0, {0}};
+static NBN_WebRTC_C_Config nbn_wrtc_c_cfg;
 
 static void NBN_WebRTC_C_DestroyPeer(NBN_WebRTC_C_Peer *peer)
 {
@@ -590,24 +600,15 @@ static int NBN_WebRTC_C_ServStart(uint32_t protocol_id, uint16_t port, bool enab
     nbn_wrtc_c_serv.protocol_id = protocol_id;
     nbn_wrtc_c_serv.wsserver = -1;
 
-#ifdef NBN_USE_HTTPS
-
-// TODO
-#error "HTTPS is not supported yet"
-
-#endif // NBN_USE_HTTPS
-
     rtcInitLogger(RTC_LOG_VERBOSE, NBN_WebRTC_C_Log);
     rtcPreload();
 
     rtcWsServerConfiguration cfg = {
         .port = port,
-
-        // TODO: https
-        .enableTls = false,
-        .certificatePemFile = NULL,
-        .keyPemFile = NULL,
-        .keyPemPass = NULL
+        .enableTls = nbn_wrtc_c_cfg.enable_tls,
+        .certificatePemFile = nbn_wrtc_c_cfg.cert_path,
+        .keyPemFile = nbn_wrtc_c_cfg.key_path,
+        .keyPemPass = nbn_wrtc_c_cfg.passphrase
     };
 
     int wsserver = rtcCreateWebSocketServer(&cfg, NBN_WebRTC_C_OnWsConnection);
@@ -686,7 +687,7 @@ static int NBN_WebRTC_C_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *con
 
 #pragma endregion /* Game server */
 
-void NBN_WebRTC_C_Register(void)
+void NBN_WebRTC_C_Register(NBN_WebRTC_C_Config config)
 {
     NBN_DriverImplementation driver_impl = {
         // Client implementation
@@ -702,6 +703,8 @@ void NBN_WebRTC_C_Register(void)
         NBN_WebRTC_C_ServSendPacketTo,
         NBN_WebRTC_C_ServRemoveClientConnection
     };
+
+    nbn_wrtc_c_cfg = config;
 
     NBN_Driver_Register(
         NBN_WEBRTC_C_DRIVER_ID,

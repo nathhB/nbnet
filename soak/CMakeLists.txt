@@ -21,7 +21,7 @@ target_compile_definitions(client PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_
 target_compile_definitions(server PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR SOAK_SERVER)
 
 option(ENCRYPTION_ENABLED OFF)
-option(WEBRTC_DRIVER_C OFF)
+option(WEBRTC_NATIVE OFF)
 
 if (ENCRYPTION_ENABLED)
   message("Encryption enabled")
@@ -33,7 +33,7 @@ endif(ENCRYPTION_ENABLED)
 unset(ENCRYPTION_ENABLED)
 
 # compile with C WebRTC driver
-if (WEBRTC_C_DRIVER)
+if (WEBRTC_NATIVE)
   # can't compile WebRTC native driver with emscripten
   if (EMSCRIPTEN)
     message(SEND_ERROR "Can't compile WebRTC native driver with emscripten")
@@ -52,9 +52,9 @@ if (WEBRTC_C_DRIVER)
     target_compile_definitions(server PUBLIC NBN_HTTPS_KEY_PEM="localhost.key")
     target_compile_definitions(server PUBLIC NBN_HTTPS_CERT_PEM="localhost.crt")
   endif (USE_HTTPS)
-endif (WEBRTC_C_DRIVER)
+endif (WEBRTC_NATIVE)
 
-unset(WEBRTC_C_DRIVER)
+unset(WEBRTC_NATIVE)
 
 # Use HTTPS (for WebRTC drivers)
 if (USE_HTTPS)

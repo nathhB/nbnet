@@ -120,7 +120,14 @@ int main(int argc, char *argv[])
     }
 
 #ifdef __EMSCRIPTEN__
-    NBN_WebRTC_Register(); // Register the WebRTC driver
+
+    // Register the WebRTC driver
+#ifdef NBN_TLS
+    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = true});
+#else
+    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false});
+#endif // NBN_TLS
+
 #else
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__
