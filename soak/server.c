@@ -344,7 +344,7 @@ int main(int argc, char *argv[])
 
 #ifdef SOAK_WEBRTC_C_DRIVER
     // Register native WebRTC driver
-    NBN_WebRTC_C_Register((NBN_WebRTC_Config){.enable_tls = false, .cert_path = NULL, .key_path = NULL, .passphrase = NULL}); 
+    NBN_WebRTC_C_Register((NBN_WebRTC_C_Config){.enable_tls = false, .cert_path = NULL, .key_path = NULL, .passphrase = NULL}); 
 #endif
 
 #endif // __EMSCRIPTEN__
