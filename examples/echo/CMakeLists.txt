@@ -4,6 +4,7 @@ project(echo)
 
 option(CPP_COMPILE OFF)
 option(ENABLE_TLS OFF)
+option(WEBRTC_NATIVE OFF)
 
 # allow to compile as cpp
 if (CPP_COMPILE)
@@ -26,6 +27,20 @@ if (ENABLE_TLS)
 endif (ENABLE_TLS)
 
 unset(ENABLE_TLS)
+
+if (WEBRTC_NATIVE)
+    if (EMSCRIPTEN)
+        message(FATAL_ERROR "Cannot compile native webrtc driver with emscripten")
+    endif (EMSCRIPTEN)
+
+    message("Compile with webrtc native driver")
+
+    target_compile_definitions(echo_server PUBLIC NBN_WEBRTC_NATIVE)
+    target_link_libraries(echo_server ${LIBDATACHANNEL_LIBRARY_PATH} m)
+    target_include_directories(echo_server PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
+endif (WEBRTC_NATIVE)
+
+unset(WEBRTC_NATIVE)
 
 target_compile_definitions(echo_client PUBLIC NBN_DEBUG)
 target_compile_definitions(echo_server PUBLIC NBN_DEBUG)

@@ -83,7 +83,15 @@ int main(int argc, const char **argv)
     NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false});
 #endif // NBN_TLS
 
+#elif defined(NBN_WEBRTC_NATIVE)
+
+    // Register native WebRTC driver
+#ifdef NBN_TLS
+    // pass NULL for cert and key path to auto generate them
+    NBN_WebRTC_C_Register((NBN_WebRTC_C_Config){.enable_tls = true, .cert_path = NULL, .key_path = NULL, .passphrase = NULL});
 #else
+    NBN_WebRTC_C_Register((NBN_WebRTC_C_Config){.enable_tls = false, .cert_path = NULL, .key_path = NULL, .passphrase = NULL});
+#endif // NBN_TLS
 
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__ 
