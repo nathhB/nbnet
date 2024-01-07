@@ -368,7 +368,7 @@ static char *NBN_WebRTC_C_EscapeSDP(const char *sdp)
 
 static void NBN_WebRTC_C_OnLocalDescriptionCallback(int pc, const char *sdp, const char *type, void *user_ptr)
 {
-    if (strncmp(type, "answer", 5) != 0)
+    if (strncmp(type, "answer", strlen("answer")) != 0)
     {
         NBN_LogWarning("Received a local description with an unknown type: %s", type);
         return;
@@ -518,11 +518,16 @@ static void NBN_WebRTC_C_OnWsError(int ws, const char *err_msg, void *user_ptr)
 
 static void NBN_WebRTC_C_OnWsMessage(int ws, const char *msg, int size, void *user_ptr)
 {
-    NBN_LogDebug("Received signaling data on WS %d (size: %d): %s", ws, size, msg);
+    // for some reason the size of the message is negative
+    // in libdatachannel documentation (https://github.com/paullouisageneau/libdatachannel/blob/master/DOC.md) there is mention of:
+    // size: if size >= 0, data is interpreted as a binary message of length size, otherwise it is interpreted as a null-terminated UTF-8 string.
+    // so I guess in this case msg is a null terminated string? I could not find more information about this so I decided to go with
+    // flipping the size to positive even though it feels weird, but it works so... ¯\_(ツ)_/¯
 
-    // FIXME: the size parameter is wrong for some reason
-    // that's why I need to use strlen on the msg (I'm assuming it's always null-terminated...)
-    size = strlen(msg);
+    if (size < 0) size *= -1;
+    size -= 1;
+
+    NBN_LogDebug("Received signaling data on WS %d (size: %d): %s", ws, size, msg);
 
     char *sdp = NBN_WebRTC_C_ParseSignalingMessage(msg, size);
 
