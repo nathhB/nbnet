@@ -190,6 +190,13 @@ jobs:
         run: ./bin/github-actions/download_and_build_libdatachannel.sh
       - name: Install emsdk
         run: ./bin/github-actions/install_emsdk.sh
+      - name: Install nbnet NPM dependencies
+        run: |
+          npm update
+          npm install -g node-pre-gyp
+          npm install -g node-gyp
+          cd net_drivers/webrtc
+          npm install --build-from-resource
       - name: Compile soak test (native)
         run: |
           cd soak
