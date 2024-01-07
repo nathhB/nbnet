@@ -10,7 +10,7 @@
 
 nbnet is a single header C (C99) library designed to implement client-server architecture, more precisely for online video games. The library is based on this [great series of articles](https://gafferongames.com/) by Glenn Fiedler.
 
-nbnet can target different protocols such as UDP or WebRTC through "drivers" (see below for more information).
+nbnet can target different protocols such as UDP or [WebRTC](WEBRTC.md) through "drivers" (see below for more information).
 
 The API is meant to be as straightforward as possible and relies on event polling, making it easy to integrate into a game loop.
 
