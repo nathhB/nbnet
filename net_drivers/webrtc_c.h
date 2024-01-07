@@ -50,9 +50,12 @@ typedef struct NBN_WebRTC_C_Config
     const char *cert_path;
     const char *key_path;
     const char *passphrase;
+    const char **ice_servers;
+    unsigned int ice_servers_count;
 } NBN_WebRTC_C_Config;
 
 void NBN_WebRTC_C_Register(NBN_WebRTC_C_Config config);
+void NBN_WebRTC_C_Unregister(void);
 
 #ifdef NBNET_IMPL
 
@@ -309,17 +312,6 @@ static void NBN_WebRTC_C_StringReplaceAll(char *res, const char *str, const char
 
 #pragma region Signaling
 
-// TODO: move ice servers in driver config
-#define DEFAULT_ICE_SERVER "stun:stun01.sipphone.com"
-
-#ifndef ICE_SERVERS
-#define ICE_SERVERS DEFAULT_ICE_SERVER
-#endif
-
-static const char *ice_servers[] = {
-   DEFAULT_ICE_SERVER
-};
-
 static char *NBN_WebRTC_C_ParseSignalingMessage(const char *msg, size_t msg_len)
 {
     // start by making sure this is an offer
@@ -436,8 +428,8 @@ static void NBN_WebRTC_C_OnWsOpen(int ws, void *user_ptr)
     NBN_LogDebug("WS %d is open", ws);
 
     int peer_id = rtcCreatePeerConnection(&(rtcConfiguration){
-            .iceServers = ice_servers,
-            .iceServersCount = 1,
+            .iceServers = nbn_wrtc_c_cfg.ice_servers,
+            .iceServersCount = nbn_wrtc_c_cfg.ice_servers_count,
             .disableAutoNegotiation = false
             });
 
@@ -689,6 +681,30 @@ static int NBN_WebRTC_C_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *con
 
 void NBN_WebRTC_C_Register(NBN_WebRTC_C_Config config)
 {
+    const char **ice_servers = NBN_Allocator(sizeof(char *) * config.ice_servers_count);
+
+    for (unsigned int i = 0; i < config.ice_servers_count; i++)
+    {
+        // strdup equivalent using NBN_Allocator, make sure this get freed
+        const char *str = config.ice_servers[i];
+        size_t len = strlen(str);
+        char *dup_str = NBN_Allocator(len + 1);
+
+        memcpy(dup_str, str, len + 1);
+        ice_servers[i] = dup_str;
+    }
+
+    nbn_wrtc_c_cfg.ice_servers = ice_servers;
+    nbn_wrtc_c_cfg.ice_servers_count = config.ice_servers_count;
+    nbn_wrtc_c_cfg.enable_tls = config.enable_tls;
+
+    if (config.enable_tls)
+    {
+        nbn_wrtc_c_cfg.cert_path = config.cert_path;
+        nbn_wrtc_c_cfg.key_path = config.key_path;
+        nbn_wrtc_c_cfg.passphrase = config.passphrase;
+    }
+
     NBN_DriverImplementation driver_impl = {
         // Client implementation
         NULL,
@@ -704,13 +720,21 @@ void NBN_WebRTC_C_Register(NBN_WebRTC_C_Config config)
         NBN_WebRTC_C_ServRemoveClientConnection
     };
 
-    nbn_wrtc_c_cfg = config;
-
     NBN_Driver_Register(
-        NBN_WEBRTC_C_DRIVER_ID,
-        NBN_WEBRTC_C_DRIVER_NAME,
-        driver_impl
-    );
+            NBN_WEBRTC_C_DRIVER_ID,
+            NBN_WEBRTC_C_DRIVER_NAME,
+            driver_impl
+            );
+}
+
+void NBN_WebRTC_C_Unregister(void)
+{
+    for (unsigned int i = 0; i < nbn_wrtc_c_cfg.ice_servers_count; i++)
+    {
+        NBN_Deallocator((void *)nbn_wrtc_c_cfg.ice_servers[i]);
+    }
+
+    NBN_Deallocator(nbn_wrtc_c_cfg.ice_servers);
 }
 
 #endif // NBNET_IMPL
