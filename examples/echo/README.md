@@ -45,7 +45,7 @@ and to run the client:
 You can also compile using the native WebRTC driver:
 
 ```
-cmake -DWEBRTC_NATIVE=ON -DLIBDATACHANNEL_LIBRARY_PATH=<PATH TO LIBDATACHANNEL LIBRARY> -DLIBDATACHANNEL_INCLUDE_PATH=<PATH TO LIBDATACHANNEL HEADERS> .
+cmake -DWEBRTC_NATIVE_SERVER=ON -DLIBDATACHANNEL_LIBRARY_PATH=<PATH TO LIBDATACHANNEL LIBRARY> -DLIBDATACHANNEL_INCLUDE_PATH=<PATH TO LIBDATACHANNEL HEADERS> .
 make
 ```
 
@@ -54,3 +54,5 @@ To run the server simply do:
 `./echo_server`
 
 You should then be able to connect with both UDP and node clients.
+
+Use `-DWEBRTC_NATIVE_CLIENT=ON` if you want to use the WebRTC native driver on the client instead of UDP.
