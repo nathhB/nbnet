@@ -285,6 +285,8 @@ int main(int argc, char *argv[])
     NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false}); // Register the WebRTC driver
 #else
 
+#ifdef WEBRTC_NATIVE
+
     if (options.webrtc)
     {
         // Register native WebRTC driver
@@ -303,6 +305,13 @@ int main(int argc, char *argv[])
     {
         NBN_UDP_Register();
     }
+
+#else
+
+    NBN_UDP_Register();
+
+#endif // WEBRTC_NATIVE
+
 #endif // __EMSCRIPTEN__ 
 
     if (NBN_GameClient_Start(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT) < 0)
@@ -377,10 +386,14 @@ int main(int argc, char *argv[])
 
     Soak_LogInfo("No memory leak detected! Cool... cool cool cool");
 
+#ifdef WEBRTC_NATIVE
+
     if (options.webrtc)
     {
         NBN_WebRTC_C_Unregister();
     }
+
+#endif // WEBRTC_NATIVE
 
 #ifdef __EMSCRIPTEN__
     emscripten_force_exit(ret);
