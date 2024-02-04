@@ -17,6 +17,7 @@ run_client () {
         # WASM WebRTC client
         $NODE_CMD build_web/client.js --message_count=$MESSAGE_COUNT --channel_count=$CHANNEL_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION --ping=$PING --jitter=$JITTER &> soak_cli_out
     elif [ $node_client -eq 2 ]
+    then
         # native WebRTC client
         ./build/client --webrtc --message_count=$MESSAGE_COUNT --channel_count=$CHANNEL_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION --ping=$PING --jitter=$JITTER &> soak_cli_out
     else
