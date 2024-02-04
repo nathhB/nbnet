@@ -10,12 +10,17 @@ NODE_CMD="$EMSDK_NODE --experimental-wasm-threads"
 
 run_client () {
     node_client=$1
-    echo "Running soak client (run in node: $node_client)..."
+    echo "Running soak client (run in mode: $node_client)..."
 
     if [ $node_client -eq 1 ]
     then
+        # WASM WebRTC client
         $NODE_CMD build_web/client.js --message_count=$MESSAGE_COUNT --channel_count=$CHANNEL_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION --ping=$PING --jitter=$JITTER &> soak_cli_out
+    elif [ $node_client -eq 2 ]
+        # native WebRTC client
+        ./build/client --webrtc --message_count=$MESSAGE_COUNT --channel_count=$CHANNEL_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION --ping=$PING --jitter=$JITTER &> soak_cli_out
     else
+        # UDP client
         ./build/client --message_count=$MESSAGE_COUNT --channel_count=$CHANNEL_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION --ping=$PING --jitter=$JITTER &> soak_cli_out
     fi
 
@@ -82,9 +87,9 @@ then
 else
     if [ -n "$WEBRTC_NATIVE" ]
     then
-        # run both UDP and webrtc clients on the same server
+        # run a UDP client, a webrtc WASM client (emscripten) and a native webrtc client (all connecting to the same server)
 
-        if run_client 0 && run_client 1; then
+        if run_client 0 && run_client 1 && run_client 2; then
             exit_soak 0
         else
             exit_soak 1

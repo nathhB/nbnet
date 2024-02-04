@@ -45,8 +45,15 @@ static unsigned int destroyed_incoming_soak_message_count = 0;
 static void Usage(void)
 {
 #ifdef SOAK_CLIENT
-        printf("Usage: client --message_count=<value> --channel_count=<value> [--packet_loss=<value>] \
+
+#ifdef WEBRTC_NATIVE
+    printf("Usage: client --message_count=<value> --channel_count=<value> [--packet_loss=<value>] \
+[--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>] [--webrtc]\n");
+#else
+    printf("Usage: client --message_count=<value> --channel_count=<value> [--packet_loss=<value>] \
 [--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
+#endif // WEBRTC_NATIVE
+
 #endif // SOAK_CLIENT
 
 #ifdef SOAK_SERVER
@@ -59,13 +66,10 @@ int Soak_Init(int argc, char *argv[])
 {
     srand(SOAK_SEED);
 
-    if (Soak_ReadCommandLine(argc, argv) < 0)
-        return -1;
-
     SoakOptions options = Soak_GetOptions();
 
     Soak_LogInfo("Soak test initialized (Packet loss: %f, Packet duplication: %f, Ping: %f, Jitter: %f)",
-        options.packet_loss, options.packet_duplication, options.ping, options.jitter);
+            options.packet_loss, options.packet_duplication, options.ping, options.jitter);
 
 #ifdef SOAK_CLIENT 
 
@@ -114,8 +118,17 @@ int Soak_ReadCommandLine(int argc, char *argv[])
 {
     struct cag_option options[] = {
 #ifdef SOAK_CLIENT
+
         {'m', NULL, "message_count", "VALUE", "Number of messages to send"},
-#endif
+
+#ifdef WEBRTC_NATIVE
+
+        {'w', NULL, "webrtc", NULL, "Use the native WebRTC driver instead of the UDP driver"},
+
+#endif // WEBRTC_NATIVE
+
+#endif // SOAK_CLIENT
+
         {'c', NULL, "channel_count", "VALUE", "Number of channels (1-NBN_MAX_CHANNELS)"},
         {'l', NULL, "packet_loss", "VALUE", "Packet loss frenquency (0-1)"},
         {'d', NULL, "packet_duplication", "VALUE", "Packet duplication frequency (0-1)"},
@@ -140,6 +153,10 @@ int Soak_ReadCommandLine(int argc, char *argv[])
             {
                 soak_options.message_count = atoi(val);
             }
+        }
+        else if (option == 'w')
+        {
+            soak_options.webrtc = true;
         }
 #else
         if (false) {}

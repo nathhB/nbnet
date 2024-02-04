@@ -20,17 +20,7 @@ add_compile_options(-Wall -Wextra -Wpedantic)
 target_compile_definitions(client PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR SOAK_CLIENT)
 target_compile_definitions(server PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR SOAK_SERVER)
 
-option(ENCRYPTION_ENABLED OFF)
 option(WEBRTC_NATIVE OFF)
-
-if (ENCRYPTION_ENABLED)
-  message("Encryption enabled")
-
-  target_compile_definitions(client PUBLIC SOAK_ENCRYPTION)
-  target_compile_definitions(server PUBLIC SOAK_ENCRYPTION)
-endif(ENCRYPTION_ENABLED)
-
-unset(ENCRYPTION_ENABLED)
 
 # compile with C WebRTC driver
 if (WEBRTC_NATIVE)
@@ -39,32 +29,20 @@ if (WEBRTC_NATIVE)
     message(SEND_ERROR "Can't compile WebRTC native driver with emscripten")
   endif (EMSCRIPTEN)
 
-  message("Compiling with C WebRTC driver")
+  message("Compiling with WebRTC native driver")
 
-  target_compile_definitions(server PUBLIC SOAK_WEBRTC_C_DRIVER)
+  target_compile_definitions(server PUBLIC WEBRTC_NATIVE)
+  target_compile_definitions(client PUBLIC WEBRTC_NATIVE)
 
   target_link_libraries(server ${LIBDATACHANNEL_LIBRARY_PATH} m)
+  target_link_libraries(client ${LIBDATACHANNEL_LIBRARY_PATH} m)
 
   target_include_directories(server PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
+  target_include_directories(client PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
 
-  if (USE_HTTPS)
-    target_compile_definitions(server PUBLIC NBN_HTTPS_SERVER_NAME="localhost")
-    target_compile_definitions(server PUBLIC NBN_HTTPS_KEY_PEM="localhost.key")
-    target_compile_definitions(server PUBLIC NBN_HTTPS_CERT_PEM="localhost.crt")
-  endif (USE_HTTPS)
 endif (WEBRTC_NATIVE)
 
 unset(WEBRTC_NATIVE)
-
-# Use HTTPS (for WebRTC drivers)
-if (USE_HTTPS)
-  message("Compiling with HTTPS enabled")
-
-  target_compile_definitions(client PUBLIC NBN_USE_HTTPS)
-  target_compile_definitions(server PUBLIC NBN_USE_HTTPS) 
-endif (USE_HTTPS)
-
-unset(USE_HTTPS)
 
 if(WIN32)
   target_link_libraries(client wsock32 ws2_32)

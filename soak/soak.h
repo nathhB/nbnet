@@ -69,6 +69,7 @@ typedef struct
     float packet_duplication; /* 0 - 1 */
     float ping; /* in seconds */
     float jitter; /* in seconds */
+    bool webrtc; /* use native WebRTC driver */
 } SoakOptions;
 
 typedef struct
