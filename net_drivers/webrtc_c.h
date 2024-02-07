@@ -37,6 +37,7 @@ freely, subject to the following restrictions:
         2. Call NBN_WebRTC_C_Register in both your client and server code before calling NBN_GameClient_Start or NBN_GameServer_Start
 */
 
+#include <time.h>
 #include <string.h>
 #include <rtc/rtc.h>
 #include "json.h"
@@ -736,7 +737,6 @@ static int NBN_WebRTC_C_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *con
 
 typedef struct NBN_WebRTC_C_Client
 {
-    int ws;
     uint32_t protocol_id;
     bool is_encrypyed;
     bool is_connected;
@@ -744,7 +744,7 @@ typedef struct NBN_WebRTC_C_Client
     char packet_buffer[NBN_PACKET_MAX_SIZE];
 } NBN_WebRTC_C_Client;
 
-static NBN_WebRTC_C_Client nbn_wrtc_c_cli = (NBN_WebRTC_C_Client){-1, 0, false, false, NULL, {0}};
+static NBN_WebRTC_C_Client nbn_wrtc_c_cli = (NBN_WebRTC_C_Client){0, false, false, NULL, {0}};
 
 static void NBN_WebRTC_C_Cli_OnLocalDescription(int pc, const char *sdp, const char *type, void *user_ptr)
 {
@@ -776,7 +776,7 @@ static void NBN_WebRTC_C_Cli_OnWsOpen(int ws, void *user_ptr)
 {
     NBN_LogDebug("WS %d is open, creating peer...", ws);
 
-    NBN_WebRTC_C_Peer *peer = NBN_WebRTC_C_CreatePeer(nbn_wrtc_c_cli.ws, NBN_WebRTC_C_Cli_OnLocalDescription, NBN_WebRTC_C_Cli_OnPeerStateChanged);
+    NBN_WebRTC_C_Peer *peer = NBN_WebRTC_C_CreatePeer(ws, NBN_WebRTC_C_Cli_OnLocalDescription, NBN_WebRTC_C_Cli_OnPeerStateChanged);
 
     if (!peer)
     {
@@ -808,6 +808,39 @@ static void NBN_WebRTC_C_Cli_OnWsMessage(int ws, const char *msg, int size, void
     NBN_WebRTC_C_ProcessSignalingMessage((NBN_WebRTC_C_Peer *)user_ptr, ws, msg, size, "answer");
 }
 
+static int AttemptConnection(void)
+{
+    struct timespec rqtp;
+
+    rqtp.tv_sec = 0;
+    rqtp.tv_nsec = 1e9 / 3;
+
+    int retries = 9; // approximatively 3 seconds to get connected
+
+    while (true)
+    {
+        if (nanosleep(&rqtp, NULL) < 0)
+        {
+            NBN_LogError("nanosleep failed");
+            return NBN_ERROR;
+        }
+
+        if (--retries <= 0 || nbn_wrtc_c_cli.is_connected)
+        {
+            break;
+        }
+    }
+
+    if (!nbn_wrtc_c_cli.is_connected)
+    {
+        NBN_LogError("Failed to connect");
+
+        return NBN_ERROR;
+    }
+
+    return 0;
+}
+
 static int NBN_WebRTC_C_CliStart(uint32_t protocol_id, const char *host, uint16_t port, bool enable_encryption)
 {
     rtcInitLogger(RTC_LOG_VERBOSE, NBN_WebRTC_C_Log);
@@ -817,7 +850,9 @@ static int NBN_WebRTC_C_CliStart(uint32_t protocol_id, const char *host, uint16_
 
     snprintf(ws_addr, sizeof(ws_addr), "ws://%s:%d", host, port);
 
-    if ((nbn_wrtc_c_cli.ws = rtcCreateWebSocket(ws_addr)) < 0)
+    int cli_ws;
+
+    if ((cli_ws = rtcCreateWebSocket(ws_addr)) < 0)
     {
         NBN_LogError("Failed to create websocket");
         return NBN_ERROR;
@@ -826,26 +861,26 @@ static int NBN_WebRTC_C_CliStart(uint32_t protocol_id, const char *host, uint16_
     nbn_wrtc_c_cli.protocol_id = protocol_id;
     nbn_wrtc_c_cli.is_encrypyed = enable_encryption;
 
-    NBN_LogDebug("Successfully created client WS: %d", nbn_wrtc_c_cli.ws);
+    NBN_LogDebug("Successfully created client WS: %d", cli_ws);
 
-    rtcSetOpenCallback(nbn_wrtc_c_cli.ws, NBN_WebRTC_C_Cli_OnWsOpen);
-    rtcSetClosedCallback(nbn_wrtc_c_cli.ws, NBN_WebRTC_C_Cli_OnWsClosed);
-    rtcSetErrorCallback(nbn_wrtc_c_cli.ws, NBN_WebRTC_C_OnWsError);
-    rtcSetMessageCallback(nbn_wrtc_c_cli.ws, NBN_WebRTC_C_Cli_OnWsMessage);
+    rtcSetOpenCallback(cli_ws, NBN_WebRTC_C_Cli_OnWsOpen);
+    rtcSetClosedCallback(cli_ws, NBN_WebRTC_C_Cli_OnWsClosed);
+    rtcSetErrorCallback(cli_ws, NBN_WebRTC_C_OnWsError);
+    rtcSetMessageCallback(cli_ws, NBN_WebRTC_C_Cli_OnWsMessage);
 
-    // TODO: handle errors, leave the loop and return NBN_ERROR
-    while (!nbn_wrtc_c_cli.is_connected) {}
-
-    return 0;
+    return AttemptConnection();
 }
 
 static void NBN_WebRTC_C_CliStop(void)
 {
-    if (nbn_wrtc_c_cli.ws >= 0 && rtcIsOpen(nbn_wrtc_c_cli.ws))
+    NBN_WebRTC_C_Peer *peer = nbn_wrtc_c_cli.peer;
+
+    if (peer)
     {
-        rtcDeleteWebSocket(nbn_wrtc_c_cli.ws);
+        NBN_WebRTC_C_DestroyPeer(peer);
     }
 
+    nbn_wrtc_c_cli.is_connected = false;
     rtcCleanup();
 }
 
@@ -926,11 +961,7 @@ void NBN_WebRTC_C_Register(NBN_WebRTC_C_Config config)
         NBN_WebRTC_C_ServRemoveClientConnection
     };
 
-    NBN_Driver_Register(
-            NBN_WEBRTC_C_DRIVER_ID,
-            NBN_WEBRTC_C_DRIVER_NAME,
-            driver_impl
-            );
+    NBN_Driver_Register(NBN_WEBRTC_C_DRIVER_ID, NBN_WEBRTC_C_DRIVER_NAME, driver_impl);
 }
 
 void NBN_WebRTC_C_Unregister(void)
