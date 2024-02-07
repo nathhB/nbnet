@@ -53,6 +53,7 @@ typedef struct NBN_WebRTC_C_Config
     const char *passphrase;
     const char **ice_servers;
     unsigned int ice_servers_count;
+    rtcLogLevel log_level;
 } NBN_WebRTC_C_Config;
 
 static NBN_WebRTC_C_Config nbn_wrtc_c_cfg;
@@ -645,7 +646,7 @@ static int NBN_WebRTC_C_ServStart(uint32_t protocol_id, uint16_t port, bool enab
     nbn_wrtc_c_serv.protocol_id = protocol_id;
     nbn_wrtc_c_serv.wsserver = -1;
 
-    rtcInitLogger(RTC_LOG_VERBOSE, NBN_WebRTC_C_Log);
+    rtcInitLogger(nbn_wrtc_c_cfg.log_level, NBN_WebRTC_C_Log);
     rtcPreload();
 
     rtcWsServerConfiguration cfg = {
@@ -843,7 +844,7 @@ static int AttemptConnection(void)
 
 static int NBN_WebRTC_C_CliStart(uint32_t protocol_id, const char *host, uint16_t port, bool enable_encryption)
 {
-    rtcInitLogger(RTC_LOG_VERBOSE, NBN_WebRTC_C_Log);
+    rtcInitLogger(nbn_wrtc_c_cfg.log_level, NBN_WebRTC_C_Log);
     rtcPreload();
 
     char ws_addr[256] = {0};

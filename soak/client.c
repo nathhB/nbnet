@@ -297,7 +297,8 @@ int main(int argc, char *argv[])
             .enable_tls = false,
             .cert_path = NULL,
             .key_path = NULL,
-            .passphrase = NULL};
+            .passphrase = NULL,
+            .log_level = RTC_LOG_VERBOSE};
 
         NBN_WebRTC_C_Register(cfg);
     }
