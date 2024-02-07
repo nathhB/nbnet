@@ -26,12 +26,18 @@
 #include "soak.h"
 
 #ifdef __EMSCRIPTEN__
-/* Use WebRTC driver */
+
 #include "../net_drivers/webrtc.h"
+
 #else
-/* Use UDP driver */
+
 #include "../net_drivers/udp.h"
+
+#ifdef WEBRTC_NATIVE
+#include "../net_drivers/webrtc_c.h"
 #endif
+
+#endif // __EMSCRIPTEN__
 
 typedef struct
 {
@@ -270,10 +276,43 @@ int main(int argc, char *argv[])
 {
     Soak_SetLogLevel(LOG_TRACE);
 
+    if (Soak_ReadCommandLine(argc, argv) < 0)
+        return -1;
+
+    SoakOptions options = Soak_GetOptions();
+
 #ifdef __EMSCRIPTEN__
-    NBN_WebRTC_Register(); // Register the WebRTC driver
+    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false}); // Register the WebRTC driver
 #else
-    NBN_UDP_Register(); // Register the UDP driver
+
+#ifdef WEBRTC_NATIVE
+
+    if (options.webrtc)
+    {
+        // Register native WebRTC driver
+        const char *ice_servers[] = { "stun:stun01.sipphone.com" };
+        NBN_WebRTC_C_Config cfg = {
+            .ice_servers = ice_servers,
+            .ice_servers_count = 1,
+            .enable_tls = false,
+            .cert_path = NULL,
+            .key_path = NULL,
+            .passphrase = NULL,
+            .log_level = RTC_LOG_VERBOSE};
+
+        NBN_WebRTC_C_Register(cfg);
+    }
+    else
+    {
+        NBN_UDP_Register();
+    }
+
+#else
+
+    NBN_UDP_Register();
+
+#endif // WEBRTC_NATIVE
+
 #endif // __EMSCRIPTEN__ 
 
     if (NBN_GameClient_Start(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT) < 0)
@@ -293,7 +332,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    SoakOptions options = Soak_GetOptions();
     unsigned int channel_count = options.channel_count;
     unsigned int message_count = options.message_count;
     unsigned int message_per_channel = message_count / channel_count;
@@ -348,6 +386,15 @@ int main(int argc, char *argv[])
     }
 
     Soak_LogInfo("No memory leak detected! Cool... cool cool cool");
+
+#ifdef WEBRTC_NATIVE
+
+    if (options.webrtc)
+    {
+        NBN_WebRTC_C_Unregister();
+    }
+
+#endif // WEBRTC_NATIVE
 
 #ifdef __EMSCRIPTEN__
     emscripten_force_exit(ret);

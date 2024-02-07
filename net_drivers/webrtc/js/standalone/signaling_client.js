@@ -12,11 +12,11 @@ SignalingClient.prototype.connect = function(host, port) {
         const uri = this.options['https'] ? `wss://${host}:${port}` : `ws://${host}:${port}`
 
         this.logger.info(this.options['https'])
-        this.logger.info(`Connecting to ${uri} (protocol: %s)...`, this.protocol)
+        this.logger.info(`Connecting to ${uri}...`)
 
         const WebSocket = require('websocket').w3cwebsocket
 
-        this.ws = new WebSocket(uri, this.protocol)
+        this.ws = new WebSocket(uri)
 
         this.ws.onclose = (ev) => {
             if (this.connected) {

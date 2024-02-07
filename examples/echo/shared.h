@@ -54,10 +54,20 @@ void Log(int, const char *, ...);
 #include "../../nbnet.h"
 
 #ifdef __EMSCRIPTEN__
+
 #include "../../net_drivers/webrtc.h"
+
 #else
+
 #include "../../net_drivers/udp.h"
-#endif
+
+#ifdef NBN_WEBRTC_NATIVE
+
+#include "../../net_drivers/webrtc_c.h"
+
+#endif // NBN_WEBRTC_NATIVE
+
+#endif // __EMSCRIPTEN__
 
 typedef struct
 {

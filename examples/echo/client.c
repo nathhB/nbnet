@@ -120,7 +120,34 @@ int main(int argc, char *argv[])
     }
 
 #ifdef __EMSCRIPTEN__
-    NBN_WebRTC_Register(); // Register the WebRTC driver
+
+    // Register the WebRTC driver
+#ifdef NBN_TLS
+    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = true});
+#else
+    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false});
+#endif // NBN_TLS
+
+#elif defined(NBN_WEBRTC_NATIVE)
+
+#ifdef NBN_TLS
+    bool enable_tls = true;
+#else
+    bool enable_tls = false;
+#endif // NBN_TLS
+
+    const char *ice_servers[] = { "stun:stun01.sipphone.com" };
+    NBN_WebRTC_C_Config cfg = {
+        .ice_servers = ice_servers,
+        .ice_servers_count = 1,
+        .enable_tls = enable_tls,
+        .cert_path = NULL,
+        .key_path = NULL,
+        .passphrase = NULL,
+        .log_level = RTC_LOG_VERBOSE};
+
+    NBN_WebRTC_C_Register(cfg);
+
 #else
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__
@@ -222,6 +249,10 @@ int main(int argc, char *argv[])
 
     // Stop and deinitialize the client
     NBN_GameClient_Stop();
+
+#ifdef NBN_WEBRTC_NATIVE
+    NBN_WebRTC_C_Unregister();
+#endif
 
 #ifdef __EMSCRIPTEN__
     emscripten_force_exit(0);

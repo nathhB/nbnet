@@ -4,36 +4,25 @@
 
 #include "CuTest.h"
 
-static int StringReplaceAll(char *res, unsigned int len, const char *str, const char *a, const char *b)
+static void StringReplaceAll(char *res, const char *str, const char *a, const char *b)
 {
     char *substr = strstr(str, a);
-    char *res2 = malloc(len);
+    size_t len_a = strlen(a);
+    size_t len_b = strlen(b);
 
     if (substr)
     {
-        size_t len_a = strlen(a);
-        size_t len_b = strlen(b);
-
-        if (strlen(str) + (len_b - len_a) >= len)
-        {
-            return -1;
-        }
-
         int pos = substr - str;
 
-        strncpy(res2, str, pos);
-        strncpy(res2 + pos, b, len_b);
-        strncpy(res2 + pos + len_b, str + pos + len_a, len - (pos + len_a) + 1);
-        memcpy(res, res2, len);
-        StringReplaceAll(res, len, res2, a, b);
-        free(res2);
+        strncpy(res, str, pos);
+        strncpy(res + pos, b, len_b);
+
+        StringReplaceAll(res + pos + len_b, str + pos + len_a, a, b);
     }
     else
     {
-        memcpy(res, str, len);
+        strncpy(res, str, strlen(str) + 1);
     }
-
-    return 0;
 }
 
 void Test_StringReplaceAll(CuTest *tc)
@@ -45,12 +34,12 @@ void Test_StringReplaceAll(CuTest *tc)
     char res2[128] = {0};
     char res3[16] = {0};
 
-    CuAssertIntEquals(tc, 0, StringReplaceAll(res, sizeof(res), str, "foo", "hello"));
+    StringReplaceAll(res, str, "foo", "hello");
     CuAssertStrEquals(tc, "hello bar plop hello plap test hello", res);
-    CuAssertIntEquals(tc, 0, StringReplaceAll(res2, sizeof(res2), str2, "\n", "\\n"));
+    StringReplaceAll(res2, str2, "\n", "\\n");
     CuAssertStrEquals(tc, "foo bar\\nplop\\n\\nplap", res2);
-    CuAssertIntEquals(tc, 0, StringReplaceAll(res3, sizeof(res3), str3, "bar", "aaaaa"));
-    CuAssertIntEquals(tc, -1, StringReplaceAll(res3, sizeof(res3), str3, "bar", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+    StringReplaceAll(res3, str3, "test", "aaaaa");
+    CuAssertStrEquals(tc, "foo bar", res3);
 }
 
 int main(int argc, char *argv[])

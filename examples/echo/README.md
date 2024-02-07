@@ -3,7 +3,9 @@
 This is a very basic echo client server example, the server accepts a single client at a time and echoes all
 messages it receives.
 
-Use the CMake script to compile the example:
+## UDP
+
+Use the CMake script to build the example:
 
 ```
 cmake .
@@ -20,12 +22,12 @@ and to run the client:
 
 The client will run indefinitely and send the provided string to the server every tick (30 times per second).
 
-## WebRTC (JS driver)
+## WebRTC
 
-Use the CMake script to compile the example:
+To target WASM:
 
 ```
-EMSCRIPTEN=1 cmake .
+emcmake cmake .
 make
 npm install
 ```
@@ -39,3 +41,18 @@ To run the server simply do:
 and to run the client:
 
 `npm run client "some message"`
+
+You can also compile using the native WebRTC driver:
+
+```
+cmake -DWEBRTC_NATIVE_SERVER=ON -DLIBDATACHANNEL_LIBRARY_PATH=<PATH TO LIBDATACHANNEL LIBRARY> -DLIBDATACHANNEL_INCLUDE_PATH=<PATH TO LIBDATACHANNEL HEADERS> .
+make
+```
+
+To run the server simply do:
+
+`./echo_server`
+
+You should then be able to connect with both UDP and node clients.
+
+Use `-DWEBRTC_NATIVE_CLIENT=ON` if you want to use the WebRTC native driver on the client instead of UDP.

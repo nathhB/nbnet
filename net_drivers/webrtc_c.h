@@ -21,16 +21,15 @@ freely, subject to the following restrictions:
 */
 
 /*
-    --- NBNET C (NATIVE) WEBRTC DRIVER ---
+    --- NBNET NATIVE WEBRTC DRIVER ---
 
     WebRTC driver for the nbnet library, using a single unreliable data channel. As opposed to the other emscripten/JS
     based WebRTC driver (webrtc.h), this one is fully written in C99 and can be compiled as a native application.
 
     Dependencies:
 
-        1. facil.io (https://github.com/boazsegev/facil.io)
-        2. libdatachannel (https://github.com/paullouisageneau/libdatachannel)
-        3. json.h (https://github.com/sheredom/json.h)
+        1. libdatachannel (https://github.com/paullouisageneau/libdatachannel)
+        2. json.h (https://github.com/sheredom/json.h)
     
     How to use:
 
@@ -38,16 +37,29 @@ freely, subject to the following restrictions:
         2. Call NBN_WebRTC_C_Register in both your client and server code before calling NBN_GameClient_Start or NBN_GameServer_Start
 */
 
-#include <http.h>
-#include <fio_tls.h>
+#include <time.h>
+#include <string.h>
 #include <rtc/rtc.h>
-#include <pthread.h>
 #include "json.h"
 
 #define NBN_WEBRTC_C_DRIVER_ID 2
 #define NBN_WEBRTC_C_DRIVER_NAME "WebRTC_C"
 
-void NBN_WebRTC_C_Register(void);
+typedef struct NBN_WebRTC_C_Config
+{
+    bool enable_tls;
+    const char *cert_path;
+    const char *key_path;
+    const char *passphrase;
+    const char **ice_servers;
+    unsigned int ice_servers_count;
+    rtcLogLevel log_level;
+} NBN_WebRTC_C_Config;
+
+static NBN_WebRTC_C_Config nbn_wrtc_c_cfg;
+
+void NBN_WebRTC_C_Register(NBN_WebRTC_C_Config config);
+void NBN_WebRTC_C_Unregister(void);
 
 #ifdef NBNET_IMPL
 
@@ -55,7 +67,7 @@ typedef struct
 {
     int id;
     int channel_id;
-    ws_s *ws;
+    int ws;
     NBN_Connection *conn;
 } NBN_WebRTC_C_Peer;
 
@@ -108,7 +120,9 @@ static NBN_WebRTC_C_HTable *NBN_WebRTC_C_HTable_CreateWithCapacity(unsigned int 
     htable->load_factor = 0;
 
     for (unsigned int i = 0; i < htable->capacity; i++)
+    {
         htable->internal_array[i] = NULL;
+    }
 
     return htable;
 }
@@ -276,358 +290,402 @@ static void NBN_WebRTC_C_HTable_Grow(NBN_WebRTC_C_HTable *htable)
 
 #pragma region String utils
 
-static int NBN_WebRTC_C_StringReplaceAll(char *res, unsigned int len, const char *str, const char *a, const char *b)
+// IMPORTANT: res needs to be pre allocated and big enough to old the resulting string
+static void NBN_WebRTC_C_StringReplaceAll(char *res, const char *str, const char *a, const char *b)
 {
     char *substr = strstr(str, a);
-    char *res2 = malloc(len);
+    size_t len_a = strlen(a);
+    size_t len_b = strlen(b);
 
     if (substr)
     {
-        size_t len_a = strlen(a);
-        size_t len_b = strlen(b);
-
-        if (strlen(str) + (len_b - len_a) >= len)
-        {
-            return -1;
-        }
-
         int pos = substr - str;
 
-        strncpy(res2, str, pos);
-        strncpy(res2 + pos, b, len_b);
-        strncpy(res2 + pos + len_b, str + pos + len_a, len - (pos + len_a) + 1);
-        memcpy(res, res2, len);
-        NBN_WebRTC_C_StringReplaceAll(res, len, res2, a, b);
-        free(res2);
+        strncpy(res, str, pos);
+        strncpy(res + pos, b, len_b);
+
+        NBN_WebRTC_C_StringReplaceAll(res + pos + len_b, str + pos + len_a, a, b);
     }
     else
     {
-        memcpy(res, str, len);
+        strncpy(res, str, strlen(str) + 1);
     }
-
-    return 0;
 }
 
 #pragma endregion /* String utils */
 
-#pragma region Signaling
+#pragma region WebRTC common
 
-typedef enum
+static char *NBN_WebRTC_C_ParseSignalingMessage(const char *msg, size_t msg_len, const char *type)
 {
-    NBN_WEBRTC_C_UNDEFINED,
-    NBN_WEBRTC_C_OFFER
-} NBN_WebRTC_C_SignalingPayloadType;
+    char *sdp = NULL;
+    struct json_value_s* root = json_parse(msg, msg_len); // this has to be freed
 
-typedef struct
-{
-    NBN_WebRTC_C_SignalingPayloadType type;
-    const char *sdp;
-    struct json_value_s *json;
-} NBN_WebRTC_C_SignalingPayload;
-
-#define DEFAULT_ICE_SERVER "stun:stun01.sipphone.com"
-
-#ifndef ICE_SERVERS
-#define ICE_SERVERS DEFAULT_ICE_SERVER
-#endif
-
-static const char *ice_servers[] = {
-   DEFAULT_ICE_SERVER
-};
-
-static bool NBN_WebRTC_C_ParseSignalingMessage(const char *msg, size_t msg_len, NBN_WebRTC_C_SignalingPayload *payload)
-{
-    struct json_value_s* root = json_parse(msg, msg_len);
-    
     if (root->type != json_type_object)
     {
-        free(root);
-        return false;
+        NBN_LogDebug("Received an invalid signaling message: %s", msg);
+        goto leave_free_root;
     }
 
     struct json_object_s* object = (struct json_object_s*)root->payload;
     struct json_object_element_s *curr = object->start;
 
-    payload->json = root;
-    payload->type = NBN_WEBRTC_C_UNDEFINED;
-    payload->sdp = NULL;
-
     while (curr != NULL)
     {
         if (strncmp(curr->name->string, "type", 4) == 0)
         {
-            payload->type = NBN_WEBRTC_C_OFFER;
+            struct json_string_s *str = json_value_as_string(curr->value);
+
+            if (strncmp(str->string, type, strlen(type)))
+            {
+                // unexpected type
+                NBN_LogDebug("Received a signaling message with an unexpected type: %s (expected: %s)", str->string, type);
+                sdp = NULL;
+                goto leave_free_root;
+            }
         }
-        else if (strncmp(curr->name->string, "sdp", 4) == 0)
+        else if (strncmp(curr->name->string, "sdp", 3) == 0)
         {
             struct json_string_s *str = json_value_as_string(curr->value);
 
             if (str)
             {
-                payload->sdp = str->string;
+                // strdup equivalent using NBN_Allocator, make sure this get freed
+                size_t len = strlen(str->string);
+
+                sdp = NBN_Allocator(len + 1);
+                memcpy(sdp, str->string, len + 1);
             }
         }
 
         curr = curr->next;
     }
 
-    if (payload->type == NBN_WEBRTC_C_UNDEFINED)
-    {
-        free(root);
-        return false;
-    }
+leave_free_root:
+    free(root);
 
-    return true;
+    return sdp;
 }
 
 static char *NBN_WebRTC_C_EscapeSDP(const char *sdp)
 {
-    unsigned int len = strlen(sdp) * 2;
-    char *escaped_sdp = malloc(len);
+    size_t len = strlen(sdp) * 2; // TODO: kinda lame way of making sure it's going to be big enough, find a better way
+    char *escaped_sdp = NBN_Allocator(len);
 
-    if (NBN_WebRTC_C_StringReplaceAll(escaped_sdp, len, sdp, "\r\n", "\\r\\n") < 0)
-    {
-        free(escaped_sdp);
-        return NULL;
-    }
+    NBN_WebRTC_C_StringReplaceAll(escaped_sdp, sdp, "\r\n", "\\r\\n");
 
     return escaped_sdp;
 }
 
-static void NBN_WebRTC_C_OnLocalDescriptionCallback(int pc, const char *sdp, const char *type, void *user_ptr)
+static void NBN_WebRTC_C_Log(rtcLogLevel level, const char *msg)
 {
-    if (strncmp(type, "answer", 5) != 0) return;
+    switch (level)
+    {
+        case RTC_LOG_FATAL:
+        case RTC_LOG_ERROR:
+            NBN_LogError(msg);
+            break;
 
-    ws_s *ws = user_ptr;
-    fio_str_info_s msg;
-    char data[1024];
-    char *escaped_sdp = NBN_WebRTC_C_EscapeSDP(sdp);
+        case RTC_LOG_WARNING:
+            NBN_LogWarning(msg);
+            break;
 
-    assert(escaped_sdp);
-    snprintf(data, sizeof(data), "{\"type\":\"answer\", \"sdp\":\"%s\"}", escaped_sdp);
-    free(escaped_sdp);
+        case RTC_LOG_INFO:
+            NBN_LogInfo(msg);
+            break;
 
-    msg.data = data;
-    msg.len = strnlen(data, sizeof(data)); 
+        case RTC_LOG_DEBUG:
+            NBN_LogDebug(msg);
+            break;
 
-    websocket_write(ws, msg, 1);
+        case RTC_LOG_VERBOSE:
+            NBN_LogTrace(msg);
+            break;
+
+        case RTC_LOG_NONE:
+            break;
+    }
 }
 
-#pragma endregion /* Signaling */
+static void NBN_WebRTC_C_OnWsError(int ws, const char *err_msg, void *user_ptr)
+{
+    (void)user_ptr;
+
+    NBN_LogError("Error on WS %d: %s", ws, err_msg);
+}
+
+static NBN_WebRTC_C_Peer *NBN_WebRTC_C_CreatePeer(
+        int ws,
+        rtcDescriptionCallbackFunc on_rtc_description_cb,
+        rtcStateChangeCallbackFunc on_state_change_cb)
+{
+    int peer_id = rtcCreatePeerConnection(&(rtcConfiguration){
+            .iceServers = nbn_wrtc_c_cfg.ice_servers,
+            .iceServersCount = nbn_wrtc_c_cfg.ice_servers_count,
+            .disableAutoNegotiation = false
+            });
+
+    if (peer_id < 0)
+    {
+        NBN_LogError("Failed to create peer: %d", peer_id);
+        return NULL;
+    }
+
+    NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer *)NBN_Allocator(sizeof(NBN_WebRTC_C_Peer));
+
+    peer->id = peer_id;
+    peer->ws = ws;
+    peer->channel_id = -1;
+
+    rtcSetUserPointer(peer_id, peer);
+    rtcSetUserPointer(ws, peer);
+
+    int ret = rtcSetLocalDescriptionCallback(peer->id, on_rtc_description_cb);
+
+    if (ret < 0)
+    {
+        NBN_LogError("Failed to register local description callback for peer %d: %d", peer->id, ret);
+        NBN_WebRTC_C_DestroyPeer(peer);
+        return NULL;
+    }
+
+    ret = rtcSetStateChangeCallback(peer_id, on_state_change_cb);
+
+    if (ret < 0)
+    {
+        NBN_LogError("Failed to register state change callback for peer %d: %d", peer_id, ret);
+        NBN_WebRTC_C_DestroyPeer(peer);
+        return NULL;
+    }
+
+    int channel_id = rtcCreateDataChannelEx(peer_id, "unreliable", &(rtcDataChannelInit){
+            .reliability = {.unordered = true, .unreliable = true, .maxPacketLifeTime = 1000, .maxRetransmits = 0},
+            .negotiated = true,
+            .manualStream = true,
+            .stream = 0
+            });
+
+    if (channel_id < 0)
+    {
+        NBN_LogError("Failed to create data channel for peer %d: %d", peer_id, channel_id);
+        NBN_WebRTC_C_DestroyPeer(peer);
+        return NULL;
+    }
+
+    peer->channel_id = channel_id;
+
+    NBN_LogDebug("Successfully created data channel for peer %d: %d", peer_id, channel_id); 
+
+    return peer;
+}
+
+static void NBN_WebRTC_C_DestroyPeer(NBN_WebRTC_C_Peer *peer)
+{
+    NBN_LogDebug("Destroying peer %d", peer->id);
+
+    if (peer->channel_id >= 0)
+    {
+        rtcDeleteDataChannel(peer->channel_id);
+    }
+
+    rtcDeletePeerConnection(peer->id);
+    rtcDelete(peer->ws);
+    NBN_Deallocator(peer);
+}
+
+static void NBN_WebRTC_C_ProcessLocalDescription(NBN_WebRTC_C_Peer *peer, const char *sdp, const char *type)
+{
+    char signaling_json[1024];
+    char *escaped_sdp = NBN_WebRTC_C_EscapeSDP(sdp);
+
+    snprintf(signaling_json, sizeof(signaling_json), "{\"type\":\"%s\", \"sdp\":\"%s\"}", type, escaped_sdp);
+    NBN_LogDebug("Send signaling message of type %s to remote connection: %s", type, signaling_json);
+
+    // pass -1 as the size (assume signaling_json to be a null-terminated string)
+    if (rtcSendMessage(peer->ws, signaling_json, -1) < 0)
+    {
+        NBN_WebRTC_C_DestroyPeer(peer);
+    }
+
+    NBN_Deallocator(escaped_sdp);
+}
+
+static void NBN_WebRTC_C_ProcessSignalingMessage(NBN_WebRTC_C_Peer *peer, int ws, const char *msg, int size, const char *type)
+{
+    // for some reason the size of the message is negative
+    // in libdatachannel documentation (https://github.com/paullouisageneau/libdatachannel/blob/master/DOC.md) there is mention of:
+    // size: if size >= 0, data is interpreted as a binary message of length size, otherwise it is interpreted as a null-terminated UTF-8 string.
+    // so I guess in this case msg is a null terminated string? I could not find more information about this so I decided to go with
+    // flipping the size to positive even though it feels weird, but it works so... ¯\_(ツ)_/¯
+
+    if (size < 0) size *= -1;
+    size -= 1;
+
+    NBN_LogDebug("Received signaling message on WS %d (size: %d): %s", ws, size, msg);
+
+    char *sdp = NBN_WebRTC_C_ParseSignalingMessage(msg, size, type);
+
+    if (!sdp)
+    {
+        NBN_LogWarning("Failed to parse signaling data for WS %d", ws);
+        return;
+    }
+
+    NBN_LogDebug("Successfully parsed signaling payload (sdp: %s)", sdp);
+
+    int ret = rtcSetRemoteDescription(peer->id, sdp, type);
+
+    if (ret < 0)
+    {
+        NBN_LogError("Failed to set remote description for peer %d (WS: %d): %d", peer->id, ws, ret);
+        rtcClose(ws);
+    }
+
+    // IMPORTANT: not sure I can free this because it's passed to rtcSetRemoteDescription
+    NBN_Deallocator(sdp);
+}
+
+#pragma endregion /* WebRTC common */
 
 #pragma region Game server
 
 typedef struct NBN_WebRTC_C_Server
 {
+    int wsserver;
     NBN_WebRTC_C_HTable *peers;
     bool is_encrypted;
-    pthread_t thread;
     uint16_t ws_port;
     uint32_t protocol_id;
-    fio_tls_s *tls;
     char packet_buffer[NBN_PACKET_MAX_SIZE];
 } NBN_WebRTC_C_Server;
 
-static NBN_WebRTC_C_Server nbn_wrtc_c_serv = {NULL, false, 0, 0, NULL, {0}};
+static NBN_WebRTC_C_Server nbn_wrtc_c_serv = {0, NULL, false, 0, 0, {0}};
 
-static void NBN_WebRTC_C_DestroyPeer(NBN_WebRTC_C_Peer *peer)
+static void NBN_WebRTC_C_Serv_OnLocalDescription(int pc, const char *sdp, const char *type, void *user_ptr)
 {
-    NBN_LogDebug("Destroy peer %d", peer->id);
-    rtcClose(peer->channel_id);
-    rtcDelete(peer->channel_id);
-    rtcClosePeerConnection(peer->id);
-    rtcDeletePeerConnection(peer->id);
-    NBN_Deallocator(peer);
+    NBN_LogDebug("Processing local description of type '%s'", type);
+
+    if (strncmp(type, "answer", strlen("answer")) != 0)
+    {
+        NBN_LogWarning("Ignoring local description of type '%s' (expected 'answer')", type);
+        return;
+    }
+
+    NBN_WebRTC_C_ProcessLocalDescription((NBN_WebRTC_C_Peer *)user_ptr, sdp, "answer");
 }
 
-static void NBN_WebRTC_C_OnWsOpen(ws_s *ws)
+static void NBN_WebRTC_C_Serv_OnPeerStateChanged(int pc, rtcState state, void *user_ptr)
 {
-    int peer_id = rtcCreatePeerConnection(&(rtcConfiguration){
-        .iceServers = ice_servers,
-        .iceServersCount = 1,
-        .disableAutoNegotiation = false
-    });
+    NBN_LogDebug("Peer %d state changed to %d", pc, state);
 
-    if (peer_id < 0)
+    if (state == RTC_CONNECTED)
     {
-        NBN_LogError("Failed to create peer: %d", peer_id);
+        NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer *)user_ptr;
+
+        NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_CONNECTED, peer->conn);
+        NBN_LogDebug("Peer %d is connected !", pc);
+    }
+}
+
+static void NBN_WebRTC_C_Serv_OnWsOpen(int ws, void *user_ptr)
+{
+    NBN_LogDebug("WS %d is open", ws);
+
+    NBN_WebRTC_C_Peer *peer = NBN_WebRTC_C_CreatePeer(ws, NBN_WebRTC_C_Serv_OnLocalDescription, NBN_WebRTC_C_Serv_OnPeerStateChanged);
+
+    if (!peer)
+    {
+        NBN_LogError("Failed to create peer");
         return;
     }
 
-    // save a pointer to the WS in peer's user data
-    rtcSetUserPointer(peer_id, ws);
-
-    int ret = rtcSetLocalDescriptionCallback(peer_id, NBN_WebRTC_C_OnLocalDescriptionCallback);
-
-    if (ret < 0)
-    {
-        NBN_LogError("Failed to register local description callback for peer %d: %d", peer_id, ret);
-        rtcClosePeerConnection(peer_id);
-        rtcDeletePeerConnection(peer_id);
-        return;
-    }
-
-    int channel_id = rtcCreateDataChannelEx(peer_id, "unreliable", &(rtcDataChannelInit){
-        .reliability = {.unordered = true, .unreliable = true, .maxPacketLifeTime = 1000, .maxRetransmits = 0},
-        .negotiated = true,
-        .manualStream = true,
-        .stream = 0
-    });
-
-    if (channel_id < 0)
-    {
-        NBN_LogError("Failed to create data channel for peer %d: %d", peer_id, channel_id);
-        rtcClosePeerConnection(peer_id);
-        rtcDeletePeerConnection(peer_id);
-        return;
-    }
-
-    NBN_LogDebug("Successfully created data channel for peer %d: %d", peer_id, channel_id);
-
-    NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer *)NBN_Allocator(sizeof(NBN_WebRTC_C_Peer));
-
-    peer->id = peer_id;
-    peer->channel_id = channel_id;
-    peer->ws = ws;
     peer->conn = NBN_GameServer_CreateClientConnection(
             NBN_WEBRTC_C_DRIVER_ID,
             peer,
             nbn_wrtc_c_serv.protocol_id,
-            peer_id,
+            peer->id,
             nbn_wrtc_c_serv.is_encrypted);
-
-    websocket_udata_set(ws, peer); // save a pointer to the peer in websocket's user data
-    NBN_WebRTC_C_HTable_Add(nbn_wrtc_c_serv.peers, peer_id, peer);
-    NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_CONNECTED, peer->conn);
+    NBN_WebRTC_C_HTable_Add(nbn_wrtc_c_serv.peers, peer->id, peer);
 }
 
-static void NBN_WebRTC_C_OnWsClose(intptr_t uuid, void *udata)
+static void NBN_WebRTC_C_Serv_OnWsClosed(int ws, void *user_ptr)
 {
-    if (uuid >= 0 && udata)
+    NBN_LogDebug("WS %d has closed", ws);
+
+    if (user_ptr)
     {
-        NBN_WebRTC_C_Peer *peer = udata;
+        NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer *)user_ptr;
 
-        NBN_LogDebug("WebSocket %d closed (peer id %d)", uuid, peer->id);
-    }
-}
+        NBN_LogDebug("Closing WebRTC peer and channel (peer: %d, channel: %d)", peer->id, peer->channel_id);
 
-static void NBN_WebRTC_C_OnWsMessage(ws_s *ws, fio_str_info_s msg, uint8_t is_text)
-{
-    NBN_WebRTC_C_SignalingPayload payload;
-
-    bool ret = NBN_WebRTC_C_ParseSignalingMessage(msg.data, msg.len, &payload);
-
-    if (!ret) return;
-
-    if (payload.type == NBN_WEBRTC_C_OFFER && payload.sdp)
-    {
-        NBN_WebRTC_C_Peer *peer = websocket_udata_get(ws);
-
-        int ret = rtcSetRemoteDescription(peer->id, payload.sdp, "offer");
-
-        if (ret < 0)
-        {
-            NBN_LogError("Failed to set remote description for peer %d: %d", peer->id, ret);
-        }
-    }
-
-    free(payload.json);
-}
-
-static void NBN_WebRTC_C_OnHttpRequest(http_s *request)
-{
-    const char *msg = "This is a websocket server\n";
-
-    http_set_header(request, HTTP_HEADER_CONTENT_TYPE, http_mimetype_find("txt", 3));
-    http_send_body(request, (void *)msg, strlen(msg));
-}
-
-static void NBN_WebRTC_C_OnHttpUpgrade(http_s *request, char *target, size_t len)
-{
-    if (len >= 9 && target[1] == 'e')
-    {
-        http_upgrade2ws(
-            request,
-            .on_message = NBN_WebRTC_C_OnWsMessage,
-            .on_open = NBN_WebRTC_C_OnWsOpen,
-            .on_close = NBN_WebRTC_C_OnWsClose);
-    }
-    else if (len >= 3 && target[0] == 's')
-    {
-        http_upgrade2sse(request, .on_open = NULL);
-    }
-    else
-    {
-        http_send_error(request, 400);
+        rtcClose(peer->channel_id);
+        rtcClosePeerConnection(peer->id);
     }
 }
 
-static void *NBN_WebRTC_C_HttpServerThread(void *data)
+static void NBN_WebRTC_C_Serv_OnWsMessage(int ws, const char *msg, int size, void *user_ptr)
 {
-    char port_str[16];
+    NBN_WebRTC_C_ProcessSignalingMessage((NBN_WebRTC_C_Peer *)user_ptr, ws, msg, size, "offer");
+}
 
-    snprintf(port_str, sizeof(port_str), "%d", nbn_wrtc_c_serv.ws_port);
+static void NBN_WebRTC_C_Serv_OnWsConnection(int wsserver, int ws, void *user_ptr)
+{
+    NBN_LogDebug("New WS connection %d (user_ptr: %p)", ws, user_ptr);
 
-    if (http_listen(port_str, NULL,
-        .tls = nbn_wrtc_c_serv.tls,
-        .on_request = NBN_WebRTC_C_OnHttpRequest,
-        .on_upgrade = NBN_WebRTC_C_OnHttpUpgrade) < 0)
-    {
-        NBN_LogError("Failed to start websocket server");
-        return NULL;
-    }
-
-    fio_start(.threads = 1);
-    return NULL;
+    rtcSetOpenCallback(ws, NBN_WebRTC_C_Serv_OnWsOpen);
+    rtcSetClosedCallback(ws, NBN_WebRTC_C_Serv_OnWsClosed);
+    rtcSetErrorCallback(ws, NBN_WebRTC_C_OnWsError);
+    rtcSetMessageCallback(ws, NBN_WebRTC_C_Serv_OnWsMessage);
 }
 
 static int NBN_WebRTC_C_ServStart(uint32_t protocol_id, uint16_t port, bool enable_encryption)
 {
-    // protocol_id is not used
-
     nbn_wrtc_c_serv.ws_port = port;
     nbn_wrtc_c_serv.peers = NBN_WebRTC_C_HTable_Create();
     nbn_wrtc_c_serv.is_encrypted = enable_encryption;
     nbn_wrtc_c_serv.protocol_id = protocol_id;
-    nbn_wrtc_c_serv.tls = NULL;
+    nbn_wrtc_c_serv.wsserver = -1;
 
-#ifdef NBN_USE_HTTPS
+    rtcInitLogger(nbn_wrtc_c_cfg.log_level, NBN_WebRTC_C_Log);
+    rtcPreload();
 
-    nbn_wrtc_c_serv.tls = fio_tls_new(
-        NBN_HTTPS_SERVER_NAME,
-        NBN_HTTPS_CERT_PEM,
-        NBN_HTTPS_KEY_PEM,
-        NULL);
+    rtcWsServerConfiguration cfg = {
+        .port = port,
+        .enableTls = nbn_wrtc_c_cfg.enable_tls,
+        .certificatePemFile = nbn_wrtc_c_cfg.cert_path,
+        .keyPemFile = nbn_wrtc_c_cfg.key_path,
+        .keyPemPass = nbn_wrtc_c_cfg.passphrase
+    };
 
-    NBN_LogDebug("Using HTTPS (server name: %s, cert: %s, key: %s)",
-        NBN_HTTPS_SERVER_NAME, NBN_HTTPS_CERT_PEM, NBN_HTTPS_KEY_PEM);
+    int wsserver = rtcCreateWebSocketServer(&cfg, NBN_WebRTC_C_Serv_OnWsConnection);
 
-#endif // NBN_USE_HTTPS
-
-    if (pthread_create(&nbn_wrtc_c_serv.thread, NULL, NBN_WebRTC_C_HttpServerThread, nbn_wrtc_c_serv.tls) < 0)
+    if (wsserver < 0)
     {
-        NBN_LogError("Failed to start HTTP server thread");
+        NBN_LogError("Failed to start WS server (code: %d)", wsserver);
         return NBN_ERROR;
     }
+
+    nbn_wrtc_c_serv.wsserver = wsserver;
 
     return 0;
 }
 
 static void NBN_WebRTC_C_ServStop(void)
 {
-    pthread_join(nbn_wrtc_c_serv.thread, NULL);
     NBN_WebRTC_C_HTable_Destroy(nbn_wrtc_c_serv.peers);
-    rtcCleanup();
 
-    if (nbn_wrtc_c_serv.tls)
+    if (nbn_wrtc_c_serv.wsserver >= 0)
     {
-        fio_tls_destroy(nbn_wrtc_c_serv.tls);
+        rtcDeleteWebSocketServer(nbn_wrtc_c_serv.wsserver);
     }
+
+    rtcCleanup();
 }
 
 static int NBN_WebRTC_C_ServRecvPackets(void)
 {
-    int size;
+    const int buffer_size = sizeof(nbn_wrtc_c_serv.packet_buffer);
+    int size = buffer_size;
 
     for (unsigned int i = 0; i < nbn_wrtc_c_serv.peers->capacity; i++)
     {
@@ -635,9 +693,7 @@ static int NBN_WebRTC_C_ServRecvPackets(void)
 
         if (entry)
         {
-            size = NBN_PACKET_MAX_SIZE;
-
-            while (rtcReceiveMessage(entry->peer->channel_id, nbn_wrtc_c_serv.packet_buffer, &size) != RTC_ERR_NOT_AVAIL)
+            while (rtcReceiveMessage(entry->peer->channel_id, nbn_wrtc_c_serv.packet_buffer, &size) == RTC_ERR_SUCCESS)
             {
                 NBN_Packet packet;
 
@@ -646,9 +702,11 @@ static int NBN_WebRTC_C_ServRecvPackets(void)
 
                 packet.sender = entry->peer->conn;
                 NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_PACKET_RECEIVED, &packet);
+                size = buffer_size;
             }
         }
     }
+
     return 0;
 }
 
@@ -668,7 +726,7 @@ static int NBN_WebRTC_C_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *con
 
     if (rtcSendMessage(peer->channel_id, (char *)packet->buffer, packet->size) < 0)
     {
-        NBN_LogDebug("rtcSendMessage failed for peer %d", peer->id);
+        NBN_LogError("rtcSendMessage failed for peer %d", peer->id);
     }
 
     return 0;
@@ -676,14 +734,225 @@ static int NBN_WebRTC_C_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *con
 
 #pragma endregion /* Game server */
 
-void NBN_WebRTC_C_Register(void)
+#pragma region Game client
+
+typedef struct NBN_WebRTC_C_Client
 {
+    uint32_t protocol_id;
+    bool is_encrypyed;
+    bool is_connected;
+    NBN_WebRTC_C_Peer *peer;
+    char packet_buffer[NBN_PACKET_MAX_SIZE];
+} NBN_WebRTC_C_Client;
+
+static NBN_WebRTC_C_Client nbn_wrtc_c_cli = (NBN_WebRTC_C_Client){0, false, false, NULL, {0}};
+
+static void NBN_WebRTC_C_Cli_OnLocalDescription(int pc, const char *sdp, const char *type, void *user_ptr)
+{
+    NBN_LogDebug("Processing local description of type '%s'", type);
+
+    if (strncmp(type, "offer", strlen("offer")) != 0)
+    {
+        NBN_LogWarning("Ignoring local description of type '%s' (expected 'offer')", type);
+        return;
+    }
+
+    NBN_WebRTC_C_ProcessLocalDescription((NBN_WebRTC_C_Peer *)user_ptr, sdp, "offer");
+}
+
+static void NBN_WebRTC_C_Cli_OnPeerStateChanged(int pc, rtcState state, void *user_ptr)
+{
+    NBN_LogDebug("Server peer state changed to %d", pc, state);
+
+    if (state == RTC_CONNECTED)
+    {
+        NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer *)user_ptr;
+
+        NBN_LogDebug("Server peer is connected !", pc);
+        nbn_wrtc_c_cli.is_connected = true;
+    }
+}
+
+static void NBN_WebRTC_C_Cli_OnWsOpen(int ws, void *user_ptr)
+{
+    NBN_LogDebug("WS %d is open, creating peer...", ws);
+
+    NBN_WebRTC_C_Peer *peer = NBN_WebRTC_C_CreatePeer(ws, NBN_WebRTC_C_Cli_OnLocalDescription, NBN_WebRTC_C_Cli_OnPeerStateChanged);
+
+    if (!peer)
+    {
+        NBN_LogError("Failed to create peer");
+        return;
+    } 
+
+    NBN_LogDebug("Successfully created peer: %d", peer->id); 
+
+    peer->conn = NBN_GameClient_CreateServerConnection(NBN_WEBRTC_C_DRIVER_ID, peer, nbn_wrtc_c_cli.protocol_id, nbn_wrtc_c_cli.is_encrypyed);
+    nbn_wrtc_c_cli.peer = peer;
+}
+
+static void NBN_WebRTC_C_Cli_OnWsClosed(int ws, void *user_ptr)
+{
+    NBN_LogDebug("WS %d has closed", ws);
+
+    if (user_ptr)
+    {
+        NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer *)user_ptr;
+
+        NBN_LogDebug("Destroying server peer (peer: %d, channel: %d)", peer->id, peer->channel_id);
+        NBN_WebRTC_C_DestroyPeer(peer);
+    }
+}
+
+static void NBN_WebRTC_C_Cli_OnWsMessage(int ws, const char *msg, int size, void *user_ptr)
+{
+    NBN_WebRTC_C_ProcessSignalingMessage((NBN_WebRTC_C_Peer *)user_ptr, ws, msg, size, "answer");
+}
+
+static int AttemptConnection(void)
+{
+    struct timespec rqtp;
+
+    rqtp.tv_sec = 0;
+    rqtp.tv_nsec = 1e9 / 3;
+
+    int retries = 9; // approximatively 3 seconds to get connected
+
+    while (true)
+    {
+        if (nanosleep(&rqtp, NULL) < 0)
+        {
+            NBN_LogError("nanosleep failed");
+            return NBN_ERROR;
+        }
+
+        if (--retries <= 0 || nbn_wrtc_c_cli.is_connected)
+        {
+            break;
+        }
+    }
+
+    if (!nbn_wrtc_c_cli.is_connected)
+    {
+        NBN_LogError("Failed to connect");
+
+        return NBN_ERROR;
+    }
+
+    return 0;
+}
+
+static int NBN_WebRTC_C_CliStart(uint32_t protocol_id, const char *host, uint16_t port, bool enable_encryption)
+{
+    rtcInitLogger(nbn_wrtc_c_cfg.log_level, NBN_WebRTC_C_Log);
+    rtcPreload();
+
+    char ws_addr[256] = {0};
+
+    snprintf(ws_addr, sizeof(ws_addr), "ws://%s:%d", host, port);
+
+    int cli_ws;
+
+    if ((cli_ws = rtcCreateWebSocket(ws_addr)) < 0)
+    {
+        NBN_LogError("Failed to create websocket");
+        return NBN_ERROR;
+    }
+
+    nbn_wrtc_c_cli.protocol_id = protocol_id;
+    nbn_wrtc_c_cli.is_encrypyed = enable_encryption;
+
+    NBN_LogDebug("Successfully created client WS: %d", cli_ws);
+
+    rtcSetOpenCallback(cli_ws, NBN_WebRTC_C_Cli_OnWsOpen);
+    rtcSetClosedCallback(cli_ws, NBN_WebRTC_C_Cli_OnWsClosed);
+    rtcSetErrorCallback(cli_ws, NBN_WebRTC_C_OnWsError);
+    rtcSetMessageCallback(cli_ws, NBN_WebRTC_C_Cli_OnWsMessage);
+
+    return AttemptConnection();
+}
+
+static void NBN_WebRTC_C_CliStop(void)
+{
+    NBN_WebRTC_C_Peer *peer = nbn_wrtc_c_cli.peer;
+
+    if (peer)
+    {
+        NBN_WebRTC_C_DestroyPeer(peer);
+    }
+
+    nbn_wrtc_c_cli.is_connected = false;
+    rtcCleanup();
+}
+
+static int NBN_WebRTC_C_CliRecvPackets(void)
+{
+    const int buffer_size = sizeof(nbn_wrtc_c_cli.packet_buffer);
+    int size = buffer_size;
+    NBN_WebRTC_C_Peer *peer = nbn_wrtc_c_cli.peer;
+
+    while (rtcReceiveMessage(peer->channel_id, nbn_wrtc_c_cli.packet_buffer, &size) == RTC_ERR_SUCCESS)
+    {
+        NBN_Packet packet;
+
+        if (NBN_Packet_InitRead(&packet, peer->conn, (uint8_t *)nbn_wrtc_c_cli.packet_buffer, size) < 0)
+            continue;
+
+        packet.sender = peer->conn;
+        NBN_Driver_RaiseEvent(NBN_DRIVER_CLI_PACKET_RECEIVED, &packet);
+        size = buffer_size;
+    }
+
+    return 0;
+}
+
+static int NBN_WebRTC_C_CliSendPacket(NBN_Packet *packet)
+{
+    NBN_WebRTC_C_Peer *peer = nbn_wrtc_c_cli.peer;
+
+    if (rtcSendMessage(peer->channel_id, (char *)packet->buffer, packet->size) < 0)
+    {
+        NBN_LogError("rtcSendMessage failed for peer %d", peer->id);
+        return NBN_ERROR;
+    }
+
+    return 0;
+}
+
+#pragma endregion /* Game client */
+
+void NBN_WebRTC_C_Register(NBN_WebRTC_C_Config config)
+{
+    const char **ice_servers = NBN_Allocator(sizeof(char *) * config.ice_servers_count);
+
+    for (unsigned int i = 0; i < config.ice_servers_count; i++)
+    {
+        // strdup equivalent using NBN_Allocator, make sure this get freed
+        const char *str = config.ice_servers[i];
+        size_t len = strlen(str);
+        char *dup_str = NBN_Allocator(len + 1);
+
+        memcpy(dup_str, str, len + 1);
+        ice_servers[i] = dup_str;
+    }
+
+    nbn_wrtc_c_cfg.ice_servers = ice_servers;
+    nbn_wrtc_c_cfg.ice_servers_count = config.ice_servers_count;
+    nbn_wrtc_c_cfg.enable_tls = config.enable_tls;
+
+    if (config.enable_tls)
+    {
+        nbn_wrtc_c_cfg.cert_path = config.cert_path;
+        nbn_wrtc_c_cfg.key_path = config.key_path;
+        nbn_wrtc_c_cfg.passphrase = config.passphrase;
+    }
+
     NBN_DriverImplementation driver_impl = {
         // Client implementation
-        NULL,
-        NULL,
-        NULL,
-        NULL,
+        NBN_WebRTC_C_CliStart,
+        NBN_WebRTC_C_CliStop,
+        NBN_WebRTC_C_CliRecvPackets,
+        NBN_WebRTC_C_CliSendPacket,
 
         // Server implementation
         NBN_WebRTC_C_ServStart,
@@ -693,11 +962,17 @@ void NBN_WebRTC_C_Register(void)
         NBN_WebRTC_C_ServRemoveClientConnection
     };
 
-    NBN_Driver_Register(
-        NBN_WEBRTC_C_DRIVER_ID,
-        NBN_WEBRTC_C_DRIVER_NAME,
-        driver_impl
-    );
+    NBN_Driver_Register(NBN_WEBRTC_C_DRIVER_ID, NBN_WEBRTC_C_DRIVER_NAME, driver_impl);
+}
+
+void NBN_WebRTC_C_Unregister(void)
+{
+    for (unsigned int i = 0; i < nbn_wrtc_c_cfg.ice_servers_count; i++)
+    {
+        NBN_Deallocator((void *)nbn_wrtc_c_cfg.ice_servers[i]);
+    }
+
+    NBN_Deallocator(nbn_wrtc_c_cfg.ice_servers);
 }
 
 #endif // NBNET_IMPL

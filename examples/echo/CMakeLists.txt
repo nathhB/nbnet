@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.1)
 
 project(echo)
+
 option(CPP_COMPILE OFF)
+option(ENABLE_TLS OFF)
+option(WEBRTC_NATIVE OFF)
 
 # allow to compile as cpp
 if (CPP_COMPILE)
@@ -17,11 +20,44 @@ add_executable(echo_server server.c shared.c)
 
 add_compile_options(-Wall -Wextra -Wpedantic)
 
+if (ENABLE_TLS)
+    message("Compile with TLS enabled")
+    target_compile_definitions(echo_server PUBLIC NBN_TLS)
+    target_compile_definitions(echo_client PUBLIC NBN_TLS)
+endif (ENABLE_TLS)
+
+unset(ENABLE_TLS)
+
+if (WEBRTC_NATIVE_SERVER)
+    if (EMSCRIPTEN)
+        message(FATAL_ERROR "Cannot compile native webrtc driver with emscripten")
+    endif (EMSCRIPTEN)
+
+    message("Compile server with webrtc native driver")
+
+    target_compile_definitions(echo_server PUBLIC NBN_WEBRTC_NATIVE)
+    target_link_libraries(echo_server ${LIBDATACHANNEL_LIBRARY_PATH} m)
+    target_include_directories(echo_server PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
+endif (WEBRTC_NATIVE_SERVER)
+
+unset(WEBRTC_NATIVE_SERVER)
+
+if (WEBRTC_NATIVE_CLIENT)
+    if (EMSCRIPTEN)
+        message(FATAL_ERROR "Cannot compile native webrtc driver with emscripten")
+    endif (EMSCRIPTEN)
+
+    message("Compile client with webrtc native driver")
+
+    target_compile_definitions(echo_client PUBLIC NBN_WEBRTC_NATIVE)
+    target_link_libraries(echo_client ${LIBDATACHANNEL_LIBRARY_PATH} m)
+    target_include_directories(echo_client PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
+endif (WEBRTC_NATIVE_CLIENT)
+
+unset(WEBRTC_NATIVE_CLIENT)
+
 target_compile_definitions(echo_client PUBLIC NBN_DEBUG)
 target_compile_definitions(echo_server PUBLIC NBN_DEBUG)
-
-option(ENCRYPTION_ENABLED OFF)
-option(WEBRTC_DRIVER_C OFF)
 
 if(WIN32)
   target_link_libraries(echo_client ws2_32)

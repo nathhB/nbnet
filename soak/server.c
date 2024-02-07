@@ -34,7 +34,7 @@
 #else
 #include "../net_drivers/udp.h"
 
-#ifdef SOAK_WEBRTC_C_DRIVER
+#ifdef WEBRTC_NATIVE
 #include "../net_drivers/webrtc_c.h"
 #endif
 
@@ -337,16 +337,29 @@ int main(int argc, char *argv[])
 
     Soak_SetLogLevel(LOG_TRACE);
 
+    if (Soak_ReadCommandLine(argc, argv) < 0)
+        return -1;
+
 #ifdef __EMSCRIPTEN__
-    NBN_WebRTC_Register(); // Register the WebRTC driver
+    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false}); // Register JS WebRTC driver
 #else
     NBN_UDP_Register(); // Register the UDP driver
-
-#ifdef SOAK_WEBRTC_C_DRIVER
-    NBN_WebRTC_C_Register(); // Register native WebRTC driver
-#endif
-
 #endif // __EMSCRIPTEN__
+
+#ifdef WEBRTC_NATIVE
+    // Register native WebRTC driver
+    const char *ice_servers[] = { "stun:stun01.sipphone.com" };
+    NBN_WebRTC_C_Config cfg = {
+        .ice_servers = ice_servers,
+        .ice_servers_count = 1,
+        .enable_tls = false,
+        .cert_path = NULL,
+        .key_path = NULL,
+        .passphrase = NULL,
+        .log_level = RTC_LOG_VERBOSE};
+
+    NBN_WebRTC_C_Register(cfg);
+#endif // WEBRTC_NATIVE
 
     if (NBN_GameServer_Start(SOAK_PROTOCOL_NAME, SOAK_PORT))
     {
@@ -368,6 +381,10 @@ int main(int argc, char *argv[])
 
     NBN_GameServer_Stop();
     Soak_Deinit();
+
+#ifdef WEBRTC_NATIVE
+    NBN_WebRTC_C_Unregister();
+#endif
 
     return ret;
 }
