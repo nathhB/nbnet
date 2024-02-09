@@ -100,9 +100,9 @@ static NBN_WebRTC_HTable *NBN_WebRTC_HTable_Create(void)
 
 static NBN_WebRTC_HTable *NBN_WebRTC_HTable_CreateWithCapacity(unsigned int capacity)
 {
-    NBN_WebRTC_HTable *htable = NBN_Allocator(sizeof(NBN_WebRTC_HTable));
+    NBN_WebRTC_HTable *htable = (NBN_WebRTC_HTable*)NBN_Allocator(sizeof(NBN_WebRTC_HTable));
 
-    htable->internal_array = NBN_Allocator(sizeof(NBN_WebRTC_HTableEntry *) * capacity);
+    htable->internal_array = (NBN_WebRTC_HTableEntry**)NBN_Allocator(sizeof(NBN_WebRTC_HTableEntry *) * capacity);
     htable->capacity = capacity;
     htable->count = 0;
     htable->load_factor = 0;
@@ -129,7 +129,7 @@ static void NBN_WebRTC_HTable_Destroy(NBN_WebRTC_HTable *htable)
 
 static void NBN_WebRTC_HTable_Add(NBN_WebRTC_HTable *htable, uint32_t peer_id, NBN_WebRTC_Peer *peer)
 {
-    NBN_WebRTC_HTableEntry *entry = NBN_Allocator(sizeof(NBN_WebRTC_HTableEntry));
+    NBN_WebRTC_HTableEntry *entry = (NBN_WebRTC_HTableEntry*)NBN_Allocator(sizeof(NBN_WebRTC_HTableEntry));
 
     entry->peer_id = peer_id;
     entry->peer = peer;
@@ -247,7 +247,7 @@ static void NBN_WebRTC_HTable_Grow(NBN_WebRTC_HTable *htable)
     unsigned int old_capacity = htable->capacity;
     unsigned int new_capacity = old_capacity * 2;
     NBN_WebRTC_HTableEntry** old_internal_array = htable->internal_array;
-    NBN_WebRTC_HTableEntry** new_internal_array = NBN_Allocator(sizeof(NBN_WebRTC_HTableEntry*) * new_capacity);
+    NBN_WebRTC_HTableEntry** new_internal_array = (NBN_WebRTC_HTableEntry**)NBN_Allocator(sizeof(NBN_WebRTC_HTableEntry*) * new_capacity);
 
     for (unsigned int i = 0; i < new_capacity; i++)
     {
