@@ -812,21 +812,26 @@ static void NBN_WebRTC_C_Cli_OnWsMessage(int ws, const char *msg, int size, void
 
 static int AttemptConnection(void)
 {
+    double waitTime = 1.0 / 3.0; // wait time between connection attempts in seconds
+
+    int retries = 9; // approximatively 3 seconds to get connected
+    
     struct timespec rqtp;
 
     rqtp.tv_sec = 0;
-    rqtp.tv_nsec = 1e9 / 3;
-
-    int retries = 9; // approximatively 3 seconds to get connected
+    rqtp.tv_nsec = waitTime * 1e9;
 
     while (true)
     {
+    #if defined(_WIN32) || defined(_WIN64)
+        Sleep(waitTime * 1000);
+    #else
         if (nanosleep(&rqtp, NULL) < 0)
         {
             NBN_LogError("nanosleep failed");
             return NBN_ERROR;
         }
-
+    #endif
         if (--retries <= 0 || nbn_wrtc_c_cli.is_connected)
         {
             break;
