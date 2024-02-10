@@ -112,9 +112,9 @@ static NBN_WebRTC_C_HTable *NBN_WebRTC_C_HTable_Create(void)
 
 static NBN_WebRTC_C_HTable *NBN_WebRTC_C_HTable_CreateWithCapacity(unsigned int capacity)
 {
-    NBN_WebRTC_C_HTable *htable = NBN_Allocator(sizeof(NBN_WebRTC_C_HTable));
+    NBN_WebRTC_C_HTable *htable = (NBN_WebRTC_C_HTable*)NBN_Allocator(sizeof(NBN_WebRTC_C_HTable));
 
-    htable->internal_array = NBN_Allocator(sizeof(NBN_WebRTC_C_HTableEntry *) * capacity);
+    htable->internal_array = (NBN_WebRTC_C_HTableEntry**)NBN_Allocator(sizeof(NBN_WebRTC_C_HTableEntry *) * capacity);
     htable->capacity = capacity;
     htable->count = 0;
     htable->load_factor = 0;
@@ -145,7 +145,7 @@ static void NBN_WebRTC_C_HTable_Destroy(NBN_WebRTC_C_HTable *htable)
 
 static void NBN_WebRTC_C_HTable_Add(NBN_WebRTC_C_HTable *htable, int peer_id, NBN_WebRTC_C_Peer *peer)
 {
-    NBN_WebRTC_C_HTableEntry *entry = NBN_Allocator(sizeof(NBN_WebRTC_C_HTableEntry));
+    NBN_WebRTC_C_HTableEntry *entry = (NBN_WebRTC_C_HTableEntry*)NBN_Allocator(sizeof(NBN_WebRTC_C_HTableEntry));
 
     entry->peer_id = peer_id;
     entry->peer = peer;
@@ -263,7 +263,7 @@ static void NBN_WebRTC_C_HTable_Grow(NBN_WebRTC_C_HTable *htable)
     unsigned int old_capacity = htable->capacity;
     unsigned int new_capacity = old_capacity * 2;
     NBN_WebRTC_C_HTableEntry** old_internal_array = htable->internal_array;
-    NBN_WebRTC_C_HTableEntry** new_internal_array = NBN_Allocator(sizeof(NBN_WebRTC_C_HTableEntry*) * new_capacity);
+    NBN_WebRTC_C_HTableEntry** new_internal_array = (NBN_WebRTC_C_HTableEntry**)NBN_Allocator(sizeof(NBN_WebRTC_C_HTableEntry*) * new_capacity);
 
     for (unsigned int i = 0; i < new_capacity; i++)
     {
@@ -293,7 +293,7 @@ static void NBN_WebRTC_C_HTable_Grow(NBN_WebRTC_C_HTable *htable)
 // IMPORTANT: res needs to be pre allocated and big enough to old the resulting string
 static void NBN_WebRTC_C_StringReplaceAll(char *res, const char *str, const char *a, const char *b)
 {
-    char *substr = strstr(str, a);
+    char *substr = (char*)strstr(str, a);
     size_t len_a = strlen(a);
     size_t len_b = strlen(b);
 
@@ -320,15 +320,15 @@ static char *NBN_WebRTC_C_ParseSignalingMessage(const char *msg, size_t msg_len,
 {
     char *sdp = NULL;
     struct json_value_s* root = json_parse(msg, msg_len); // this has to be freed
+    
+    struct json_object_s* object = (struct json_object_s*)root->payload;
+    struct json_object_element_s *curr = object->start;
 
     if (root->type != json_type_object)
     {
         NBN_LogDebug("Received an invalid signaling message: %s", msg);
         goto leave_free_root;
     }
-
-    struct json_object_s* object = (struct json_object_s*)root->payload;
-    struct json_object_element_s *curr = object->start;
 
     while (curr != NULL)
     {
@@ -353,7 +353,7 @@ static char *NBN_WebRTC_C_ParseSignalingMessage(const char *msg, size_t msg_len,
                 // strdup equivalent using NBN_Allocator, make sure this get freed
                 size_t len = strlen(str->string);
 
-                sdp = NBN_Allocator(len + 1);
+                sdp = (char*)NBN_Allocator(len + 1);
                 memcpy(sdp, str->string, len + 1);
             }
         }
@@ -370,7 +370,7 @@ leave_free_root:
 static char *NBN_WebRTC_C_EscapeSDP(const char *sdp)
 {
     size_t len = strlen(sdp) * 2; // TODO: kinda lame way of making sure it's going to be big enough, find a better way
-    char *escaped_sdp = NBN_Allocator(len);
+    char *escaped_sdp = (char*)NBN_Allocator(len);
 
     NBN_WebRTC_C_StringReplaceAll(escaped_sdp, sdp, "\r\n", "\\r\\n");
 
@@ -383,23 +383,23 @@ static void NBN_WebRTC_C_Log(rtcLogLevel level, const char *msg)
     {
         case RTC_LOG_FATAL:
         case RTC_LOG_ERROR:
-            NBN_LogError(msg);
+            NBN_LogError("%s",msg);
             break;
 
         case RTC_LOG_WARNING:
-            NBN_LogWarning(msg);
+            NBN_LogWarning("%s",msg);
             break;
 
         case RTC_LOG_INFO:
-            NBN_LogInfo(msg);
+            NBN_LogInfo("%s",msg);
             break;
 
         case RTC_LOG_DEBUG:
-            NBN_LogDebug(msg);
+            NBN_LogDebug("%s",msg);
             break;
 
         case RTC_LOG_VERBOSE:
-            NBN_LogTrace(msg);
+            NBN_LogTrace("%s",msg);
             break;
 
         case RTC_LOG_NONE:
@@ -419,11 +419,12 @@ static NBN_WebRTC_C_Peer *NBN_WebRTC_C_CreatePeer(
         rtcDescriptionCallbackFunc on_rtc_description_cb,
         rtcStateChangeCallbackFunc on_state_change_cb)
 {
-    int peer_id = rtcCreatePeerConnection(&(rtcConfiguration){
-            .iceServers = nbn_wrtc_c_cfg.ice_servers,
-            .iceServersCount = nbn_wrtc_c_cfg.ice_servers_count,
-            .disableAutoNegotiation = false
-            });
+    rtcConfiguration rtcCfg = {
+        .iceServers = nbn_wrtc_c_cfg.ice_servers,
+        .iceServersCount = (int)nbn_wrtc_c_cfg.ice_servers_count,
+        .disableAutoNegotiation = false
+    };
+    int peer_id = rtcCreatePeerConnection(&rtcCfg);
 
     if (peer_id < 0)
     {
@@ -457,13 +458,13 @@ static NBN_WebRTC_C_Peer *NBN_WebRTC_C_CreatePeer(
         NBN_WebRTC_C_DestroyPeer(peer);
         return NULL;
     }
-
-    int channel_id = rtcCreateDataChannelEx(peer_id, "unreliable", &(rtcDataChannelInit){
-            .reliability = {.unordered = true, .unreliable = true, .maxPacketLifeTime = 1000, .maxRetransmits = 0},
-            .negotiated = true,
-            .manualStream = true,
-            .stream = 0
-            });
+    rtcDataChannelInit rtcDataChannel = {
+        .reliability = {.unordered = true, .unreliable = true, .maxPacketLifeTime = 1000, .maxRetransmits = 0},
+        .negotiated = true,
+        .manualStream = true,
+        .stream = 0
+    };
+    int channel_id = rtcCreateDataChannelEx(peer_id, "unreliable", &rtcDataChannel);
 
     if (channel_id < 0)
     {
@@ -712,7 +713,7 @@ static int NBN_WebRTC_C_ServRecvPackets(void)
 
 static void NBN_WebRTC_C_ServRemoveClientConnection(NBN_Connection *conn)
 {
-    NBN_WebRTC_C_Peer *peer = conn->driver_data;
+    NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer*)conn->driver_data;
 
     NBN_WebRTC_C_HTable_Remove(nbn_wrtc_c_serv.peers, peer->id);
     NBN_WebRTC_C_DestroyPeer(peer);
@@ -722,7 +723,7 @@ static int NBN_WebRTC_C_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *con
 {
     if (!conn->is_accepted) return 0;
 
-    NBN_WebRTC_C_Peer *peer = conn->driver_data;
+    NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer*)conn->driver_data;
 
     if (rtcSendMessage(peer->channel_id, (char *)packet->buffer, packet->size) < 0)
     {
@@ -745,7 +746,7 @@ typedef struct NBN_WebRTC_C_Client
     char packet_buffer[NBN_PACKET_MAX_SIZE];
 } NBN_WebRTC_C_Client;
 
-static NBN_WebRTC_C_Client nbn_wrtc_c_cli = (NBN_WebRTC_C_Client){0, false, false, NULL, {0}};
+static NBN_WebRTC_C_Client nbn_wrtc_c_cli = {0, false, false, NULL, {0}};
 
 static void NBN_WebRTC_C_Cli_OnLocalDescription(int pc, const char *sdp, const char *type, void *user_ptr)
 {
@@ -811,21 +812,26 @@ static void NBN_WebRTC_C_Cli_OnWsMessage(int ws, const char *msg, int size, void
 
 static int AttemptConnection(void)
 {
+    double waitTime = 1.0 / 3.0; // wait time between connection attempts in seconds
+
+    int retries = 9; // approximatively 3 seconds to get connected
+    
     struct timespec rqtp;
 
     rqtp.tv_sec = 0;
-    rqtp.tv_nsec = 1e9 / 3;
-
-    int retries = 9; // approximatively 3 seconds to get connected
+    rqtp.tv_nsec = waitTime * 1e9;
 
     while (true)
     {
+    #if defined(_WIN32) || defined(_WIN64)
+        Sleep(waitTime * 1000);
+    #else
         if (nanosleep(&rqtp, NULL) < 0)
         {
             NBN_LogError("nanosleep failed");
             return NBN_ERROR;
         }
-
+    #endif
         if (--retries <= 0 || nbn_wrtc_c_cli.is_connected)
         {
             break;
@@ -923,14 +929,14 @@ static int NBN_WebRTC_C_CliSendPacket(NBN_Packet *packet)
 
 void NBN_WebRTC_C_Register(NBN_WebRTC_C_Config config)
 {
-    const char **ice_servers = NBN_Allocator(sizeof(char *) * config.ice_servers_count);
+    const char **ice_servers = (const char**)NBN_Allocator(sizeof(char *) * config.ice_servers_count);
 
     for (unsigned int i = 0; i < config.ice_servers_count; i++)
     {
         // strdup equivalent using NBN_Allocator, make sure this get freed
         const char *str = config.ice_servers[i];
         size_t len = strlen(str);
-        char *dup_str = NBN_Allocator(len + 1);
+        char *dup_str = (char*)NBN_Allocator(len + 1);
 
         memcpy(dup_str, str, len + 1);
         ice_servers[i] = dup_str;
