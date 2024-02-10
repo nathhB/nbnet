@@ -322,7 +322,7 @@ static char *NBN_WebRTC_C_ParseSignalingMessage(const char *msg, size_t msg_len,
     struct json_value_s* root = json_parse(msg, msg_len); // this has to be freed
     
     struct json_object_s* object = (struct json_object_s*)root->payload;
-    struct json_object_element_s *curr = (json_object_element_s*)object->start;
+    struct json_object_element_s *curr = object->start;
 
     if (root->type != json_type_object)
     {
@@ -419,7 +419,7 @@ static NBN_WebRTC_C_Peer *NBN_WebRTC_C_CreatePeer(
         rtcDescriptionCallbackFunc on_rtc_description_cb,
         rtcStateChangeCallbackFunc on_state_change_cb)
 {
-    rtcConfiguration rtcCfg = rtcConfiguration{
+    rtcConfiguration rtcCfg = {
         .iceServers = nbn_wrtc_c_cfg.ice_servers,
         .iceServersCount = (int)nbn_wrtc_c_cfg.ice_servers_count,
         .disableAutoNegotiation = false
@@ -458,7 +458,7 @@ static NBN_WebRTC_C_Peer *NBN_WebRTC_C_CreatePeer(
         NBN_WebRTC_C_DestroyPeer(peer);
         return NULL;
     }
-    rtcDataChannelInit rtcDataChannel = rtcDataChannelInit{
+    rtcDataChannelInit rtcDataChannel = {
         .reliability = {.unordered = true, .unreliable = true, .maxPacketLifeTime = 1000, .maxRetransmits = 0},
         .negotiated = true,
         .manualStream = true,
@@ -746,7 +746,7 @@ typedef struct NBN_WebRTC_C_Client
     char packet_buffer[NBN_PACKET_MAX_SIZE];
 } NBN_WebRTC_C_Client;
 
-static NBN_WebRTC_C_Client nbn_wrtc_c_cli = (NBN_WebRTC_C_Client){0, false, false, NULL, {0}};
+static NBN_WebRTC_C_Client nbn_wrtc_c_cli = {0, false, false, NULL, {0}};
 
 static void NBN_WebRTC_C_Cli_OnLocalDescription(int pc, const char *sdp, const char *type, void *user_ptr)
 {
