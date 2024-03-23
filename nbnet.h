@@ -1728,15 +1728,12 @@ struct NBN_Driver
     NBN_DriverImplementation impl;
 };
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wmissing-field-initializers"
 static NBN_Driver nbn_drivers[NBN_MAX_DRIVERS] = {
     { .id = -1 },
     { .id = -1 },
     { .id = -1 },
     { .id = -1 }
 };
-#pragma clang diagnostic pop
 
 static unsigned int nbn_driver_count = 0;
 
@@ -2751,7 +2748,7 @@ static void AES_CBC_decrypt_buffer(struct AES_ctx*, uint8_t*, uint32_t);
 
 void poly1305_auth(uint8_t out[POLY1305_TAGLEN], const uint8_t *m, size_t inlen,
                    const uint8_t key[POLY1305_KEYLEN])
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && defined(__clang__)
     __attribute__((__bounded__(__minbytes__, 1, POLY1305_TAGLEN)))
     __attribute__((__bounded__(__buffer__, 2, 3)))
     __attribute__((__bounded__(__minbytes__, 4, POLY1305_KEYLEN)))
