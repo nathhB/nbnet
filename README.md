@@ -74,7 +74,7 @@ A little online tank game prototype.
 
 A list of user-contributed bindings (they are not officially supported, so they may be outdated):
 
-- [nbnet-sunder](https://github.com/ashn-dot-dev/nbnet-sunder) by [@ashn](https://github.com/ashn-dot-dev) ([Sunder](https://github.com/ashn-dot-dev/sunder) is a C-like systems programming language and compiler for x86-64 Linux, ARM64 Linux, and WebAssembly)
+- [nbnet-sunder](https://github.com/ashn-dot-dev/nbnet-sunder) by [@ashn](https://github.com/ashn-dot-dev) ([Sunder](https://github.com/ashn-dot-dev/sunder) is a modest systems programming language for Unix-like platforms)
 
 ## Drivers
 
