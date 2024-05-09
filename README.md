@@ -29,7 +29,6 @@ If you want to discuss the library or need help, join the [nbnet's discord serve
 - Network conditions simulation: ping, jitter, packet loss, packet duplication, and out-of-order packets)
 - Network statistics: ping, bandwidth (upload and download) and packet loss
 - Web (WebRTC) support (both natively and through WASM using [emscripten](https://emscripten.org/docs/introducing_emscripten/about_emscripten.html))
-- Encrypted and authenticated packets
 
 ## Thanks
 
