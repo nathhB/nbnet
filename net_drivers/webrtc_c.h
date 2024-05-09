@@ -554,7 +554,6 @@ typedef struct NBN_WebRTC_C_Server
 {
     int wsserver;
     NBN_WebRTC_C_HTable *peers;
-    bool is_encrypted;
     uint16_t ws_port;
     uint32_t protocol_id;
     char packet_buffer[NBN_PACKET_MAX_SIZE];
@@ -604,8 +603,7 @@ static void NBN_WebRTC_C_Serv_OnWsOpen(int ws, void *user_ptr)
             NBN_WEBRTC_C_DRIVER_ID,
             peer,
             nbn_wrtc_c_serv.protocol_id,
-            peer->id,
-            nbn_wrtc_c_serv.is_encrypted);
+            peer->id);
     NBN_WebRTC_C_HTable_Add(nbn_wrtc_c_serv.peers, peer->id, peer);
 }
 
@@ -639,11 +637,10 @@ static void NBN_WebRTC_C_Serv_OnWsConnection(int wsserver, int ws, void *user_pt
     rtcSetMessageCallback(ws, NBN_WebRTC_C_Serv_OnWsMessage);
 }
 
-static int NBN_WebRTC_C_ServStart(uint32_t protocol_id, uint16_t port, bool enable_encryption)
+static int NBN_WebRTC_C_ServStart(uint32_t protocol_id, uint16_t port)
 {
     nbn_wrtc_c_serv.ws_port = port;
     nbn_wrtc_c_serv.peers = NBN_WebRTC_C_HTable_Create();
-    nbn_wrtc_c_serv.is_encrypted = enable_encryption;
     nbn_wrtc_c_serv.protocol_id = protocol_id;
     nbn_wrtc_c_serv.wsserver = -1;
 
@@ -848,7 +845,7 @@ static int AttemptConnection(void)
     return 0;
 }
 
-static int NBN_WebRTC_C_CliStart(uint32_t protocol_id, const char *host, uint16_t port, bool enable_encryption)
+static int NBN_WebRTC_C_CliStart(uint32_t protocol_id, const char *host, uint16_t port)
 {
     rtcInitLogger(nbn_wrtc_c_cfg.log_level, NBN_WebRTC_C_Log);
     rtcPreload();
@@ -866,7 +863,6 @@ static int NBN_WebRTC_C_CliStart(uint32_t protocol_id, const char *host, uint16_
     }
 
     nbn_wrtc_c_cli.protocol_id = protocol_id;
-    nbn_wrtc_c_cli.is_encrypyed = enable_encryption;
 
     NBN_LogDebug("Successfully created client WS: %d", cli_ws);
 

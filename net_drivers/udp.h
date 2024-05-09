@@ -445,17 +445,15 @@ typedef struct NBN_UDP_Server
     NBN_UDP_HTable *connections;
     uint32_t next_conn_id; // nbnet connection ids start at 1
     uint32_t protocol_id;
-    bool is_encrypted;
 } NBN_UDP_Server;
 
-static NBN_UDP_Server nbn_udp_serv = {NULL, 1, 0, false};
+static NBN_UDP_Server nbn_udp_serv = {NULL, 1, 0};
 
 static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress);
 
-static int NBN_UDP_ServStart(uint32_t protocol_id, uint16_t port, bool enable_encryption)
+static int NBN_UDP_ServStart(uint32_t protocol_id, uint16_t port)
 {
     nbn_udp_serv.protocol_id = protocol_id;
-    nbn_udp_serv.is_encrypted = enable_encryption;
     nbn_udp_serv.connections = NBN_UDP_HTable_Create();
 
     if (InitSocket() < 0)
@@ -563,7 +561,7 @@ static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress addre
 
         udp_conn->id = nbn_udp_serv.next_conn_id++;
         udp_conn->address = address;
-        udp_conn->conn = NBN_GameServer_CreateClientConnection(NBN_UDP_DRIVER_ID, udp_conn, nbn_udp_serv.protocol_id, udp_conn->id, nbn_udp_serv.is_encrypted);
+        udp_conn->conn = NBN_GameServer_CreateClientConnection(NBN_UDP_DRIVER_ID, udp_conn, nbn_udp_serv.protocol_id, udp_conn->id);
 
         NBN_UDP_HTable_Add(nbn_udp_serv.connections, address, udp_conn);
 
@@ -599,7 +597,7 @@ static NBN_UDP_Client nbn_udp_cli = {NULL, 0};
 
 static int ResolveIpAddress(const char *, uint16_t, NBN_IPAddress *);
 
-static int NBN_UDP_CliStart(uint32_t protocol_id, const char *host, uint16_t port, bool enable_encryption)
+static int NBN_UDP_CliStart(uint32_t protocol_id, const char *host, uint16_t port)
 {
     NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)NBN_Allocator(sizeof(NBN_Connection));
 
@@ -618,7 +616,7 @@ static int NBN_UDP_CliStart(uint32_t protocol_id, const char *host, uint16_t por
     if (BindSocket(0) < 0)
         return NBN_ERROR;
 
-    nbn_udp_cli.server_conn = NBN_GameClient_CreateServerConnection(NBN_UDP_DRIVER_ID, udp_conn, protocol_id, enable_encryption);
+    nbn_udp_cli.server_conn = NBN_GameClient_CreateServerConnection(NBN_UDP_DRIVER_ID, udp_conn, protocol_id);
 
     return 0;
 }
