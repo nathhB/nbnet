@@ -517,15 +517,10 @@ int main(int argc, char *argv[])
 #endif // __EMSCRIPTEN__
 
     // Initialize the client with a protocol name (must be the same than the one used by the server), the server ip address and port
-#ifdef EXAMPLE_ENCRYPTION
-    bool enable_encryption = true;
-#else
-    bool enable_encryption = false;
-#endif
 
     // Start the client with a protocol name (must be the same than the one used by the server)
-    // the server host and port and with packet encryption on or off
-    if (NBN_GameClient_StartEx(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, enable_encryption, NULL, 0) < 0)
+    // the server host and port
+    if (NBN_GameClient_StartEx(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, NULL, 0) < 0)
     {
         TraceLog(LOG_WARNING, "Game client failed to start. Exit");
 
