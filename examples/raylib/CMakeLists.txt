@@ -31,15 +31,6 @@ target_compile_definitions(raylib_client PUBLIC NBN_DEBUG)
 target_compile_definitions(raylib_server PUBLIC NBN_DEBUG)
 target_compile_definitions(raylib_server PUBLIC NBN_RAYLIB_SERVER)
 
-if (ENCRYPTION_ENABLED)
-  message("Encryption enabled")
-
-  target_compile_definitions(raylib_client PUBLIC EXAMPLE_ENCRYPTION)
-  target_compile_definitions(raylib_server PUBLIC EXAMPLE_ENCRYPTION)
-endif(ENCRYPTION_ENABLED)
-
-unset(ENCRYPTION_ENABLED)
-
 # compile with C WebRTC driver
 if (WEBRTC_C_DRIVER)
   # can't compile WebRTC native driver with emscripten

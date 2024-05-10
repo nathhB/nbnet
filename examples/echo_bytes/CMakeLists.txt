@@ -21,7 +21,6 @@ add_compile_options(-Wall -Wextra -Wpedantic)
 target_compile_definitions(echo_bytes_client PUBLIC NBN_DEBUG)
 target_compile_definitions(echo_bytes_server PUBLIC NBN_DEBUG)
 
-option(ENCRYPTION_ENABLED OFF)
 option(WEBRTC_DRIVER_C OFF)
 
 if(WIN32)
