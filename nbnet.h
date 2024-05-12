@@ -4092,6 +4092,9 @@ void NBN_Channel_Destroy(NBN_Channel *channel)
         }
     }
 
+    NBN_Deallocator(channel->read_chunk_buffer);
+    NBN_Deallocator(channel->write_chunk_buffer);
+
     NBN_Deallocator(channel);
 }
 
