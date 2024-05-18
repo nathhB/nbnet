@@ -3318,7 +3318,7 @@ static void Connection_StartEncryption(NBN_Connection *);
 static int ecdh_generate_keys(uint8_t*, uint8_t*);
 static int ecdh_shared_secret(const uint8_t*, const uint8_t*, uint8_t*);
 
-static CSPRNG csprng_create();
+static CSPRNG csprng_create(void);
 static CSPRNG csprng_destroy(CSPRNG object);
 static int csprng_get(CSPRNG, void*, unsigned long long);
 
@@ -8085,7 +8085,7 @@ poly1305_donna_finish:
 #ifdef _WIN32
 
 /* ------------------------------------------------------------------------------------------- */
-static CSPRNG csprng_create()
+static CSPRNG csprng_create(void)
 {
     CSPRNG_TYPE csprng;
     if (!CryptAcquireContextA(&csprng.hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT))
@@ -8129,7 +8129,7 @@ static CSPRNG csprng_destroy(CSPRNG object)
 /* ///////////////////////////////////////////////////////////////////////////////////////////// */
 
 /* ------------------------------------------------------------------------------------------- */
-static CSPRNG csprng_create()
+static CSPRNG csprng_create(void)
 {
     CSPRNG_TYPE csprng;
     csprng.urandom = fopen("/dev/urandom", "rb");
