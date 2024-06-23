@@ -22,7 +22,6 @@ target_compile_definitions(echo_bytes_client PUBLIC NBN_DEBUG)
 target_compile_definitions(echo_bytes_server PUBLIC NBN_DEBUG)
 
 option(ENCRYPTION_ENABLED OFF)
-option(WEBRTC_DRIVER_C OFF)
 
 if(WIN32)
   target_link_libraries(echo_bytes_client wsock32 ws2_32)

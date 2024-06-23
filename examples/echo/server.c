@@ -83,7 +83,9 @@ int main(int argc, const char **argv)
     NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false});
 #endif // NBN_TLS
 
-#elif defined(NBN_WEBRTC_NATIVE)
+#endif // __EMSCRIPTEN__
+
+#ifdef NBN_WEBRTC_NATIVE
 
     // Register native WebRTC driver
 
@@ -104,8 +106,11 @@ int main(int argc, const char **argv)
         .log_level = RTC_LOG_VERBOSE};
 
     NBN_WebRTC_C_Register(cfg);
+#endif // NBN_WEBRTC_NATIVE
+
+#if !defined(__EMSCRIPTEN__) && !defined(NBN_WEBRTC_NATIVE)
     NBN_UDP_Register(); // Register the UDP driver
-#endif // __EMSCRIPTEN__ 
+#endif
 
 #ifdef NBN_ENCRYPTION
     bool enable_encryption = true;

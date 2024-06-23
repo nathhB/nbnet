@@ -320,10 +320,6 @@ int main(int argc, char *argv[])
 #else
     NBN_UDP_Register(); // Register the UDP driver
 
-#ifdef SOAK_WEBRTC_C_DRIVER
-    NBN_WebRTC_C_Register(); // Register the native WebRTC driver
-#endif
-
 #endif // __EMSCRIPTEN__
 
 #ifdef EXAMPLE_ENCRYPTION

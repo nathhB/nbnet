@@ -128,7 +128,9 @@ int main(int argc, char *argv[])
     NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false});
 #endif // NBN_TLS
 
-#elif defined(NBN_WEBRTC_NATIVE)
+#endif // __EMSCRIPTEN__
+
+#ifdef NBN_WEBRTC_NATIVE
 
 #ifdef NBN_TLS
     bool enable_tls = true;
@@ -148,7 +150,9 @@ int main(int argc, char *argv[])
 
     NBN_WebRTC_C_Register(cfg);
 
-#else
+#endif // NBN_WEBRTC_NATIVE
+
+#if !defined(__EMSCRIPTEN__) && !defined(NBN_WEBRTC_NATIVE)
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__
 
