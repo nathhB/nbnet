@@ -1728,15 +1728,12 @@ struct NBN_Driver
     NBN_DriverImplementation impl;
 };
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wmissing-field-initializers"
 static NBN_Driver nbn_drivers[NBN_MAX_DRIVERS] = {
-    {-1, NULL},
-    {-1, NULL},
-    {-1, NULL},
-    {-1, NULL}
+    { .id = -1 },
+    { .id = -1 },
+    { .id = -1 },
+    { .id = -1 }
 };
-#pragma clang diagnostic pop
 
 static unsigned int nbn_driver_count = 0;
 
@@ -2415,7 +2412,7 @@ int NBN_ReadStream_SerializeBool(NBN_ReadStream *read_stream, bool *value)
     if (NBN_BitReader_Read(&read_stream->bit_reader, &v, 1) < 0)
         return NBN_ERROR;
 
-    if (v < 0 || v > 1)
+    if (v > 1)
         return NBN_ERROR;
 
     *value = v;
@@ -2751,7 +2748,7 @@ static void AES_CBC_decrypt_buffer(struct AES_ctx*, uint8_t*, uint32_t);
 
 void poly1305_auth(uint8_t out[POLY1305_TAGLEN], const uint8_t *m, size_t inlen,
                    const uint8_t key[POLY1305_KEYLEN])
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && defined(__clang__)
     __attribute__((__bounded__(__minbytes__, 1, POLY1305_TAGLEN)))
     __attribute__((__bounded__(__buffer__, 2, 3)))
     __attribute__((__bounded__(__minbytes__, 4, POLY1305_KEYLEN)))
@@ -3106,7 +3103,7 @@ void NBN_ClientAcceptedMessage_Destroy(NBN_ClientAcceptedMessage *msg)
 
 int NBN_ClientAcceptedMessage_Serialize(NBN_ClientAcceptedMessage *msg, NBN_Stream *stream)
 {
-    NBN_SerializeUInt(stream, msg->length, 0, NBN_SERVER_DATA_MAX_SIZE);
+    NBN_SerializeUInt(stream, msg->length, 1, NBN_SERVER_DATA_MAX_SIZE);
     NBN_SerializeBytes(stream, msg->data, msg->length);
 
     return 0;
@@ -3128,7 +3125,7 @@ void NBN_ByteArrayMessage_Destroy(NBN_ByteArrayMessage *msg)
 
 int NBN_ByteArrayMessage_Serialize(NBN_ByteArrayMessage *msg, NBN_Stream *stream)
 {
-    NBN_SerializeUInt(stream, msg->length, 0, NBN_BYTE_ARRAY_MAX_SIZE);
+    NBN_SerializeUInt(stream, msg->length, 1, NBN_BYTE_ARRAY_MAX_SIZE);
     NBN_SerializeBytes(stream, msg->bytes, msg->length);
 
     return 0;
@@ -3218,7 +3215,7 @@ void NBN_ConnectionRequestMessage_Destroy(NBN_ConnectionRequestMessage *msg)
 
 int NBN_ConnectionRequestMessage_Serialize(NBN_ConnectionRequestMessage *msg, NBN_Stream *stream)
 {
-    NBN_SerializeUInt(stream, msg->length, 0, NBN_CONNECTION_DATA_MAX_SIZE);
+    NBN_SerializeUInt(stream, msg->length, 1, NBN_CONNECTION_DATA_MAX_SIZE);
     NBN_SerializeBytes(stream, msg->data, msg->length);
 
     return 0;
@@ -3240,8 +3237,8 @@ void NBN_RPC_Message_Destroy(NBN_RPC_Message *msg)
 
 int NBN_RPC_Message_Serialize(NBN_RPC_Message *msg, NBN_Stream *stream)
 {
-    NBN_SerializeUInt(stream, msg->id, 0, NBN_RPC_MAX);
-    NBN_SerializeUInt(stream, msg->param_count, 0, NBN_RPC_MAX_PARAM_COUNT);
+    NBN_SerializeUInt(stream, msg->id, 1, NBN_RPC_MAX);
+    NBN_SerializeUInt(stream, msg->param_count, 1, NBN_RPC_MAX_PARAM_COUNT);
 
     for (unsigned int i = 0; i < msg->param_count; i++)
     {
@@ -3987,7 +3984,7 @@ static NBN_RPC_Message *Connection_BuildRPC(NBN_Connection *connection, NBN_RPC 
 
 static void Connection_HandleReceivedRPC(NBN_ConnectionHandle connection, NBN_Endpoint *endpoint, NBN_RPC_Message *msg)
 {
-    if (msg->id < 0 || msg->id > NBN_RPC_MAX - 1)
+    if (msg->id > NBN_RPC_MAX - 1)
     {
         NBN_LogError("Received an invalid RPC");
 
@@ -4756,7 +4753,7 @@ static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_
 
 static int Endpoint_RegisterRPC(NBN_Endpoint *endpoint, unsigned int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
 {
-    if (id < 0 || id >= NBN_RPC_MAX)
+    if (id >= NBN_RPC_MAX)
     {
         NBN_LogError("Failed to register RPC, invalid ID");
 
@@ -5368,7 +5365,7 @@ int NBN_GameClient_CallRPC(unsigned int id, ...)
 {
     NBN_RPC rpc = nbn_game_client.endpoint.rpcs[id];
 
-    if (rpc.id < 0 || rpc.id != id)
+    if (rpc.id != id)
     {
         NBN_LogError("Cannot call invalid RPC (ID: %d)", id);
 
@@ -5995,7 +5992,7 @@ int NBN_GameServer_CallRPC(unsigned int id, NBN_ConnectionHandle connection_hand
 
     NBN_RPC rpc = nbn_game_server.endpoint.rpcs[id];
 
-    if (rpc.id < 0 || rpc.id != id)
+    if (rpc.id != id)
     {
         NBN_LogError("Cannot call invalid RPC (ID: %d)", id);
 
