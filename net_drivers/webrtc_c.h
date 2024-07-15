@@ -496,10 +496,12 @@ static void NBN_WebRTC_C_DestroyPeer(NBN_WebRTC_C_Peer *peer)
 
 static void NBN_WebRTC_C_ProcessLocalDescription(NBN_WebRTC_C_Peer *peer, const char *sdp, const char *type)
 {
-    char signaling_json[1024];
     char *escaped_sdp = NBN_WebRTC_C_EscapeSDP(sdp);
+    size_t signaling_json_size = snprintf(NULL, 0, "{\"type\":\"%s\", \"sdp\":\"%s\"}", type, escaped_sdp) + 1;
 
-    snprintf(signaling_json, sizeof(signaling_json), "{\"type\":\"%s\", \"sdp\":\"%s\"}", type, escaped_sdp);
+    char* signaling_json = (char *) NBN_Allocator(signaling_json_size);
+
+    snprintf(signaling_json, signaling_json_size, "{\"type\":\"%s\", \"sdp\":\"%s\"}", type, escaped_sdp);
     NBN_LogDebug("Send signaling message of type %s to remote connection: %s", type, signaling_json);
 
     // pass -1 as the size (assume signaling_json to be a null-terminated string)
@@ -507,7 +509,7 @@ static void NBN_WebRTC_C_ProcessLocalDescription(NBN_WebRTC_C_Peer *peer, const 
     {
         NBN_WebRTC_C_DestroyPeer(peer);
     }
-
+    NBN_Deallocator(signaling_json);
     NBN_Deallocator(escaped_sdp);
 }
 
