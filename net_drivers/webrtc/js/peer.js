@@ -20,7 +20,7 @@ freely, subject to the following restrictions:
 
 */
 
-const webrtc = require('wrtc')
+const webrtc = require('@roamhq/wrtc')
 const RTCPeerConnection = webrtc.RTCPeerConnection
 const RTCSessionDescription = webrtc.RTCSessionDescription
 const loggerFactory = require('./logger.js')
