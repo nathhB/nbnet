@@ -8,6 +8,6 @@
   "dependencies": {
     "websocket": "^1.0.31",
     "winston": "^3.2.1",
-    "wrtc": "^0.4.2"
+    "@roamhq/wrtc": "^0.8.0"
   }
 }
