@@ -290,13 +290,12 @@ typedef struct NBN_WebRTC_Server
     NBN_WebRTC_HTable *peers;
     uint8_t packet_buffer[NBN_PACKET_MAX_SIZE];
     uint32_t protocol_id;
-    bool is_encrypted;
 } NBN_WebRTC_Server;
 
 static NBN_WebRTC_Server nbn_wrtc_serv = {NULL, {0}, 0, false};
 static NBN_WebRTC_Config nbn_wrtc_cfg;
 
-static int NBN_WebRTC_ServStart(uint32_t protocol_id, uint16_t port, bool enable_encryption)
+static int NBN_WebRTC_ServStart(uint32_t protocol_id, uint16_t port)
 {
     __js_game_server_init(protocol_id, nbn_wrtc_cfg.enable_tls, nbn_wrtc_cfg.key_path, nbn_wrtc_cfg.cert_path);
     
@@ -304,7 +303,6 @@ static int NBN_WebRTC_ServStart(uint32_t protocol_id, uint16_t port, bool enable
         return -1;
 
     nbn_wrtc_serv.peers = NBN_WebRTC_HTable_Create();
-    nbn_wrtc_serv.is_encrypted = enable_encryption;
     nbn_wrtc_serv.protocol_id = protocol_id;
 
     return 0;
@@ -341,8 +339,7 @@ static int NBN_WebRTC_ServRecvPackets(void)
                     NBN_WEBRTC_DRIVER_ID,
                     peer,
                     nbn_wrtc_serv.protocol_id,
-                    peer_id,
-                    nbn_wrtc_serv.is_encrypted);
+                    peer_id);
 
             NBN_WebRTC_HTable_Add(nbn_wrtc_serv.peers, peer_id, peer);
 
@@ -402,11 +399,11 @@ typedef struct NBN_WebRTC_Client
 
 static NBN_WebRTC_Client nbn_wrtc_cli = {NULL};
 
-static int NBN_WebRTC_CliStart(uint32_t protocol_id, const char *host, uint16_t port, bool enable_encryption)
+static int NBN_WebRTC_CliStart(uint32_t protocol_id, const char *host, uint16_t port)
 {
     __js_game_client_init(protocol_id, nbn_wrtc_cfg.enable_tls);
 
-    nbn_wrtc_cli.server_conn = NBN_GameClient_CreateServerConnection(NBN_WEBRTC_DRIVER_ID, NULL, protocol_id, enable_encryption);
+    nbn_wrtc_cli.server_conn = NBN_GameClient_CreateServerConnection(NBN_WEBRTC_DRIVER_ID, NULL, protocol_id);
 
     int res;
 

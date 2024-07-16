@@ -21,8 +21,6 @@ add_compile_options(-Wall -Wextra -Wpedantic)
 target_compile_definitions(echo_bytes_client PUBLIC NBN_DEBUG)
 target_compile_definitions(echo_bytes_server PUBLIC NBN_DEBUG)
 
-option(ENCRYPTION_ENABLED OFF)
-
 if(WIN32)
   target_link_libraries(echo_bytes_client wsock32 ws2_32)
   target_link_libraries(echo_bytes_server wsock32 ws2_32)

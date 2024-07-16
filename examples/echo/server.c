@@ -112,14 +112,8 @@ int main(int argc, const char **argv)
     NBN_UDP_Register(); // Register the UDP driver
 #endif
 
-#ifdef NBN_ENCRYPTION
-    bool enable_encryption = true;
-#else
-    bool enable_encryption = false;
-#endif
-
     // Start the server with a protocol name, a port, and with packet encryption on or off
-    if (NBN_GameServer_StartEx(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, enable_encryption) < 0)
+    if (NBN_GameServer_StartEx(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT) < 0)
     {
         Log(LOG_ERROR, "Failed to start the server");
 
