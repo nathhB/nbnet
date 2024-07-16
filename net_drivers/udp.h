@@ -223,7 +223,7 @@ static void NBN_UDP_HTable_RemoveEntry(NBN_UDP_HTable *htable, NBN_UDP_HTableEnt
     NBN_Deallocator(entry);
 
     htable->count--;
-    htable->load_factor = htable->count / htable->capacity;
+    htable->load_factor = (float)htable->count / htable->capacity;
 }
 
 static unsigned int NBN_UDP_HTable_FindFreeSlot(NBN_UDP_HTable *htable, NBN_UDP_HTableEntry *entry, bool *use_existing_slot)
@@ -405,6 +405,7 @@ static int ResolveIpAddress(const char *host, uint16_t port, NBN_IPAddress *addr
     {
         char *s;
 
+        // TODO: replace strtok with strsep
         if ((s = strtok(i == 0 ? dup_host : NULL, ".")) == NULL)
             return NBN_ERROR;
 
@@ -428,7 +429,7 @@ static int ResolveIpAddress(const char *host, uint16_t port, NBN_IPAddress *addr
 static char *GetLastErrorMessage(void)
 {
 #ifdef PLATFORM_WINDOWS
-    sprintf(err_msg, "%d", WSAGetLastError());
+    snprintf(err_msg, sizeof(err_msg), "%d", WSAGetLastError());
 
     return err_msg;
 #else

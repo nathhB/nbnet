@@ -35,12 +35,20 @@
 #include <assert.h>
 
 #if defined(_WIN32) || defined(_WIN64)
+
+#include <winsock2.h>
+#include <windows.h>
+#include <wincrypt.h>
+
 #define NBNET_WINDOWS
+
 #endif
 
 #ifndef NBNET_WINDOWS
+
 #include <sys/time.h>
 #include <time.h>
+
 #endif
 
 #ifndef NBN_Allocator

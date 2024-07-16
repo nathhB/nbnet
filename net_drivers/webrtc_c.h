@@ -739,7 +739,6 @@ static int NBN_WebRTC_C_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *con
 typedef struct NBN_WebRTC_C_Client
 {
     uint32_t protocol_id;
-    bool is_encrypyed;
     bool is_connected;
     NBN_WebRTC_C_Peer *peer;
     char packet_buffer[NBN_PACKET_MAX_SIZE];
@@ -787,7 +786,7 @@ static void NBN_WebRTC_C_Cli_OnWsOpen(int ws, void *user_ptr)
 
     NBN_LogDebug("Successfully created peer: %d", peer->id); 
 
-    peer->conn = NBN_GameClient_CreateServerConnection(NBN_WEBRTC_C_DRIVER_ID, peer, nbn_wrtc_c_cli.protocol_id, nbn_wrtc_c_cli.is_encrypyed);
+    peer->conn = NBN_GameClient_CreateServerConnection(NBN_WEBRTC_C_DRIVER_ID, peer, nbn_wrtc_c_cli.protocol_id);
     nbn_wrtc_c_cli.peer = peer;
 }
 
