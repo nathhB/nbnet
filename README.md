@@ -24,19 +24,13 @@ If you want to discuss the library or need help, join the [nbnet's discord serve
 
 - Connection management
 - Sending/Receiving both reliable ordered and unreliable ordered messages
-- Sending/Receiving messages larger than the MTU (using nbnet's message fragmentation)
+- Sending/Receiving messages larger than the MTU through nbnet's message fragmentation system
 - Bit-level serialization (for bandwidth optimization): integers (signed and unsigned), floats, booleans, and byte arrays
 - Network conditions simulation: ping, jitter, packet loss, packet duplication, and out-of-order packets)
 - Network statistics: ping, bandwidth (upload and download) and packet loss
 - Web (WebRTC) support (both natively and through WASM using [emscripten](https://emscripten.org/docs/introducing_emscripten/about_emscripten.html))
 
 ## Thanks
-
-nbnet encryption and packet authentication use the following open-source libraries:
-
-- [tiny-ECDH](https://github.com/kokke/tiny-ECDH-c)
-- [tiny-AES](https://github.com/kokke/tiny-AES-c)
-- [poly1305-donna](https://github.com/floodyberry/poly1305-donna)
 
 the native WebRTC driver relies on:
 
@@ -84,7 +78,7 @@ A driver is a set of function definitions that live outside the nbnet header and
 nbnet comes with three ready-to-use drivers:
 
 - UDP: works with a single UDP socket, designed for desktop games
-- WebRTC (WASM): works with a single unreliable/unordered data channel, implemented in JS using emscripten API
+- WebRTC (WASM): works with a single unreliable/unordered data channel, implemented in JS using the emscripten API
 - WebRTC (Native): works the same way as the WASM WebRTC driver but can be natively compiled 
 
 ## How to use
