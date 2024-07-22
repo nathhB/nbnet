@@ -5885,7 +5885,7 @@ int NBN_PacketSimulator_EnqueuePacket(NBN_PacketSimulator *packet_simulator, NBN
 
     NBN_PacketSimulatorEntry *entry = (NBN_PacketSimulatorEntry *)MemoryManager_Alloc(NBN_MEM_PACKET_SIMULATOR_ENTRY);
 
-    entry->delay = packet_simulator->ping + jitter / 1000; /* and converted back to seconds */
+    entry->delay = packet_simulator->ping + (double)jitter / 1000; /* and converted back to seconds */
     entry->receiver = receiver;
     entry->enqueued_at = packet_simulator->endpoint->time;
 
