@@ -14,14 +14,14 @@ static void StringReplaceAll(char *res, const char *str, const char *a, const ch
     {
         int pos = substr - str;
 
-        strncpy(res, str, pos);
-        strncpy(res + pos, b, len_b);
+        memcpy(res, str, pos);
+        memcpy(res + pos, b, len_b);
 
         StringReplaceAll(res + pos + len_b, str + pos + len_a, a, b);
     }
     else
     {
-        strncpy(res, str, strlen(str) + 1);
+        memcpy(res, str, strlen(str) + 1);
     }
 }
 
