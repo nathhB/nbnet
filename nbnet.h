@@ -154,7 +154,7 @@ typedef uint32_t Word;
 #define B_IS_SET(mask, n) ((B_MASK(n) & mask) == B_MASK(n))
 #define B_IS_UNSET(mask, n) ((B_MASK(n) & mask) == 0)
 
-#define ASSERT_VALUE_IN_RANGE(v, min, max) assert(v >= min && v <= max)
+#define ASSERT_VALUE_IN_RANGE(v, min, max) assert(v >= (int64_t)min && v <= (int64_t)max)
 #define ASSERTED_SERIALIZE(stream, v, min, max, func)       \
 {                                                           \
     if (stream->type == NBN_STREAM_WRITE)                   \
