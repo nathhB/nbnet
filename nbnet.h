@@ -1531,18 +1531,6 @@ struct NBN_Driver
     NBN_DriverImplementation impl;
 };
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wmissing-field-initializers"
-static NBN_Driver nbn_drivers[NBN_MAX_DRIVERS] = {
-    {-1, NULL},
-    {-1, NULL},
-    {-1, NULL},
-    {-1, NULL}
-};
-#pragma clang diagnostic pop
-
-static unsigned int nbn_driver_count = 0;
-
 /**
  * Register a new network driver, at least one network driver has to be registered.
  *
@@ -1592,6 +1580,15 @@ int NBN_Driver_RaiseEvent(NBN_DriverEvent ev, void *data);
 #pragma region Implementations
 
 #ifdef NBNET_IMPL
+
+static NBN_Driver nbn_drivers[NBN_MAX_DRIVERS] = {
+    {.id = -1},
+    {.id = -1},
+    {.id = -1},
+    {.id = -1}
+};
+
+static unsigned int nbn_driver_count = 0;
 
 #pragma region NBN_ConnectionVector
 
