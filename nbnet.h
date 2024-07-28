@@ -2215,7 +2215,7 @@ int NBN_ReadStream_SerializeBool(NBN_ReadStream *read_stream, bool *value)
     if (NBN_BitReader_Read(&read_stream->bit_reader, &v, 1) < 0)
         return NBN_ERROR;
 
-    if (v < 0 || v > 1)
+    if (v > 1)
         return NBN_ERROR;
 
     *value = v;
@@ -3574,7 +3574,7 @@ static NBN_RPC_Message *Connection_BuildRPC(NBN_Connection *connection, NBN_RPC 
 
 static void Connection_HandleReceivedRPC(NBN_ConnectionHandle connection, NBN_Endpoint *endpoint, NBN_RPC_Message *msg)
 {
-    if (msg->id < 0 || msg->id > NBN_RPC_MAX - 1)
+    if (msg->id > NBN_RPC_MAX - 1)
     {
         NBN_LogError("Received an invalid RPC");
 
@@ -4271,7 +4271,7 @@ static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_
 
 static int Endpoint_RegisterRPC(NBN_Endpoint *endpoint, unsigned int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
 {
-    if (id < 0 || id >= NBN_RPC_MAX)
+    if (id >= NBN_RPC_MAX)
     {
         NBN_LogError("Failed to register RPC, invalid ID");
 
@@ -4881,7 +4881,7 @@ int NBN_GameClient_CallRPC(unsigned int id, ...)
 {
     NBN_RPC rpc = nbn_game_client.endpoint.rpcs[id];
 
-    if (rpc.id < 0 || rpc.id != id)
+    if (rpc.id != id)
     {
         NBN_LogError("Cannot call invalid RPC (ID: %d)", id);
 
@@ -5430,7 +5430,7 @@ int NBN_GameServer_CallRPC(unsigned int id, NBN_ConnectionHandle connection_hand
 
     NBN_RPC rpc = nbn_game_server.endpoint.rpcs[id];
 
-    if (rpc.id < 0 || rpc.id != id)
+    if (rpc.id != id)
     {
         NBN_LogError("Cannot call invalid RPC (ID: %d)", id);
 
