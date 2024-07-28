@@ -102,6 +102,9 @@ void Test_SerializeUInt64(CuTest *tc)
 
 int main(int argc, char *argv[])
 {
+    (void) argc;
+    (void) argv;
+
     CuString *output = CuStringNew();
     CuSuite* suite = CuSuiteNew();
 

@@ -7,4 +7,4 @@ add_subdirectory(echo_bytes)
 if (NOT DEFINED CPP_COMPILE)
     # not supported in CPP
     add_subdirectory(rpc)
-endif (CPP_COMPILE)
+endif (NOT DEFINED CPP_COMPILE)

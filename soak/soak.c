@@ -64,6 +64,9 @@ static void Usage(void)
 
 int Soak_Init(int argc, char *argv[])
 {
+    (void) argc;
+    (void) argv;
+
     srand(SOAK_SEED);
 
     SoakOptions options = Soak_GetOptions();
@@ -258,6 +261,8 @@ SoakOptions Soak_GetOptions(void)
 
 void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *conn, NBN_Message *msg)
 {
+    (void) conn;
+    (void) msg;
     // FIXME
     /*if (msg->header.type == NBN_MESSAGE_CHUNK_TYPE)
     {

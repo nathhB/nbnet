@@ -309,6 +309,7 @@ static void SigintHandler(int dummy)
     unsigned int destroyed_outgoing_message_count = Soak_GetDestroyedOutgoingSoakMessageCount();
     unsigned int created_incoming_message_count = Soak_GetCreatedIncomingSoakMessageCount();
     unsigned int destroyed_incoming_message_count = Soak_GetDestroyedIncomingSoakMessageCount();
+    (void) dummy;
 
     Soak_LogInfo("Outgoing soak messages created: %d", created_outgoing_message_count);
     Soak_LogInfo("Outgoing soak messages destroyed: %d", destroyed_outgoing_message_count);
@@ -375,7 +376,10 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    NBN_GameServer_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue);
+    NBN_ConnectionDebugCallback cbs = {
+        .OnMessageAddedToRecvQueue = Soak_Debug_PrintAddedToRecvQueue,
+    };
+    NBN_GameServer_Debug_RegisterCallback(cbs);
 
     int ret = Soak_MainLoop(Tick, NULL);
 

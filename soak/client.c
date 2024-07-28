@@ -62,7 +62,7 @@ static unsigned int done_channel_count = 0;
 
 static void GenerateRandomBytes(uint8_t *data, unsigned int length)
 {
-    for (int i = 0; i < length; i++)
+    for (unsigned int i = 0; i < length; i++)
         data[i] = rand() % 255 + 1;
 }
 
@@ -95,7 +95,7 @@ static int SendSoakMessages(SoakChannel *channel, uint8_t channel_id)
 
         Soak_LogInfo("Will send %d soak messages this tick", send_message_count);
 
-        for (int i = 0; i < send_message_count; i++)
+        for (unsigned int i = 0; i < send_message_count; i++)
         {
             SoakMessage *msg = SoakMessage_CreateOutgoing();
 
@@ -338,7 +338,7 @@ int main(int argc, char *argv[])
     unsigned int leftover_message_count = message_count % channel_count;
     SoakChannel *channels = (SoakChannel *)malloc(sizeof(SoakChannel) * channel_count);
 
-    for (int c = 0; c < channel_count; c++)
+    for (unsigned int c = 0; c < channel_count; c++)
     {
         SoakChannel *channel = &channels[c];
         
@@ -356,7 +356,10 @@ int main(int argc, char *argv[])
 
     channels[channel_count - 1].message_count += leftover_message_count;
 
-    NBN_GameClient_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue); 
+    NBN_ConnectionDebugCallback cbs = {
+        .OnMessageAddedToRecvQueue = Soak_Debug_PrintAddedToRecvQueue,
+    };
+    NBN_GameClient_Debug_RegisterCallback(cbs);
 
     int ret = Soak_MainLoop(Tick, channels);
 

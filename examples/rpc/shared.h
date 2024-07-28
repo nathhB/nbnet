@@ -23,6 +23,8 @@
 #ifndef RPC_EXAMPLE_SHARED_H
 #define RPC_EXAMPLE_SHARED_H
 
+#include <stdlib.h>
+
 #if defined(_WIN32) || defined(_WIN64)
 
 /*
@@ -86,6 +88,7 @@ typedef struct tagMSG *LPMSG;
 #define TEST_RPC_2_ID 1
 #define TEST_RPC_SIGNATURE NBN_RPC_BuildSignature(3, NBN_RPC_PARAM_INT, NBN_RPC_PARAM_FLOAT, NBN_RPC_PARAM_BOOL)
 #define TEST_RPC_2_SIGNATURE NBN_RPC_BuildSignature(2, NBN_RPC_PARAM_FLOAT, NBN_RPC_PARAM_STRING)
+#define TEST_VERIFY(exp)  if(!(exp)) abort()
 
 // nbnet logging
 // nbnet does not implement any logging capabilities, you need to provide your own
