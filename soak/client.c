@@ -356,7 +356,10 @@ int main(int argc, char *argv[])
 
     channels[channel_count - 1].message_count += leftover_message_count;
 
-    NBN_GameClient_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue); 
+    NBN_ConnectionDebugCallback cbs = {
+        .OnMessageAddedToRecvQueue = Soak_Debug_PrintAddedToRecvQueue,
+    };
+    NBN_GameClient_Debug_RegisterCallback(cbs);
 
     int ret = Soak_MainLoop(Tick, channels);
 

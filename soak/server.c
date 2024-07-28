@@ -375,7 +375,10 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    NBN_GameServer_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE, (void *)Soak_Debug_PrintAddedToRecvQueue);
+    NBN_ConnectionDebugCallback cbs = {
+        .OnMessageAddedToRecvQueue = Soak_Debug_PrintAddedToRecvQueue,
+    };
+    NBN_GameServer_Debug_RegisterCallback(cbs);
 
     int ret = Soak_MainLoop(Tick, NULL);
 

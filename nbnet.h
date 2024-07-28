@@ -743,9 +743,8 @@ typedef struct NBN_ConnectionStats
 
 #ifdef NBN_DEBUG
 
-typedef enum NBN_ConnectionDebugCallback
-{
-    NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE
+typedef struct NBN_ConnectionDebugCallback {
+    void (*OnMessageAddedToRecvQueue)(NBN_Connection *, NBN_Message *);
 } NBN_ConnectionDebugCallback;
 
 #endif /* NBN_DEBUG */
@@ -769,8 +768,7 @@ struct NBN_Connection
     void *driver_data; /* Data attached to the connection by the underlying driver */
 
 #ifdef NBN_DEBUG
-    /* Debug callbacks */
-    void (*OnMessageAddedToRecvQueue)(struct NBN_Connection *, NBN_Message *);
+    NBN_ConnectionDebugCallback debug_callbacks;
 #endif /* NBN_DEBUG */
 
     /*
@@ -941,8 +939,7 @@ struct NBN_Endpoint
     double time; /* Current time */
 
 #ifdef NBN_DEBUG
-    /* Debug callbacks */
-    void (*OnMessageAddedToRecvQueue)(NBN_Connection *, NBN_Message *);
+    NBN_ConnectionDebugCallback debug_callbacks;
 #endif
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
@@ -1177,7 +1174,7 @@ int NBN_GameClient_CallRPC(unsigned int id, ...);
 
 #ifdef NBN_DEBUG
 
-void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
+void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback);
 
 #endif /* NBN_DEBUG */
 
@@ -1481,7 +1478,7 @@ int NBN_GameServer_CallRPC(unsigned int id, NBN_ConnectionHandle connection_hand
 
 #ifdef NBN_DEBUG
 
-void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
+void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback);
 
 #endif /* NBN_DEBUG */
 
@@ -3014,8 +3011,8 @@ int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet 
             NBN_LogTrace("Received message %d on channel %d : added to recv queue", message.header.id, channel->id);
 
 #ifdef NBN_DEBUG
-            if (connection->OnMessageAddedToRecvQueue)
-                connection->OnMessageAddedToRecvQueue(connection, &message);
+            if (connection->debug_callbacks.OnMessageAddedToRecvQueue)
+                connection->debug_callbacks.OnMessageAddedToRecvQueue(connection, &message);
 #endif
         }
         else
@@ -4199,7 +4196,7 @@ static void Endpoint_Init(NBN_Endpoint *endpoint, bool is_server)
         endpoint, (NBN_MessageDestructor)NBN_RPC_Message_Destroy, NBN_RPC_MESSAGE_TYPE);
 
 #ifdef NBN_DEBUG
-    endpoint->OnMessageAddedToRecvQueue = NULL;
+    memset(&endpoint->debug_callbacks, 0, sizeof(endpoint->debug_callbacks));
 #endif
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
@@ -4843,7 +4840,7 @@ NBN_Connection *NBN_GameClient_CreateServerConnection(int driver_id, void *drive
     NBN_Connection *server_connection = Endpoint_CreateConnection(&nbn_game_client.endpoint, 0, protocol_id, driver_id, driver_data);
 
 #ifdef NBN_DEBUG
-    server_connection->OnMessageAddedToRecvQueue = nbn_game_client.endpoint.OnMessageAddedToRecvQueue;
+    server_connection->debug_callbacks = nbn_game_client.endpoint.debug_callbacks;
 #endif
 
     nbn_game_client.server_connection = server_connection;
@@ -4916,14 +4913,9 @@ rpc_error:
 
 #ifdef NBN_DEBUG
 
-void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, void *cb)
+void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback cbs)
 {
-    switch (cb_type)
-    {
-    case NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE:
-        nbn_game_client.endpoint.OnMessageAddedToRecvQueue = (void (*)(NBN_Connection *, NBN_Message *))cb;
-        break;
-    }
+    nbn_game_client.endpoint.debug_callbacks = cbs;
 }
 
 #endif /* NBN_DEBUG */
@@ -5242,7 +5234,7 @@ NBN_Connection *NBN_GameServer_CreateClientConnection(int driver_id, void *drive
     NBN_Connection *client = Endpoint_CreateConnection(&nbn_game_server.endpoint, conn_id, protocol_id, driver_id, driver_data);
 
 #ifdef NBN_DEBUG
-    client->OnMessageAddedToRecvQueue = nbn_game_server.endpoint.OnMessageAddedToRecvQueue;
+    client->debug_callbacks = nbn_game_server.endpoint.debug_callbacks;
 #endif
 
     return client;
@@ -5470,14 +5462,9 @@ rpc_error:
 
 #ifdef NBN_DEBUG
 
-void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, void *cb)
+void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback cbs)
 {
-    switch (cb_type)
-    {
-    case NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE:
-        nbn_game_server.endpoint.OnMessageAddedToRecvQueue = (void (*)(NBN_Connection *, NBN_Message *))cb;
-        break;
-    }
+    nbn_game_server.endpoint.debug_callbacks = cbs;
 }
 
 #endif /* NBN_DEBUG */
