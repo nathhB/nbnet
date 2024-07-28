@@ -47,6 +47,9 @@ int main(int argc, char *argv[])
     CuString *output = CuStringNew();
     CuSuite* suite = CuSuiteNew();
 
+    (void) argc;
+    (void) argv;
+
     SUITE_ADD_TEST(suite, Test_StringReplaceAll);
 
     CuSuiteRun(suite);

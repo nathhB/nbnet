@@ -125,6 +125,8 @@ int main(int argc, const char **argv)
 #endif
     }
 
+    (void) argc;
+    (void) argv;
     // Registering messages, have to be done after NBN_GameServer_StartEx
     NBN_GameServer_RegisterMessage(ECHO_MESSAGE_TYPE,
             (NBN_MessageBuilder)EchoMessage_Create,

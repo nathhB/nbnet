@@ -309,6 +309,7 @@ static void SigintHandler(int dummy)
     unsigned int destroyed_outgoing_message_count = Soak_GetDestroyedOutgoingSoakMessageCount();
     unsigned int created_incoming_message_count = Soak_GetCreatedIncomingSoakMessageCount();
     unsigned int destroyed_incoming_message_count = Soak_GetDestroyedIncomingSoakMessageCount();
+    (void) dummy;
 
     Soak_LogInfo("Outgoing soak messages created: %d", created_outgoing_message_count);
     Soak_LogInfo("Outgoing soak messages destroyed: %d", destroyed_outgoing_message_count);

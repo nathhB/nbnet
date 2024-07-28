@@ -2636,6 +2636,8 @@ int NBN_Packet_WriteMessage(NBN_Packet *packet, NBN_Message *message, NBN_Messag
 
 int NBN_Packet_Seal(NBN_Packet *packet, NBN_Connection *connection)
 {
+    (void) connection;
+
     if (packet->mode != NBN_PACKET_MODE_WRITE)
         return NBN_ERROR;
 
@@ -3027,6 +3029,7 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection, NBN_Channe
 {
     assert(!connection->is_closed || message->header.type == NBN_CLIENT_CLOSED_MESSAGE_TYPE);
     assert(!connection->is_stale);
+    (void) connection;
 
     NBN_LogTrace("Enqueue message of type %d on channel %d", message->header.type, channel->id);
 
@@ -3183,6 +3186,8 @@ int NBN_Connection_InitChannel(NBN_Connection *connection, NBN_Channel *channel)
 bool NBN_Connection_CheckIfStale(NBN_Connection *connection, double time)
 {
 #if defined(NBN_DEBUG) && defined(NBN_DISABLE_STALE_CONNECTION_DETECTION)
+    (void) connection;
+    (void) time;
     /* When testing under bad network conditions (in soak test for instance), we don't want to deal
        with stale connections */
     return false;
