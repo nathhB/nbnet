@@ -11,7 +11,7 @@ if (CPP_COMPILE)
   set (CMAKE_CXX_STANDARD 20)
 endif (CPP_COMPILE)
 
-unset(CPP_COMPILE)
+unset(CPP_COMPILE CACHE)
 
 add_executable(rpc_client client.c shared.c)
 add_executable(rpc_server server.c shared.c)
