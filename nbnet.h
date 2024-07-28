@@ -2258,7 +2258,7 @@ int NBN_ReadStream_SerializeBytes(NBN_ReadStream *read_stream, uint8_t *bytes, u
     // make sure we are at the start of a new byte after applying padding
     assert(bit_reader->scratch_bits_count % 8 == 0);
 
-    if (length * 8 <= bit_reader->scratch_bits_count)
+    if (length * 8 <= bit_reader->scratch_bits_count && length <= sizeof(Word))
     {
         // the byte array is fully contained inside the read word
 
