@@ -5588,7 +5588,7 @@ static void GameServer_AddClientToClosedList(NBN_Connection *client)
     }
 }
 
-static unsigned int GameServer_GetClientCount(void)
+static inline unsigned int GameServer_GetClientCount(void)
 {
     return nbn_game_server.clients->count;
 }
