@@ -13,10 +13,10 @@ endif (CPP_COMPILE)
 
 unset(CPP_COMPILE CACHE)
 
+add_compile_options(-Wall -Wextra -Wpedantic)
+
 add_executable(echo_bytes_client client.c shared.c)
 add_executable(echo_bytes_server server.c shared.c)
-
-add_compile_options(-Wall -Wextra -Wpedantic)
 
 target_compile_definitions(echo_bytes_client PUBLIC NBN_DEBUG)
 target_compile_definitions(echo_bytes_server PUBLIC NBN_DEBUG)

@@ -15,10 +15,10 @@ endif (CPP_COMPILE)
 
 unset(CPP_COMPILE CACHE)
 
+add_compile_options(-Wall -Wextra -Wpedantic)
+
 add_executable(echo_client client.c shared.c)
 add_executable(echo_server server.c shared.c)
-
-add_compile_options(-Wall -Wextra -Wpedantic)
 
 if (ENABLE_TLS)
     message("Compile with TLS enabled")
