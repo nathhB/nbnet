@@ -154,7 +154,7 @@ typedef uint32_t Word;
 #define B_IS_SET(mask, n) ((B_MASK(n) & mask) == B_MASK(n))
 #define B_IS_UNSET(mask, n) ((B_MASK(n) & mask) == 0)
 
-#define ASSERT_VALUE_IN_RANGE(v, min, max) assert(v >= min && v <= max)
+#define ASSERT_VALUE_IN_RANGE(v, min, max) assert(v >= (int64_t)min && v <= (int64_t)max)
 #define ASSERTED_SERIALIZE(stream, v, min, max, func)       \
 {                                                           \
     if (stream->type == NBN_STREAM_WRITE)                   \
@@ -743,9 +743,8 @@ typedef struct NBN_ConnectionStats
 
 #ifdef NBN_DEBUG
 
-typedef enum NBN_ConnectionDebugCallback
-{
-    NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE
+typedef struct NBN_ConnectionDebugCallback {
+    void (*OnMessageAddedToRecvQueue)(NBN_Connection *, NBN_Message *);
 } NBN_ConnectionDebugCallback;
 
 #endif /* NBN_DEBUG */
@@ -769,8 +768,7 @@ struct NBN_Connection
     void *driver_data; /* Data attached to the connection by the underlying driver */
 
 #ifdef NBN_DEBUG
-    /* Debug callbacks */
-    void (*OnMessageAddedToRecvQueue)(struct NBN_Connection *, NBN_Message *);
+    NBN_ConnectionDebugCallback debug_callbacks;
 #endif /* NBN_DEBUG */
 
     /*
@@ -941,8 +939,7 @@ struct NBN_Endpoint
     double time; /* Current time */
 
 #ifdef NBN_DEBUG
-    /* Debug callbacks */
-    void (*OnMessageAddedToRecvQueue)(NBN_Connection *, NBN_Message *);
+    NBN_ConnectionDebugCallback debug_callbacks;
 #endif
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
@@ -1177,7 +1174,7 @@ int NBN_GameClient_CallRPC(unsigned int id, ...);
 
 #ifdef NBN_DEBUG
 
-void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
+void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback);
 
 #endif /* NBN_DEBUG */
 
@@ -1481,7 +1478,7 @@ int NBN_GameServer_CallRPC(unsigned int id, NBN_ConnectionHandle connection_hand
 
 #ifdef NBN_DEBUG
 
-void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback, void *);
+void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback);
 
 #endif /* NBN_DEBUG */
 
@@ -1534,18 +1531,6 @@ struct NBN_Driver
     NBN_DriverImplementation impl;
 };
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wmissing-field-initializers"
-static NBN_Driver nbn_drivers[NBN_MAX_DRIVERS] = {
-    {-1, NULL},
-    {-1, NULL},
-    {-1, NULL},
-    {-1, NULL}
-};
-#pragma clang diagnostic pop
-
-static unsigned int nbn_driver_count = 0;
-
 /**
  * Register a new network driver, at least one network driver has to be registered.
  *
@@ -1595,6 +1580,15 @@ int NBN_Driver_RaiseEvent(NBN_DriverEvent ev, void *data);
 #pragma region Implementations
 
 #ifdef NBNET_IMPL
+
+static NBN_Driver nbn_drivers[NBN_MAX_DRIVERS] = {
+    {.id = -1},
+    {.id = -1},
+    {.id = -1},
+    {.id = -1}
+};
+
+static unsigned int nbn_driver_count = 0;
 
 #pragma region NBN_ConnectionVector
 
@@ -2221,7 +2215,7 @@ int NBN_ReadStream_SerializeBool(NBN_ReadStream *read_stream, bool *value)
     if (NBN_BitReader_Read(&read_stream->bit_reader, &v, 1) < 0)
         return NBN_ERROR;
 
-    if (v < 0 || v > 1)
+    if (v > 1)
         return NBN_ERROR;
 
     *value = v;
@@ -2264,7 +2258,7 @@ int NBN_ReadStream_SerializeBytes(NBN_ReadStream *read_stream, uint8_t *bytes, u
     // make sure we are at the start of a new byte after applying padding
     assert(bit_reader->scratch_bits_count % 8 == 0);
 
-    if (length * 8 <= bit_reader->scratch_bits_count)
+    if (length * 8 <= bit_reader->scratch_bits_count && length <= sizeof(Word))
     {
         // the byte array is fully contained inside the read word
 
@@ -2642,6 +2636,8 @@ int NBN_Packet_WriteMessage(NBN_Packet *packet, NBN_Message *message, NBN_Messag
 
 int NBN_Packet_Seal(NBN_Packet *packet, NBN_Connection *connection)
 {
+    (void) connection;
+
     if (packet->mode != NBN_PACKET_MODE_WRITE)
         return NBN_ERROR;
 
@@ -3014,8 +3010,8 @@ int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet 
             NBN_LogTrace("Received message %d on channel %d : added to recv queue", message.header.id, channel->id);
 
 #ifdef NBN_DEBUG
-            if (connection->OnMessageAddedToRecvQueue)
-                connection->OnMessageAddedToRecvQueue(connection, &message);
+            if (connection->debug_callbacks.OnMessageAddedToRecvQueue)
+                connection->debug_callbacks.OnMessageAddedToRecvQueue(connection, &message);
 #endif
         }
         else
@@ -3033,6 +3029,7 @@ int NBN_Connection_EnqueueOutgoingMessage(NBN_Connection *connection, NBN_Channe
 {
     assert(!connection->is_closed || message->header.type == NBN_CLIENT_CLOSED_MESSAGE_TYPE);
     assert(!connection->is_stale);
+    (void) connection;
 
     NBN_LogTrace("Enqueue message of type %d on channel %d", message->header.type, channel->id);
 
@@ -3189,6 +3186,8 @@ int NBN_Connection_InitChannel(NBN_Connection *connection, NBN_Channel *channel)
 bool NBN_Connection_CheckIfStale(NBN_Connection *connection, double time)
 {
 #if defined(NBN_DEBUG) && defined(NBN_DISABLE_STALE_CONNECTION_DETECTION)
+    (void) connection;
+    (void) time;
     /* When testing under bad network conditions (in soak test for instance), we don't want to deal
        with stale connections */
     return false;
@@ -3575,7 +3574,7 @@ static NBN_RPC_Message *Connection_BuildRPC(NBN_Connection *connection, NBN_RPC 
 
 static void Connection_HandleReceivedRPC(NBN_ConnectionHandle connection, NBN_Endpoint *endpoint, NBN_RPC_Message *msg)
 {
-    if (msg->id < 0 || msg->id > NBN_RPC_MAX - 1)
+    if (msg->id > NBN_RPC_MAX - 1)
     {
         NBN_LogError("Received an invalid RPC");
 
@@ -4199,7 +4198,7 @@ static void Endpoint_Init(NBN_Endpoint *endpoint, bool is_server)
         endpoint, (NBN_MessageDestructor)NBN_RPC_Message_Destroy, NBN_RPC_MESSAGE_TYPE);
 
 #ifdef NBN_DEBUG
-    endpoint->OnMessageAddedToRecvQueue = NULL;
+    memset(&endpoint->debug_callbacks, 0, sizeof(endpoint->debug_callbacks));
 #endif
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
@@ -4272,7 +4271,7 @@ static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_
 
 static int Endpoint_RegisterRPC(NBN_Endpoint *endpoint, unsigned int id, NBN_RPC_Signature signature, NBN_RPC_Func func)
 {
-    if (id < 0 || id >= NBN_RPC_MAX)
+    if (id >= NBN_RPC_MAX)
     {
         NBN_LogError("Failed to register RPC, invalid ID");
 
@@ -4843,7 +4842,7 @@ NBN_Connection *NBN_GameClient_CreateServerConnection(int driver_id, void *drive
     NBN_Connection *server_connection = Endpoint_CreateConnection(&nbn_game_client.endpoint, 0, protocol_id, driver_id, driver_data);
 
 #ifdef NBN_DEBUG
-    server_connection->OnMessageAddedToRecvQueue = nbn_game_client.endpoint.OnMessageAddedToRecvQueue;
+    server_connection->debug_callbacks = nbn_game_client.endpoint.debug_callbacks;
 #endif
 
     nbn_game_client.server_connection = server_connection;
@@ -4882,7 +4881,7 @@ int NBN_GameClient_CallRPC(unsigned int id, ...)
 {
     NBN_RPC rpc = nbn_game_client.endpoint.rpcs[id];
 
-    if (rpc.id < 0 || rpc.id != id)
+    if (rpc.id != id)
     {
         NBN_LogError("Cannot call invalid RPC (ID: %d)", id);
 
@@ -4916,14 +4915,9 @@ rpc_error:
 
 #ifdef NBN_DEBUG
 
-void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, void *cb)
+void NBN_GameClient_Debug_RegisterCallback(NBN_ConnectionDebugCallback cbs)
 {
-    switch (cb_type)
-    {
-    case NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE:
-        nbn_game_client.endpoint.OnMessageAddedToRecvQueue = (void (*)(NBN_Connection *, NBN_Message *))cb;
-        break;
-    }
+    nbn_game_client.endpoint.debug_callbacks = cbs;
 }
 
 #endif /* NBN_DEBUG */
@@ -5242,7 +5236,7 @@ NBN_Connection *NBN_GameServer_CreateClientConnection(int driver_id, void *drive
     NBN_Connection *client = Endpoint_CreateConnection(&nbn_game_server.endpoint, conn_id, protocol_id, driver_id, driver_data);
 
 #ifdef NBN_DEBUG
-    client->OnMessageAddedToRecvQueue = nbn_game_server.endpoint.OnMessageAddedToRecvQueue;
+    client->debug_callbacks = nbn_game_server.endpoint.debug_callbacks;
 #endif
 
     return client;
@@ -5436,7 +5430,7 @@ int NBN_GameServer_CallRPC(unsigned int id, NBN_ConnectionHandle connection_hand
 
     NBN_RPC rpc = nbn_game_server.endpoint.rpcs[id];
 
-    if (rpc.id < 0 || rpc.id != id)
+    if (rpc.id != id)
     {
         NBN_LogError("Cannot call invalid RPC (ID: %d)", id);
 
@@ -5470,14 +5464,9 @@ rpc_error:
 
 #ifdef NBN_DEBUG
 
-void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback cb_type, void *cb)
+void NBN_GameServer_Debug_RegisterCallback(NBN_ConnectionDebugCallback cbs)
 {
-    switch (cb_type)
-    {
-    case NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE:
-        nbn_game_server.endpoint.OnMessageAddedToRecvQueue = (void (*)(NBN_Connection *, NBN_Message *))cb;
-        break;
-    }
+    nbn_game_server.endpoint.debug_callbacks = cbs;
 }
 
 #endif /* NBN_DEBUG */
@@ -5599,7 +5588,7 @@ static void GameServer_AddClientToClosedList(NBN_Connection *client)
     }
 }
 
-static unsigned int GameServer_GetClientCount(void)
+static inline unsigned int GameServer_GetClientCount(void)
 {
     return nbn_game_server.clients->count;
 }

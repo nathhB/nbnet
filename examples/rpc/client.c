@@ -35,6 +35,8 @@ static bool disconnected = false;
 
 static void TestRPC2(unsigned int param_count, NBN_RPC_Param params[NBN_RPC_MAX_PARAM_COUNT], NBN_ConnectionHandle sender)
 {
+    (void) sender;
+    TEST_VERIFY(param_count == 2);
     Log(LOG_INFO, "TestRPC2 called !");
     Log(LOG_INFO, "Parameter 1 (float): %f", NBN_RPC_GetFloat(params, 0));
     Log(LOG_INFO, "Parameter 2 (string): %s", NBN_RPC_GetString(params, 1));
@@ -48,7 +50,7 @@ void OnConnected(void)
 
     int ret = NBN_GameClient_CallRPC(TEST_RPC_ID, 4242, -1234.5678f, true);
 
-    assert(ret == 0);
+    TEST_VERIFY(ret == 0);
 }
 
 void OnDisconnected(void)
@@ -62,6 +64,8 @@ void OnDisconnected(void)
 
 int main(int argc, char *argv[])
 {
+    (void) argc;
+    (void) argv;
 #ifdef __EMSCRIPTEN__
     NBN_WebRTC_Register(); // Register the WebRTC driver
 #else
@@ -84,11 +88,11 @@ int main(int argc, char *argv[])
 
     int ret = NBN_GameClient_RegisterRPC(TEST_RPC_ID, TEST_RPC_SIGNATURE, NULL);
 
-    assert(ret == 0);
+    TEST_VERIFY(ret == 0);
 
     ret = NBN_GameClient_RegisterRPC(TEST_RPC_2_ID, TEST_RPC_2_SIGNATURE, TestRPC2);
 
-    assert(ret == 0);
+    TEST_VERIFY(ret == 0);
 
     // Number of seconds between client ticks
     double dt = 1.0 / RPC_TICK_RATE;
