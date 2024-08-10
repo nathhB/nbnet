@@ -3,10 +3,10 @@ cmake_minimum_required(VERSION 3.0)
 project(unit_tests C)
 enable_testing()
 
-add_compile_options(-Wall -Wno-unknown-pragmas)
+add_compile_options(-Wall)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
-    add_compile_options(-Wextra -Wpedantic -Werror )
+    add_compile_options(-Wextra -Wpedantic -Werror -Wno-unknown-pragmas)
 endif (CMAKE_COMPILER_IS_GNUCXX)
 
 # add_executable(message_chunks message_chunks.c CuTest.c)
