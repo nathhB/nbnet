@@ -12,7 +12,11 @@ endif (CPP_COMPILE)
 
 unset(CPP_COMPILE)
 
-add_compile_options(-Wall -Wextra -Wpedantic)
+add_compile_options(-Wall)
+
+if(CMAKE_COMPILER_IS_GNUCXX)
+    add_compile_options(-Wextra -Wpedantic)
+endif (CMAKE_COMPILER_IS_GNUCXX)
 
 add_executable(client client.c soak.c logging.c cargs.c)
 add_executable(server server.c soak.c logging.c cargs.c)
