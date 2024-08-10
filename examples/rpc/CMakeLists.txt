@@ -13,7 +13,11 @@ endif (CPP_COMPILE)
 
 unset(CPP_COMPILE CACHE)
 
-add_compile_options(-Wall -Wextra -Wpedantic)
+add_compile_options(-Wall -Wpedantic)
+
+if(CMAKE_COMPILER_IS_GNUCXX)
+    add_compile_options(-Wextra)
+endif (CMAKE_COMPILER_IS_GNUCXX)
 
 add_executable(rpc_client client.c shared.c)
 add_executable(rpc_server server.c shared.c)
