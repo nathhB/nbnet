@@ -7,10 +7,10 @@ set(raylib_DIR cmake)
 set(CLIENT_SOURCES client.c shared.c)
 set(SERVER_SOURCES server.c shared.c)
 
-add_compile_options(-Wall -Wpedantic -Wno-unknown-pragmas -Wno-type-limits -std=c99)
+add_compile_options(-Wall -Wno-unknown-pragmas -Wno-type-limits -std=c99)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
-    add_compile_options(-Wextra)
+    add_compile_options(-Wextra -Wpedantic)
 endif (CMAKE_COMPILER_IS_GNUCXX)
 
 add_executable(raylib_client ${CLIENT_SOURCES})
