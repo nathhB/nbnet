@@ -13,7 +13,7 @@ endif (CPP_COMPILE)
 
 unset(CPP_COMPILE CACHE)
 
-add_compile_options(-Wall -Wpedantic)
+add_compile_options(-Wall)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     add_compile_options(-Wextra -Wpedantic)
