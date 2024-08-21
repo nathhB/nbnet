@@ -5483,7 +5483,7 @@ static int GameServer_SendMessageTo(NBN_Connection *client, uint8_t msg_type, ui
     }
 
     /* The only message type we can send to an unaccepted client is a NBN_ClientAcceptedMessage message */
-    assert(client->is_accepted || outgoing_msg->type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE);
+    assert(client->is_accepted || outgoing_msg->type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || outgoing_msg->type == NBN_CLIENT_CLOSED_MESSAGE_TYPE);
 
     if (Endpoint_EnqueueOutgoingMessage(&nbn_game_server.endpoint, client, outgoing_msg, channel_id) < 0)
     {
