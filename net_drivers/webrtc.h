@@ -292,7 +292,7 @@ typedef struct NBN_WebRTC_Server
     uint32_t protocol_id;
 } NBN_WebRTC_Server;
 
-static NBN_WebRTC_Server nbn_wrtc_serv = {NULL, {0}, 0, false};
+static NBN_WebRTC_Server nbn_wrtc_serv = {NULL, f{0}, 0};
 static NBN_WebRTC_Config nbn_wrtc_cfg;
 
 static int NBN_WebRTC_ServStart(uint32_t protocol_id, uint16_t port)
