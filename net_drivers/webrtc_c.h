@@ -720,8 +720,6 @@ static void NBN_WebRTC_C_ServRemoveClientConnection(NBN_Connection *conn)
 
 static int NBN_WebRTC_C_ServSendPacketTo(NBN_Packet *packet, NBN_Connection *conn)
 {
-    if (!conn->is_accepted) return 0;
-
     NBN_WebRTC_C_Peer *peer = (NBN_WebRTC_C_Peer*)conn->driver_data;
 
     if (rtcSendMessage(peer->channel_id, (char *)packet->buffer, packet->size) < 0)
