@@ -474,34 +474,34 @@ static void NBN_UDP_ServStop(void)
 
 static int NBN_UDP_ServRecvPackets(void)
 {
-    uint8_t buffer[NBN_PACKET_MAX_SIZE] = {0};
+    NBN_Packet packet;
     SOCKADDR_IN src_addr;
     socklen_t src_addr_len = sizeof(src_addr);
     NBN_IPAddress ip_address;
 
     while (true)
     {
-        int bytes = recvfrom(nbn_udp_sock, (char *)buffer, sizeof(buffer), 0, (SOCKADDR *)&src_addr, &src_addr_len);
+        int bytes = recvfrom(nbn_udp_sock, (char *)packet.buffer, sizeof(packet.buffer), 0, (SOCKADDR *)&src_addr, &src_addr_len);
 
         if (bytes <= 0)
             break;
 
+        if (bytes <= NBN_PACKET_HEADER_SIZE)
+            continue;
+
+        NBN_Packet packet;
+
+        if (NBN_Packet_InitRead(&packet, conn, bytes) < 0)
+            continue; /* not a valid packet */
+
         ip_address.host = ntohl(src_addr.sin_addr.s_addr);
         ip_address.port = ntohs(src_addr.sin_port);
-
-        if (NBN_Packet_ReadProtocolId(buffer, bytes) != nbn_udp_serv.protocol_id)
-            continue; /* not matching the protocol of the receiver */ 
 
         NBN_Connection *conn = FindOrCreateClientConnectionByAddress(ip_address);
 
         if (conn == NULL)
             continue; // skip the connection
-
-        NBN_Packet packet;
-
-        if (NBN_Packet_InitRead(&packet, conn, buffer, bytes) < 0)
-            continue; /* not a valid packet */
-
+ 
         if (NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_PACKET_RECEIVED, &packet) < 0)
         {
             NBN_LogError("Failed to raise game server event");
@@ -633,16 +633,19 @@ static void NBN_UDP_CliStop(void)
 static int NBN_UDP_CliRecvPackets(void)
 {
     NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)nbn_udp_cli.server_conn->driver_data;
-    uint8_t buffer[NBN_PACKET_MAX_SIZE] = {0};
+    NBN_Packet packet = {0};
     SOCKADDR_IN src_addr;
     socklen_t src_addr_len = sizeof(src_addr);
 
     while (true)
     {
-        int bytes = recvfrom(nbn_udp_sock, (char *)buffer, sizeof(buffer), 0, (SOCKADDR *)&src_addr, &src_addr_len);
+        int bytes = recvfrom(nbn_udp_sock, (char *)packet.buffer, sizeof(packet.buffer), 0, (SOCKADDR *)&src_addr, &src_addr_len);
 
         if (bytes <= 0)
             break;
+
+        if (bytes < NBN_PACKET_HEADER_SIZE)
+            continue;
 
         NBN_IPAddress ip_address;
 
@@ -653,12 +656,7 @@ static int NBN_UDP_CliRecvPackets(void)
         if (ip_address.host != udp_conn->address.host || ip_address.port != udp_conn->address.port)
             continue;
 
-        if (NBN_Packet_ReadProtocolId(buffer, bytes) != nbn_udp_cli.protocol_id)
-            continue; /* not matching the protocol of the receiver */
-
-        NBN_Packet packet;
-
-        if (NBN_Packet_InitRead(&packet, nbn_udp_cli.server_conn, buffer, bytes) < 0)
+        if (NBN_Packet_InitRead(&packet, nbn_udp_cli.server_conn, bytes) < 0)
             continue; /* not a valid packet */ 
 
         NBN_Driver_RaiseEvent(NBN_DRIVER_CLI_PACKET_RECEIVED, &packet);

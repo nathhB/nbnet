@@ -6,6 +6,8 @@ option(CPP_COMPILE OFF)
 option(ENABLE_TLS OFF)
 option(WEBRTC_NATIVE OFF)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # allow to compile as cpp
 if (CPP_COMPILE)
   file(GLOB_RECURSE CFILES "${CMAKE_SOURCE_DIR}/*.c")
