@@ -4997,6 +4997,12 @@ static int GameClient_HandleMessageReceivedEvent(void)
         memcpy(nbn_game_client.server_data, accepted_msg->data, accepted_msg->length);
         nbn_game_client.server_data_len = accepted_msg->length;
     } 
+    else if (message_info.type == NBN_RPC_MESSAGE_TYPE)
+    {
+        ret = NBN_NO_EVENT;
+
+        Connection_HandleReceivedRPC(nbn_game_client.server_connection->id, &nbn_game_client.endpoint, (NBN_RPC_Message *)message_info.data);
+    }
     else
     {
         ret = NBN_MESSAGE_RECEIVED;
