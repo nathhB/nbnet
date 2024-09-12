@@ -561,7 +561,7 @@ typedef struct NBN_WebRTC_C_Server
     char packet_buffer[NBN_PACKET_MAX_SIZE];
 } NBN_WebRTC_C_Server;
 
-static NBN_WebRTC_C_Server nbn_wrtc_c_serv = {0, NULL, false, 0, 0, {0}};
+static NBN_WebRTC_C_Server nbn_wrtc_c_serv = {0, NULL, 0, 0, {0}};
 
 static void NBN_WebRTC_C_Serv_OnLocalDescription(int pc, const char *sdp, const char *type, void *user_ptr)
 {
@@ -744,7 +744,7 @@ typedef struct NBN_WebRTC_C_Client
     char packet_buffer[NBN_PACKET_MAX_SIZE];
 } NBN_WebRTC_C_Client;
 
-static NBN_WebRTC_C_Client nbn_wrtc_c_cli = {0, false, false, NULL, {0}};
+static NBN_WebRTC_C_Client nbn_wrtc_c_cli = {0, false, NULL, {0}};
 
 static void NBN_WebRTC_C_Cli_OnLocalDescription(int pc, const char *sdp, const char *type, void *user_ptr)
 {
