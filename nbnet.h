@@ -674,7 +674,7 @@ void NBN_Channel_UpdateMessageLastSendTime(NBN_Channel *, NBN_Message *, double)
 
    Guarantee that messages will be received in order, does not however guarantee that all message will be received when
    packets get lost. This is meant to be used for time critical messages when it does not matter that much if they
-   end up getting lost. A good example would be game snaphosts when any newly received snapshot is more up to date
+   end up getting lost. A good example would be game snapshots when any newly received snapshot is more up to date
    than the previous one.
    */
 typedef struct NBN_UnreliableOrderedChannel
@@ -4590,13 +4590,15 @@ int NBN_GameClient_StartEx(const char *protocol_name, const char *host, uint16_t
     nbn_game_client.is_connected = false;
     nbn_game_client.closed_code = -1;
 
+    const char *resolved_host = strcmp(host, "localhost") == 0 ? "127.0.0.1" : host;
+
     for (unsigned int i = 0; i < NBN_MAX_DRIVERS; i++)
     {
         NBN_Driver *driver = &nbn_drivers[i];
 
         if (driver->id < 0) continue;
 
-        if (driver->impl.cli_start(Endpoint_BuildProtocolId(protocol_name), host, port) < 0)
+        if (driver->impl.cli_start(Endpoint_BuildProtocolId(protocol_name), resolved_host, port) < 0)
         {
             NBN_LogError("Failed to start driver %s", driver->name);
             return NBN_ERROR;
