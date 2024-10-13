@@ -942,6 +942,7 @@ void NBN_WebRTC_C_Register(NBN_WebRTC_C_Config config)
     nbn_wrtc_c_cfg.ice_servers = ice_servers;
     nbn_wrtc_c_cfg.ice_servers_count = config.ice_servers_count;
     nbn_wrtc_c_cfg.enable_tls = config.enable_tls;
+    nbn_wrtc_c_cfg.log_level = config.log_level;
 
     if (config.enable_tls)
     {
