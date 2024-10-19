@@ -1739,7 +1739,7 @@ static bool NBN_ConnectionTable_Remove(NBN_ConnectionTable *table, uint32_t id)
     unsigned int slot = hash % table->capacity;
     NBN_Connection *conn = table->connections[slot];
 
-    if (conn->id == id)
+    if (conn && conn->id == id)
     {
         NBN_ConnectionTable_RemoveEntry(table, slot);
         return true;
@@ -1754,7 +1754,7 @@ static bool NBN_ConnectionTable_Remove(NBN_ConnectionTable *table, uint32_t id)
         slot = (hash + (int)pow(i, 2)) % table->capacity;
         conn = table->connections[slot];
 
-        if (conn != NULL && conn->id == id)
+        if (conn && conn->id == id)
         {
             NBN_ConnectionTable_RemoveEntry(table, slot);
             return true;
