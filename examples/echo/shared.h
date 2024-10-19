@@ -69,16 +69,6 @@ void Log(int, const char *, ...);
 
 #endif // __EMSCRIPTEN__
 
-typedef struct
-{
-    unsigned int length;
-    char data[ECHO_MESSAGE_LENGTH];
-} EchoMessage;
-
-EchoMessage *EchoMessage_Create(void);
-void EchoMessage_Destroy(EchoMessage *);
-int EchoMessage_Serialize(EchoMessage *, NBN_Stream *);
-
 void EchoSleep(double);
 
 #endif /* ECHO_EXAMPLE_SHARED_H */

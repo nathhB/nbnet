@@ -63,11 +63,12 @@ void OnMessageReceived(void)
     assert(msg_info.type == ECHO_MESSAGE_TYPE);
 
     // Retrieve the received message
-    EchoMessage *msg = (EchoMessage *)msg_info.data;
 
-    Log(LOG_INFO, "Received echo: %s (%d bytes)", msg->data, msg->length);
-
-    EchoMessage_Destroy(msg); // Destroy the received echo message
+    /*EchoMessage *msg = (EchoMessage *)msg_info.data;*/
+    /**/
+    /*Log(LOG_INFO, "Received echo: %s (%d bytes)", msg->data, msg->length);*/
+    /**/
+    /*EchoMessage_Destroy(msg); // Destroy the received echo message*/
 }
 
 int SendEchoMessage(const char *msg)
@@ -75,19 +76,20 @@ int SendEchoMessage(const char *msg)
     unsigned int length = strlen(msg); // Compute message length
 
     // Create the echo message
-    EchoMessage *echo = EchoMessage_Create();
-
-    if (echo == NULL)
-        return -1;
-
-    // Fill echo message with message the length and the message
-    echo->length = length + 1;
-    memcpy(echo->data, msg, length + 1);
-
-    // Reliably send it to the server
-    if (NBN_GameClient_SendReliableMessage(ECHO_MESSAGE_TYPE, echo) < 0)
-        return -1;
-
+ 
+    /*EchoMessage *echo = EchoMessage_Create();*/
+    /**/
+    /*if (echo == NULL)*/
+    /*    return -1;*/
+    /**/
+    /*// Fill echo message with message the length and the message*/
+    /*echo->length = length + 1;*/
+    /*memcpy(echo->data, msg, length + 1);*/
+    /**/
+    /*// Reliably send it to the server*/
+    /*if (NBN_GameClient_SendReliableMessage(ECHO_MESSAGE_TYPE, echo) < 0)*/
+    /*    return -1;*/
+    /**/
     return 0;
 }
 
@@ -171,13 +173,6 @@ int main(int argc, char *argv[])
         return 1;
 #endif 
     }
-
-    // Registering messages, have to be done after NBN_GameClient_StartEx
-    // Messages need to be registered on both client and server side
-    NBN_GameClient_RegisterMessage(ECHO_MESSAGE_TYPE,
-            (NBN_MessageBuilder)EchoMessage_Create,
-            (NBN_MessageDestructor)EchoMessage_Destroy,
-            (NBN_MessageSerializer)EchoMessage_Serialize); 
 
     // Number of seconds between client ticks
     double dt = 1.0 / ECHO_TICK_RATE;

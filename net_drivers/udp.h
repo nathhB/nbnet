@@ -444,7 +444,7 @@ static char *GetLastErrorMessage(void)
 typedef struct NBN_UDP_Server
 {
     NBN_UDP_HTable *connections;
-    uint32_t next_conn_id; // nbnet connection ids start at 1
+    uint32_t next_conn_id; // nbnet connection ids, starts at 1
     uint32_t protocol_id;
 } NBN_UDP_Server;
 
@@ -474,7 +474,7 @@ static void NBN_UDP_ServStop(void)
 
 static int NBN_UDP_ServRecvPackets(void)
 {
-    NBN_Packet packet;
+    NBN_Packet packet = {0};
     SOCKADDR_IN src_addr;
     socklen_t src_addr_len = sizeof(src_addr);
     NBN_IPAddress ip_address;
@@ -489,10 +489,8 @@ static int NBN_UDP_ServRecvPackets(void)
         if (bytes <= NBN_PACKET_HEADER_SIZE)
             continue;
 
-        NBN_Packet packet;
-
-        if (NBN_Packet_InitRead(&packet, conn, bytes) < 0)
-            continue; /* not a valid packet */
+        if (NBN_Packet_InitRead(&packet, nbn_udp_serv.protocol_id, bytes) < 0)
+            continue;
 
         ip_address.host = ntohl(src_addr.sin_addr.s_addr);
         ip_address.port = ntohs(src_addr.sin_port);
@@ -500,7 +498,9 @@ static int NBN_UDP_ServRecvPackets(void)
         NBN_Connection *conn = FindOrCreateClientConnectionByAddress(ip_address);
 
         if (conn == NULL)
-            continue; // skip the connection
+            continue;
+
+        packet.sender = conn;
  
         if (NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_PACKET_RECEIVED, &packet) < 0)
         {
@@ -562,7 +562,7 @@ static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress addre
 
         udp_conn->id = nbn_udp_serv.next_conn_id++;
         udp_conn->address = address;
-        udp_conn->conn = NBN_GameServer_CreateClientConnection(NBN_UDP_DRIVER_ID, udp_conn, nbn_udp_serv.protocol_id, udp_conn->id);
+        udp_conn->conn = NBN_GameServer_CreateClientConnection(NBN_UDP_DRIVER_ID, udp_conn, udp_conn->id);
 
         NBN_UDP_HTable_Add(nbn_udp_serv.connections, address, udp_conn);
 
@@ -617,7 +617,7 @@ static int NBN_UDP_CliStart(uint32_t protocol_id, const char *host, uint16_t por
     if (BindSocket(0) < 0)
         return NBN_ERROR;
 
-    nbn_udp_cli.server_conn = NBN_GameClient_CreateServerConnection(NBN_UDP_DRIVER_ID, udp_conn, protocol_id);
+    nbn_udp_cli.server_conn = NBN_GameClient_CreateServerConnection(NBN_UDP_DRIVER_ID, udp_conn);
 
     return 0;
 }
@@ -652,12 +652,13 @@ static int NBN_UDP_CliRecvPackets(void)
         ip_address.host = ntohl(src_addr.sin_addr.s_addr);
         ip_address.port = ntohs(src_addr.sin_port);
 
-        /* make sure the received packet is from the server */
         if (ip_address.host != udp_conn->address.host || ip_address.port != udp_conn->address.port)
             continue;
 
-        if (NBN_Packet_InitRead(&packet, nbn_udp_cli.server_conn, bytes) < 0)
-            continue; /* not a valid packet */ 
+        if (NBN_Packet_InitRead(&packet, nbn_udp_cli.protocol_id, bytes) < 0)
+            continue;
+
+        packet.sender = nbn_udp_cli.server_conn;
 
         NBN_Driver_RaiseEvent(NBN_DRIVER_CLI_PACKET_RECEIVED, &packet);
     }

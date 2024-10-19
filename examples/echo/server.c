@@ -41,21 +41,22 @@ static int EchoReceivedMessage(void)
     assert(msg_info.type == ECHO_MESSAGE_TYPE);
 
     // Retrieve the received message
-    EchoMessage *msg = (EchoMessage *)msg_info.data;
 
-    // Create an echo message
-    EchoMessage *echo = EchoMessage_Create();
-
-    // Fill it with the received message data and length
-    memcpy(echo->data, msg->data, msg->length);
-    echo->length = msg->length;
-
-    // Reliably send it to the client
-    // If the send fails the client will be disconnected and a NBN_CLIENT_DISCONNECTED event
-    // will be received (see event polling in main)
-    NBN_GameServer_SendReliableMessageTo(client, ECHO_MESSAGE_TYPE, echo);
-
-    EchoMessage_Destroy(msg); // Destroy the received echo message
+    /*EchoMessage *msg = (EchoMessage *)msg_info.data;*/
+    /**/
+    /*// Create an echo message*/
+    /*EchoMessage *echo = EchoMessage_Create();*/
+    /**/
+    /*// Fill it with the received message data and length*/
+    /*memcpy(echo->data, msg->data, msg->length);*/
+    /*echo->length = msg->length;*/
+    /**/
+    /*// Reliably send it to the client*/
+    /*// If the send fails the client will be disconnected and a NBN_CLIENT_DISCONNECTED event*/
+    /*// will be received (see event polling in main)*/
+    /*NBN_GameServer_SendReliableMessageTo(client, ECHO_MESSAGE_TYPE, echo);*/
+    /**/
+    /*EchoMessage_Destroy(msg); // Destroy the received echo message*/
 
     return 0;
 }
@@ -124,12 +125,6 @@ int main(int argc, const char **argv)
         return 1;
 #endif
     }
-
-    // Registering messages, have to be done after NBN_GameServer_StartEx
-    NBN_GameServer_RegisterMessage(ECHO_MESSAGE_TYPE,
-            (NBN_MessageBuilder)EchoMessage_Create,
-            (NBN_MessageDestructor)EchoMessage_Destroy,
-            (NBN_MessageSerializer)EchoMessage_Serialize); 
 
     // Number of seconds between server ticks
     double dt = 1.0 / ECHO_TICK_RATE;

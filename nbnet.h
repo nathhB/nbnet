@@ -312,7 +312,7 @@ typedef struct NBN_Packet
 void NBN_Packet_InitWrite(NBN_Packet *, uint32_t, uint16_t, uint16_t, uint32_t);
 int NBN_Packet_WriteMessage(NBN_Packet *, NBN_Message *);
 int NBN_Packet_Seal(NBN_Packet *, NBN_Connection *);
-int NBN_Packet_InitRead(NBN_Packet *, NBN_Connection *, unsigned int);
+int NBN_Packet_InitRead(NBN_Packet *, uint32_t, unsigned int);
 
 #pragma endregion /* NBN_Packet */
 
@@ -483,7 +483,6 @@ typedef enum NBN_ConnectionDebugCallback
 struct NBN_Connection
 {
     uint32_t id;
-    uint32_t protocol_id;
     double last_recv_packet_time; /* Used to detect stale connections */
     double last_flush_time; /* Last time the send queue was flushed */
     double last_read_packets_time; /* Last time packets were read from the network driver */
@@ -523,10 +522,10 @@ struct NBN_ConnectionListNode
     NBN_ConnectionListNode *prev;
 };
 
-NBN_Connection *NBN_Connection_Create(uint32_t, uint32_t, NBN_Endpoint *, NBN_Driver *, void *);
+NBN_Connection *NBN_Connection_Create(uint32_t, NBN_Endpoint *, NBN_Driver *, void *);
 void NBN_Connection_Destroy(NBN_Connection *);
 int NBN_Connection_ProcessReceivedPacket(NBN_Connection *, NBN_Packet *, double);
-int NBN_Connection_FlushChannels(NBN_Connection *, double);
+int NBN_Connection_FlushChannels(NBN_Connection *, uint32_t, double);
 int NBN_Connection_InitChannel(NBN_Connection *, NBN_Channel *);
 bool NBN_Connection_CheckIfStale(NBN_Connection *, double);
 
@@ -661,8 +660,9 @@ struct NBN_Endpoint
     NBN_ChannelBuilder channel_builders[NBN_MAX_CHANNELS];
     NBN_ChannelDestructor channel_destructors[NBN_MAX_CHANNELS];
     NBN_EventQueue event_queue;
+    uint32_t protocol_id;
     bool is_server;
-    double time; /* Current time */
+    double time;
 
 #ifdef NBN_DEBUG
     /* Debug callbacks */
@@ -800,7 +800,7 @@ int NBN_GameClient_SendReliableMessage(uint8_t type, uint8_t *data, uint16_t len
 /**
  * For drivers only! NOT MEANT TO BE USED BY USER CODE.
  */
-NBN_Connection *NBN_GameClient_CreateServerConnection(int driver_id, void *driver_data, uint32_t protocol_id);
+NBN_Connection *NBN_GameClient_CreateServerConnection(int driver_id, void *driver_data);
 
 /**
  * Retrieve the info about the last received message.
@@ -924,7 +924,7 @@ int NBN_GameServer_SendPackets(void);
 /**
  * For drivers only! NOT MEANT TO BE USED BY USER CODE.
  */
-NBN_Connection *NBN_GameServer_CreateClientConnection(int, void *, uint32_t, uint32_t);
+NBN_Connection *NBN_GameServer_CreateClientConnection(int, void *, uint32_t);
 
 /**
  * Close a client's connection without a specific code (default code is -1)
@@ -1720,6 +1720,8 @@ void NBN_Packet_InitWrite(NBN_Packet *packet, uint32_t protocol_id, uint16_t seq
     packet->sender = NULL;
     packet->size = NBN_PACKET_HEADER_SIZE;
     packet->sealed = false;
+
+    memset(packet->buffer, 0, sizeof(packet->buffer));
 }
 
 int NBN_Packet_WriteMessage(NBN_Packet *packet, NBN_Message *message)
@@ -1785,13 +1787,13 @@ int NBN_Packet_Seal(NBN_Packet *packet, NBN_Connection *connection)
     return 0;
 }
 
-int NBN_Packet_InitRead(NBN_Packet *packet, NBN_Connection *sender, unsigned int size)
+int NBN_Packet_InitRead(NBN_Packet *packet, uint32_t protocol_id, unsigned int size)
 {
     NBN_Assert(size >= NBN_PACKET_HEADER_SIZE);
 
     packet->mode = NBN_PACKET_MODE_READ;
-    packet->sender = sender;
     packet->size = size;
+    packet->sender = NULL; // IMPORTANT: must be set by the drivers
     packet->sealed = false;
 
     NBN_Reader reader;
@@ -1799,7 +1801,7 @@ int NBN_Packet_InitRead(NBN_Packet *packet, NBN_Connection *sender, unsigned int
     NBN_Reader_Init(&reader, packet->buffer, NBN_PACKET_HEADER_SIZE);
 
     if (NBN_Reader_ReadUInt32(&reader, &packet->header.protocol_id) < 0) return NBN_ERROR;
-    if (packet->header.protocol_id != sender->protocol_id) return NBN_ERROR;
+    if (packet->header.protocol_id != protocol_id) return NBN_ERROR;
 
     if (NBN_Reader_ReadUInt32(&reader, &packet->header.ack_bits) < 0) return NBN_ERROR;
     if (NBN_Reader_ReadUInt16(&reader, &packet->header.seq_number) < 0) return NBN_ERROR;
@@ -1818,7 +1820,7 @@ static NBN_Message *Endpoint_CreateOutgoingMessage(NBN_Endpoint *, NBN_Channel*,
 static uint32_t Connection_BuildPacketAckBits(NBN_Connection *);
 static int Connection_DecodePacketHeader(NBN_Connection *, NBN_Packet *, double);
 static int Connection_AckPacket(NBN_Connection *, uint16_t, double time);
-static void Connection_InitOutgoingPacket(NBN_Connection *, NBN_Packet *, NBN_PacketEntry **);
+static void Connection_InitOutgoingPacket(NBN_Connection *, uint32_t, NBN_Packet *, NBN_PacketEntry **);
 static NBN_PacketEntry *Connection_InsertOutgoingPacketEntry(NBN_Connection *, uint16_t);
 static bool Connection_InsertReceivedPacketEntry(NBN_Connection *, uint16_t);
 static NBN_PacketEntry *Connection_FindSendPacketEntry(NBN_Connection *, uint16_t);
@@ -1831,12 +1833,11 @@ static void Connection_UpdateAveragePacketLoss(NBN_Connection *, uint16_t);
 static void Connection_UpdateAverageUploadBandwidth(NBN_Connection *, float);
 static void Connection_UpdateAverageDownloadBandwidth(NBN_Connection *, double);
 
-NBN_Connection *NBN_Connection_Create(uint32_t id, uint32_t protocol_id, NBN_Endpoint *endpoint, NBN_Driver *driver, void *driver_data)
+NBN_Connection *NBN_Connection_Create(uint32_t id, NBN_Endpoint *endpoint, NBN_Driver *driver, void *driver_data)
 {
     NBN_Connection *connection = (NBN_Connection*)MemoryManager_Alloc(NBN_MEM_CONNECTION);
 
     connection->id = id;
-    connection->protocol_id = protocol_id;
     connection->endpoint = endpoint;
     connection->last_recv_packet_time = endpoint->time;
     connection->next_packet_seq_number = 1;
@@ -1946,16 +1947,16 @@ int NBN_Connection_ProcessReceivedPacket(NBN_Connection *connection, NBN_Packet 
     return 0;
 }
 
-int NBN_Connection_FlushChannels(NBN_Connection *connection, double time)
+int NBN_Connection_FlushChannels(NBN_Connection *connection, uint32_t protocol_id, double time)
 {
     NBN_LogTrace("Flushing the send queue");
 
-    NBN_Packet packet;
+    NBN_Packet packet = {0};
     NBN_PacketEntry *packet_entry;
     unsigned int sent_packet_count = 0;
     unsigned int sent_bytes = 0;
 
-    Connection_InitOutgoingPacket(connection, &packet, &packet_entry);
+    Connection_InitOutgoingPacket(connection, protocol_id, &packet, &packet_entry);
 
     for (unsigned int i = 0; i < NBN_MAX_CHANNELS; i++)
     {
@@ -1994,7 +1995,7 @@ int NBN_Connection_FlushChannels(NBN_Connection *connection, double time)
                 sent_packet_count++;
                 sent_bytes += packet.size;
 
-                Connection_InitOutgoingPacket(connection, &packet, &packet_entry);
+                Connection_InitOutgoingPacket(connection, protocol_id, &packet, &packet_entry);
 
                 int ret = NBN_Packet_WriteMessage(&packet, message);
 
@@ -2169,11 +2170,11 @@ static int Connection_AckPacket(NBN_Connection *connection, uint16_t ack_packet_
 }
 
 static void Connection_InitOutgoingPacket(
-        NBN_Connection *connection, NBN_Packet *outgoing_packet, NBN_PacketEntry **packet_entry)
+        NBN_Connection *connection, uint32_t protocol_id, NBN_Packet *outgoing_packet, NBN_PacketEntry **packet_entry)
 {
     NBN_Packet_InitWrite(
             outgoing_packet,
-            connection->protocol_id,
+            protocol_id,
             connection->next_packet_seq_number++,
             connection->last_received_packet_seq_number,
             Connection_BuildPacketAckBits(connection));
@@ -2901,9 +2902,9 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *event_queue)
 
 #pragma region NBN_Endpoint
 
-static void Endpoint_Init(NBN_Endpoint *, bool);
+static void Endpoint_Init(NBN_Endpoint *, uint32_t, bool);
 static void Endpoint_Deinit(NBN_Endpoint *);
-static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *, uint32_t, uint32_t, int, void *);
+static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *, uint32_t, int, void *);
 static uint32_t Endpoint_BuildProtocolId(const char *);
 static void Endpoint_RegisterChannel(NBN_Endpoint *, uint8_t, NBN_ChannelBuilder, NBN_ChannelDestructor);
 static int Endpoint_ProcessReceivedPacket(NBN_Endpoint *, NBN_Packet *, NBN_Connection *);
@@ -2911,11 +2912,12 @@ static int Endpoint_EnqueueOutgoingMessage(NBN_Endpoint *, NBN_Connection *, NBN
 // static int Endpoint_SplitMessageIntoChunks(NBN_Message *, NBN_OutgoingMessage *, NBN_Channel *, NBN_MessageSerializer, unsigned int, NBN_MessageChunk **);
 static void Endpoint_UpdateTime(NBN_Endpoint *);
 
-static void Endpoint_Init(NBN_Endpoint *endpoint, bool is_server)
+static void Endpoint_Init(NBN_Endpoint *endpoint, uint32_t protocol_id, bool is_server)
 {
     MemoryManager_Init();
 
     endpoint->is_server = is_server;
+    endpoint->protocol_id = protocol_id;
 
     for (int i = 0; i < NBN_MAX_CHANNELS; i++)
     {
@@ -2959,13 +2961,13 @@ static void Endpoint_Deinit(NBN_Endpoint *endpoint)
     MemoryManager_Deinit();
 }
 
-static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_t id, uint32_t protocol_id, int driver_id, void *driver_data)
+static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *endpoint, uint32_t id, int driver_id, void *driver_data)
 {
     NBN_Driver *driver = &nbn_drivers[driver_id];
 
     assert(driver->id >= 0);
 
-    NBN_Connection *connection = NBN_Connection_Create(id, protocol_id, endpoint, driver, driver_data);
+    NBN_Connection *connection = NBN_Connection_Create(id, endpoint, driver, driver_data);
 
     for (unsigned int chan_id = 0; chan_id < NBN_MAX_CHANNELS; chan_id++)
     {
@@ -3266,7 +3268,9 @@ int NBN_GameClient_StartEx(const char *protocol_name, const char *host, uint16_t
         NBN_Abort();
     }
 
-    Endpoint_Init(&nbn_game_client.endpoint, false);
+    uint32_t protocol_id = Endpoint_BuildProtocolId(protocol_name);
+
+    Endpoint_Init(&nbn_game_client.endpoint, protocol_id, false);
 
     nbn_game_client.server_connection = NULL;
     nbn_game_client.is_connected = false;
@@ -3278,7 +3282,7 @@ int NBN_GameClient_StartEx(const char *protocol_name, const char *host, uint16_t
 
         if (driver->id < 0) continue;
 
-        if (driver->impl.cli_start(Endpoint_BuildProtocolId(protocol_name), host, port) < 0)
+        if (driver->impl.cli_start(protocol_id, host, port) < 0)
         {
             NBN_LogError("Failed to start driver %s", driver->name);
             return NBN_ERROR;
@@ -3446,7 +3450,10 @@ int NBN_GameClient_Poll(void)
 
 int NBN_GameClient_SendPackets(void)
 {
-    return NBN_Connection_FlushChannels(nbn_game_client.server_connection, nbn_game_client.endpoint.time);
+    return NBN_Connection_FlushChannels(
+            nbn_game_client.server_connection,
+            nbn_game_client.endpoint.protocol_id,
+            nbn_game_client.endpoint.time);
 }
 
 int NBN_GameClient_SendMessage(uint8_t type, uint8_t channel_id, uint8_t *data, uint16_t length)
@@ -3481,9 +3488,9 @@ int NBN_GameClient_SendReliableMessage(uint8_t type, uint8_t *data, uint16_t len
     return NBN_GameClient_SendMessage(type, NBN_CHANNEL_RESERVED_RELIABLE, data, length);
 }
 
-NBN_Connection *NBN_GameClient_CreateServerConnection(int driver_id, void *driver_data, uint32_t protocol_id)
+NBN_Connection *NBN_GameClient_CreateServerConnection(int driver_id, void *driver_data)
 {
-    NBN_Connection *server_connection = Endpoint_CreateConnection(&nbn_game_client.endpoint, 0, protocol_id, driver_id, driver_data);
+    NBN_Connection *server_connection = Endpoint_CreateConnection(&nbn_game_client.endpoint, 0, driver_id, driver_data);
 
 #ifdef NBN_DEBUG
     server_connection->OnMessageAddedToRecvQueue = nbn_game_client.endpoint.OnMessageAddedToRecvQueue;
@@ -3687,7 +3694,9 @@ int NBN_GameServer_StartEx(const char *protocol_name, uint16_t port)
         NBN_Abort();
     }
 
-    Endpoint_Init(&nbn_game_server.endpoint, true);
+    uint32_t protocol_id = Endpoint_BuildProtocolId(protocol_name);
+
+    Endpoint_Init(&nbn_game_server.endpoint, protocol_id, true);
 
     if ((nbn_game_server.clients = NBN_ConnectionVector_Create()) == NULL)
     {
@@ -3709,7 +3718,7 @@ int NBN_GameServer_StartEx(const char *protocol_name, uint16_t port)
 
         if (driver->id < 0) continue;
 
-        if (driver->impl.serv_start(Endpoint_BuildProtocolId(protocol_name), port) < 0)
+        if (driver->impl.serv_start(protocol_id, port) < 0)
         {
             NBN_LogError("Failed to start driver %s", driver->name);
             return NBN_ERROR;
@@ -3841,8 +3850,15 @@ int NBN_GameServer_SendPackets(void)
 
         assert(!(client->is_closed && client->is_stale));
 
-        if (!client->is_stale && NBN_Connection_FlushChannels(client, nbn_game_server.endpoint.time) < 0)
+        if (
+                !client->is_stale &&
+                NBN_Connection_FlushChannels(
+                    client,
+                    nbn_game_server.endpoint.protocol_id,
+                    nbn_game_server.endpoint.time) < 0
+           ) {
             return NBN_ERROR;
+        }
 
         nbn_game_server.stats.upload_bandwidth += client->stats.upload_bandwidth;
     }
@@ -3850,11 +3866,11 @@ int NBN_GameServer_SendPackets(void)
     return 0;
 }
 
-NBN_Connection *NBN_GameServer_CreateClientConnection(int driver_id, void *driver_data, uint32_t protocol_id, uint32_t conn_id)
+NBN_Connection *NBN_GameServer_CreateClientConnection(int driver_id, void *driver_data, uint32_t conn_id)
 {
     assert(conn_id > 0); // Connection IDs start at 1
 
-    NBN_Connection *client = Endpoint_CreateConnection(&nbn_game_server.endpoint, conn_id, protocol_id, driver_id, driver_data);
+    NBN_Connection *client = Endpoint_CreateConnection(&nbn_game_server.endpoint, conn_id, driver_id, driver_data);
 
 #ifdef NBN_DEBUG
     client->OnMessageAddedToRecvQueue = nbn_game_server.endpoint.OnMessageAddedToRecvQueue;
