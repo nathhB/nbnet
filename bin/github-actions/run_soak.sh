@@ -6,7 +6,7 @@ PING=0.15
 JITTER=0.1
 CHANNEL_COUNT=3
 MESSAGE_COUNT=500
-NODE_CMD="$EMSDK_NODE --experimental-wasm-threads"
+NODE_CMD="$EMSDK_NODE"
 
 run_client () {
     node_client=$1
