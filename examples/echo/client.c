@@ -160,7 +160,7 @@ int main(int argc, char *argv[])
 
     // Start the client with a protocol name (must be the same than the one used by the server)
     // the server host and port and with packet encryption on or off
-    if (NBN_GameClient_StartEx(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT, NULL, 0) < 0)
+    if (NBN_GameClient_StartEx(ECHO_PROTOCOL_NAME, "localhost", ECHO_EXAMPLE_PORT, NULL, 0) < 0)
     {
         Log(LOG_ERROR, "Failed to start client");
 
