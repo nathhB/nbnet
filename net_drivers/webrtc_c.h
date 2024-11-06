@@ -316,57 +316,6 @@ static void NBN_WebRTC_C_StringReplaceAll(char *res, const char *str, const char
 
 #pragma region WebRTC common
 
-static char *NBN_WebRTC_C_ParseSignalingMessage(const char *msg, size_t msg_len, const char *type)
-{
-    char *sdp = NULL;
-    struct json_value_s* root = json_parse(msg, msg_len); // this has to be freed
-    
-    struct json_object_s* object = (struct json_object_s*)root->payload;
-    struct json_object_element_s *curr = object->start;
-
-    if (root->type != json_type_object)
-    {
-        NBN_LogDebug("Received an invalid signaling message: %s", msg);
-        goto leave_free_root;
-    }
-
-    while (curr != NULL)
-    {
-        if (strncmp(curr->name->string, "type", 4) == 0)
-        {
-            struct json_string_s *str = json_value_as_string(curr->value);
-
-            if (strncmp(str->string, type, strlen(type)))
-            {
-                // unexpected type
-                NBN_LogDebug("Received a signaling message with an unexpected type: %s (expected: %s)", str->string, type);
-                sdp = NULL;
-                goto leave_free_root;
-            }
-        }
-        else if (strncmp(curr->name->string, "sdp", 3) == 0)
-        {
-            struct json_string_s *str = json_value_as_string(curr->value);
-
-            if (str)
-            {
-                // strdup equivalent using NBN_Allocator, make sure this get freed
-                size_t len = strlen(str->string);
-
-                sdp = (char*)NBN_Allocator(len + 1);
-                memcpy(sdp, str->string, len + 1);
-            }
-        }
-
-        curr = curr->next;
-    }
-
-leave_free_root:
-    free(root);
-
-    return sdp;
-}
-
 static char *NBN_WebRTC_C_EscapeSDP(const char *sdp)
 {
     size_t len = strlen(sdp) * 2; // TODO: kinda lame way of making sure it's going to be big enough, find a better way
@@ -513,7 +462,87 @@ static void NBN_WebRTC_C_ProcessLocalDescription(NBN_WebRTC_C_Peer *peer, const 
     NBN_Deallocator(escaped_sdp);
 }
 
-static void NBN_WebRTC_C_ProcessSignalingMessage(NBN_WebRTC_C_Peer *peer, int ws, const char *msg, int size, const char *type)
+static struct json_value_s* NBN_WebRTC_C_JsonGetValue(struct json_value_s *json, const char *name) {
+    struct json_object_s* object = (struct json_object_s*)json->payload;
+    struct json_object_element_s *curr = object->start;
+    while (curr != NULL)
+    {
+        if (strcmp(curr->name->string, name) == 0)
+        {
+          return curr->value;
+        }
+        curr = curr->next;
+    }  
+    return NULL;
+}
+
+static const char* NBN_WebRTC_C_JsonGetStringValue(struct json_value_s *json, const char *name) {
+  struct json_value_s *value = NBN_WebRTC_C_JsonGetValue(json, name);
+  if(value) {
+    struct json_string_s* str = json_value_as_string(value);
+    if(str) {
+      return str->string; 
+    }
+  } else {
+    return NULL;
+  }
+}
+
+static void NBN_WebRTC_C_SendSignalingReadyMessage(NBN_WebRTC_C_Peer *peer) {
+    const char* json = "{ \"signaling\": { \"ready_for_candidates\": true } }";
+    if (rtcSendMessage(peer->ws, json, -1) < 0)
+    {
+        NBN_WebRTC_C_DestroyPeer(peer);
+    }
+}
+
+static void NBN_WebRTC_C_ProcessSDPMessage(NBN_WebRTC_C_Peer *peer, int ws, struct json_value_s *root, const char *type) {
+    const char *sdp = NBN_WebRTC_C_JsonGetStringValue(root, "sdp");
+    if (!sdp)
+    {
+        NBN_LogWarning("Failed to parse sdp signaling data for WS %d", ws);
+        return;
+    }
+
+    NBN_LogDebug("Successfully parsed signaling payload (sdp: %s)", sdp);
+
+    // we don't need to worry about keeping sdp or type alive because rtcSetRemoteDescription copies them
+    int ret = rtcSetRemoteDescription(peer->id, sdp, type);
+
+    if (ret < 0)
+    {
+        NBN_LogError("Failed to set remote description for peer %d (WS: %d): %d", peer->id, ws, ret);
+        rtcClose(ws);
+    } else {
+      NBN_WebRTC_C_SendSignalingReadyMessage(peer);
+    }
+}
+
+static void NBN_WebRTC_C_ProcessCandidateMessage(NBN_WebRTC_C_Peer *peer, int ws, struct json_value_s *json) {
+    const char *candidate = NBN_WebRTC_C_JsonGetStringValue(json, "candidate");
+    if (!candidate)
+    {
+        NBN_LogWarning("Failed to parse candidate signaling data for WS %d", ws);
+        return;
+    }
+    NBN_LogDebug("Successfully parsed trickled candidate payload (candidate: %s)", candidate);
+
+    if(strlen(candidate) == 0) {
+      NBN_LogDebug("Ignoring empty candidate WS %d", ws);
+      return;
+    }
+
+    int ret = rtcAddRemoteCandidate(peer->id, candidate, NULL);
+
+    if (ret < 0)
+    {
+        NBN_LogError("Failed to add trickled candidate for peer %d (WS: %d): %d", peer->id, ws, ret);
+        rtcClose(ws);
+    }
+}
+
+
+static void NBN_WebRTC_C_ProcessSignalingMessage(NBN_WebRTC_C_Peer *peer, int ws, const char *msg, int size)
 {
     // for some reason the size of the message is negative
     // in libdatachannel documentation (https://github.com/paullouisageneau/libdatachannel/blob/master/DOC.md) there is mention of:
@@ -526,26 +555,28 @@ static void NBN_WebRTC_C_ProcessSignalingMessage(NBN_WebRTC_C_Peer *peer, int ws
 
     NBN_LogDebug("Received signaling message on WS %d (size: %d): %s", ws, size, msg);
 
-    char *sdp = NBN_WebRTC_C_ParseSignalingMessage(msg, size, type);
+    struct json_value_s* root = json_parse(msg, size);
 
-    if (!sdp)
+    if (root->type != json_type_object)
     {
-        NBN_LogWarning("Failed to parse signaling data for WS %d", ws);
-        return;
+        NBN_LogDebug("Received an invalid signaling message: %s", msg);
     }
 
-    NBN_LogDebug("Successfully parsed signaling payload (sdp: %s)", sdp);
+    const char *type = NBN_WebRTC_C_JsonGetStringValue(root, "type");
+    struct json_value_s *signaling = NBN_WebRTC_C_JsonGetValue(root, "signaling");
+    struct json_value_s *candidate = NBN_WebRTC_C_JsonGetValue(root, "candidate");
 
-    int ret = rtcSetRemoteDescription(peer->id, sdp, type);
-
-    if (ret < 0)
-    {
-        NBN_LogError("Failed to set remote description for peer %d (WS: %d): %d", peer->id, ws, ret);
-        rtcClose(ws);
+    if(type) {
+      NBN_WebRTC_C_ProcessSDPMessage(peer, ws, root, type);
+    } else if(signaling) {
+      // TODO: handle sending trickled ice candidates
+    } else if(candidate) {
+      NBN_WebRTC_C_ProcessCandidateMessage(peer, ws, candidate);
     }
-
-    // IMPORTANT: not sure I can free this because it's passed to rtcSetRemoteDescription
-    NBN_Deallocator(sdp);
+    else {
+      NBN_LogWarning("Failed to parse signaling message for WS %d", ws);
+    }
+    free(root);
 }
 
 #pragma endregion /* WebRTC common */
@@ -567,7 +598,7 @@ static void NBN_WebRTC_C_Serv_OnLocalDescription(int pc, const char *sdp, const 
 {
     NBN_LogDebug("Processing local description of type '%s'", type);
 
-    if (strncmp(type, "answer", strlen("answer")) != 0)
+    if (strcmp(type, "answer") != 0)
     {
         NBN_LogWarning("Ignoring local description of type '%s' (expected 'answer')", type);
         return;
@@ -626,7 +657,7 @@ static void NBN_WebRTC_C_Serv_OnWsClosed(int ws, void *user_ptr)
 
 static void NBN_WebRTC_C_Serv_OnWsMessage(int ws, const char *msg, int size, void *user_ptr)
 {
-    NBN_WebRTC_C_ProcessSignalingMessage((NBN_WebRTC_C_Peer *)user_ptr, ws, msg, size, "offer");
+    NBN_WebRTC_C_ProcessSignalingMessage((NBN_WebRTC_C_Peer *)user_ptr, ws, msg, size);
 }
 
 static void NBN_WebRTC_C_Serv_OnWsConnection(int wsserver, int ws, void *user_ptr)
@@ -748,7 +779,7 @@ static void NBN_WebRTC_C_Cli_OnLocalDescription(int pc, const char *sdp, const c
 {
     NBN_LogDebug("Processing local description of type '%s'", type);
 
-    if (strncmp(type, "offer", strlen("offer")) != 0)
+    if (strcmp(type, "offer") != 0)
     {
         NBN_LogWarning("Ignoring local description of type '%s' (expected 'offer')", type);
         return;
@@ -803,7 +834,7 @@ static void NBN_WebRTC_C_Cli_OnWsClosed(int ws, void *user_ptr)
 
 static void NBN_WebRTC_C_Cli_OnWsMessage(int ws, const char *msg, int size, void *user_ptr)
 {
-    NBN_WebRTC_C_ProcessSignalingMessage((NBN_WebRTC_C_Peer *)user_ptr, ws, msg, size, "answer");
+    NBN_WebRTC_C_ProcessSignalingMessage((NBN_WebRTC_C_Peer *)user_ptr, ws, msg, size);
 }
 
 static int AttemptConnection(void)
