@@ -35,6 +35,9 @@ target_compile_definitions(raylib_client PUBLIC NBN_DEBUG)
 target_compile_definitions(raylib_server PUBLIC NBN_DEBUG)
 target_compile_definitions(raylib_server PUBLIC NBN_RAYLIB_SERVER)
 
+target_compile_definitions(raylib_client PUBLIC _GNU_SOURCE)
+target_compile_definitions(raylib_server PUBLIC _GNU_SOURCE)
+
 # compile with C WebRTC driver
 if (WEBRTC_C_DRIVER)
   # can't compile WebRTC native driver with emscripten
