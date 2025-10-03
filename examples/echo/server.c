@@ -42,6 +42,8 @@ static int EchoReceivedMessage(void)
 
     // Retrieve the received message
 
+    Log(LOG_DEBUG, "RECEIVED");
+
     /*EchoMessage *msg = (EchoMessage *)msg_info.data;*/
     /**/
     /*// Create an echo message*/

@@ -1672,7 +1672,7 @@ int NBN_Reader_ReadUInt32(NBN_Reader *reader, uint32_t *value)
         return NBN_ERROR;
     }
 
-    *value = *((uint32_t *)(reader->buffer + reader->position));
+    *value = ntohl(*((uint32_t *)(reader->buffer + reader->position)));
     reader->position += 4;
 
     return 0;
@@ -1800,13 +1800,41 @@ int NBN_Packet_InitRead(NBN_Packet *packet, uint32_t protocol_id, unsigned int s
 
     NBN_Reader_Init(&reader, packet->buffer, NBN_PACKET_HEADER_SIZE);
 
-    if (NBN_Reader_ReadUInt32(&reader, &packet->header.protocol_id) < 0) return NBN_ERROR;
-    if (packet->header.protocol_id != protocol_id) return NBN_ERROR;
+    if (NBN_Reader_ReadUInt32(&reader, &packet->header.protocol_id) < 0)
+    {
+        NBN_LogDebug("Failed to read packet's protocol id");
+        return NBN_ERROR;
+    }
 
-    if (NBN_Reader_ReadUInt32(&reader, &packet->header.ack_bits) < 0) return NBN_ERROR;
-    if (NBN_Reader_ReadUInt16(&reader, &packet->header.seq_number) < 0) return NBN_ERROR;
-    if (NBN_Reader_ReadUInt16(&reader, &packet->header.ack) < 0) return NBN_ERROR;
-    if (NBN_Reader_ReadUInt8(&reader, &packet->header.messages_count) < 0) return NBN_ERROR;
+    if (packet->header.protocol_id != protocol_id)
+    {
+        NBN_LogDebug("Packet's protocol id did not match (expected: %d, received: %d)", protocol_id, packet->header.protocol_id);
+        return NBN_ERROR;
+    }
+
+    if (NBN_Reader_ReadUInt32(&reader, &packet->header.ack_bits) < 0)
+    {
+        NBN_LogDebug("Failed to read packet's acked bits");
+        return NBN_ERROR;
+    }
+
+    if (NBN_Reader_ReadUInt16(&reader, &packet->header.seq_number) < 0)
+    {
+        NBN_LogDebug("Failed to read packet's sequence number");
+        return NBN_ERROR;
+    }
+
+    if (NBN_Reader_ReadUInt16(&reader, &packet->header.ack) < 0)
+    {
+        NBN_LogDebug("Failed to read packet's ack");
+        return NBN_ERROR;
+    }
+
+    if (NBN_Reader_ReadUInt8(&reader, &packet->header.messages_count) < 0)
+    {
+        NBN_LogDebug("Failed to read packet's message count");
+        return NBN_ERROR;
+    }
 
     return 0;
 }
@@ -2246,7 +2274,7 @@ static int Connection_SendPacket(NBN_Connection *connection, NBN_Packet *packet,
     NBN_LogTrace("Send packet %d to connection %d (messages count: %d)",
             packet->header.seq_number, connection->id, packet->header.messages_count);
 
-    assert(packet_entry->messages_count == packet->header.messages_count);
+    NBN_Assert(packet_entry->messages_count == packet->header.messages_count);
 
     if (NBN_Packet_Seal(packet, connection) < 0)
     {
@@ -3425,7 +3453,7 @@ int NBN_GameClient_Poll(void)
 
                     while ((msg = channel->GetNextRecvedMessage(channel)) != NULL)
                     {
-                        NBN_LogTrace("Got message %d of type %d from the recv queue", msg->header.id, msg->header.type);
+                        NBN_LogTrace("Got message %d of type %d from channel %d", msg->header.id, msg->header.type, channel->id);
 
                         if (GameClient_ProcessReceivedMessage(msg, nbn_game_client.server_connection) < 0)
                         {
@@ -3503,7 +3531,7 @@ NBN_Connection *NBN_GameClient_CreateServerConnection(int driver_id, void *drive
 
 NBN_MessageInfo NBN_GameClient_GetMessageInfo(void)
 {
-    assert(nbn_game_client.last_event.type == NBN_MESSAGE_RECEIVED);
+    NBN_Assert(nbn_game_client.last_event.type == NBN_MESSAGE_RECEIVED);
 
     return nbn_game_client.last_event.data.message_info;
 }
@@ -3615,27 +3643,25 @@ static int GameClient_HandleMessageReceivedEvent(void)
     }
     else if (message_info.type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE)
     {
-        NBN_Reader reader;
+        int length = message_info.length; 
 
-        NBN_Reader_Init(&reader, message_info.data, message_info.length);
-
-        unsigned int length;
-
-        if (NBN_Reader_ReadUInt32(&reader, &length) < 0)
+        if (length > 0)
         {
-            return NBN_ERROR;
-        }
+            if (length > NBN_SERVER_DATA_MAX_SIZE)
+            {
+                NBN_LogError("Received an invalid client accepted message");
 
-        if (length > NBN_SERVER_DATA_MAX_SIZE)
-        {
-            NBN_LogError("Received an invalid client accepted message");
+                return NBN_ERROR;
+            }
 
-            return NBN_ERROR;
-        }
+            NBN_Reader reader;
 
-        if (NBN_Reader_ReadBytes(&reader, nbn_game_client.server_data, length) < 0)
-        {
-            return NBN_ERROR;
+            NBN_Reader_Init(&reader, message_info.data, length);
+
+            if (NBN_Reader_ReadBytes(&reader, nbn_game_client.server_data, length) < 0)
+            {
+                return NBN_ERROR;
+            }
         }
 
         nbn_game_client.server_data_len = length;
@@ -3937,7 +3963,6 @@ int NBN_GameServer_AcceptIncomingConnectionWithData(uint8_t *data, unsigned int 
 {
     NBN_Assert(nbn_game_server.last_event.type == NBN_NEW_CONNECTION);
     NBN_Assert(nbn_game_server.last_event.data.connection != NULL);
-    NBN_Assert(data != NULL); 
 
     NBN_Connection *client = nbn_game_server.last_event.data.connection;
     uint8_t *msg = NULL;
@@ -3948,15 +3973,13 @@ int NBN_GameServer_AcceptIncomingConnectionWithData(uint8_t *data, unsigned int 
         NBN_Assert(length > 0);
         NBN_Assert(length <= NBN_SERVER_DATA_MAX_SIZE);
 
-        msg = NBN_Allocator(length); // TODO: pooling
+        msg_length = length;
+        msg = NBN_Allocator(msg_length); // TODO: pooling
 
         NBN_Writer writer;
 
         NBN_Writer_Init(&writer, msg, length);
-        NBN_Writer_WriteUInt32(&writer, length);
         NBN_Writer_WriteBytes(&writer, data, length);
-
-        msg_length = writer.position;
     }
 
     if (GameServer_SendMessageTo(client, NBN_CLIENT_ACCEPTED_MESSAGE_TYPE, NBN_CHANNEL_RESERVED_LIBRARY_MESSAGES, msg, msg_length) < 0)
@@ -4074,6 +4097,7 @@ static int GameServer_AddClient(NBN_Connection *client)
 
     NBN_ConnectionVector_Add(nbn_game_server.clients, client);
     NBN_ConnectionTable_Add(nbn_game_server.clients_table, client);
+    NBN_LogDebug("Added client %d", client->id);
 
     return 0;
 }
@@ -4186,8 +4210,9 @@ static int GameServer_ProcessReceivedMessage(NBN_Message *message, NBN_Connectio
     }
     else
     {
-        NBN_MessageInfo msg_info = {message->header.type, message->header.channel_id, message->data, client->id};
+        NBN_MessageInfo msg_info = {message->header.type, message->header.channel_id, message->data, message->header.length, client->id};
 
+        NBN_LogDebug("Received message (type: %d, id: %d) from client %d", message->header.type, message->header.id, client->id);
         ev.data.message_info = msg_info;
     }
 
@@ -4295,12 +4320,13 @@ static int GameServer_HandleEvent(void)
 
 static int GameServer_HandleMessageReceivedEvent(void)
 {
+
     NBN_MessageInfo message_info = nbn_game_server.last_event.data.message_info;
     NBN_Connection *sender = NBN_ConnectionTable_Get(nbn_game_server.clients_table, message_info.sender);
 
     if (sender == NULL)
     {
-        NBN_LogTrace("Received message from unknown client (ID: %d)", message_info.sender);
+        NBN_LogTrace("Received message (type: %d) from unknown client (ID: %d)", message_info.type, message_info.sender);
 
         return NBN_SKIP_EVENT;
     }
@@ -4331,6 +4357,7 @@ static int GameServer_HandleMessageReceivedEvent(void)
     }
 
     // at this point we know it's a connection request
+    NBN_Assert(message_info.type == NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
 
     nbn_game_server.last_connection_data_len = 0;
     memset(nbn_game_server.last_connection_data, 0, sizeof(nbn_game_server.last_connection_data));

@@ -73,24 +73,10 @@ void OnMessageReceived(void)
 
 int SendEchoMessage(const char *msg)
 {
-    unsigned int length = strlen(msg); // Compute message length
+    unsigned int length = strlen(msg);
+    char *data = strdup(msg);
 
-    // Create the echo message
- 
-    /*EchoMessage *echo = EchoMessage_Create();*/
-    /**/
-    /*if (echo == NULL)*/
-    /*    return -1;*/
-    /**/
-    /*// Fill echo message with message the length and the message*/
-    /*echo->length = length + 1;*/
-    /*memcpy(echo->data, msg, length + 1);*/
-    /**/
-    /*// Reliably send it to the server*/
-    /*if (NBN_GameClient_SendReliableMessage(ECHO_MESSAGE_TYPE, echo) < 0)*/
-    /*    return -1;*/
-    /**/
-    return 0;
+    return NBN_GameClient_SendReliableMessage(ECHO_MESSAGE_TYPE, (uint8_t *)data, length);
 }
 
 int main(int argc, char *argv[])

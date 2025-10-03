@@ -490,7 +490,10 @@ static int NBN_UDP_ServRecvPackets(void)
             continue;
 
         if (NBN_Packet_InitRead(&packet, nbn_udp_serv.protocol_id, bytes) < 0)
+        {
+            NBN_LogDebug("Discarded invalid packet");
             continue;
+        }
 
         ip_address.host = ntohl(src_addr.sin_addr.s_addr);
         ip_address.port = ntohs(src_addr.sin_port);
@@ -656,7 +659,10 @@ static int NBN_UDP_CliRecvPackets(void)
             continue;
 
         if (NBN_Packet_InitRead(&packet, nbn_udp_cli.protocol_id, bytes) < 0)
+        {
+            NBN_LogDebug("Discarded invalid packet");
             continue;
+        }
 
         packet.sender = nbn_udp_cli.server_conn;
 
