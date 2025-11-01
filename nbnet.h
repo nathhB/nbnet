@@ -105,7 +105,6 @@ typedef struct NBN_Endpoint NBN_Endpoint;
 typedef struct NBN_Connection NBN_Connection;
 typedef struct NBN_Channel NBN_Channel;
 typedef struct NBN_Driver NBN_Driver;
-typedef uint32_t NBN_ConnectionHandle;
 
 #pragma region NBN_ConnectionVector
 
@@ -244,7 +243,7 @@ typedef struct NBN_OutgoingMessage
 {
     NBN_Message *message;
     uint16_t id;
-    double last_send_time; // TODO: use float
+    double last_send_time;
 } NBN_OutgoingMessage;
 
 typedef struct NBN_IncomingMessage
@@ -273,9 +272,9 @@ typedef struct NBN_MessageInfo
     /**
      * The message's sender.
      * 
-     * On the client side, it will always be 0 (all received messages come from the game server).
+     * On the client side, it will always be NULL  as all received messages come from the game server
     */
-    NBN_ConnectionHandle sender;
+    NBN_Connection *sender;
 } NBN_MessageInfo;
 
 #pragma endregion /* NBN_Message */
@@ -406,6 +405,8 @@ void NBN_Channel_Destroy(NBN_Endpoint *, NBN_Channel *);
 int NBN_Channel_ReconstructMessageFromChunks(NBN_Channel *, NBN_Connection *, NBN_Message *);
 /*void NBN_Channel_ResizeWriteChunkBuffer(NBN_Channel *, unsigned int);*/
 /*void NBN_Channel_ResizeReadChunkBuffer(NBN_Channel *, unsigned int);*/
+
+static void Channel_UpdateMessageSendTime(NBN_Channel *channel, uint16_t msg_id, double time);
 
 /*
    Unreliable ordered
@@ -552,7 +553,6 @@ typedef union NBN_EventData
 {
     NBN_MessageInfo message_info;
     NBN_Connection *connection;
-    NBN_ConnectionHandle connection_handle;
 } NBN_EventData;
 
 typedef struct NBN_Event
@@ -899,7 +899,6 @@ typedef struct NBN_GameServer
 {
     NBN_Endpoint endpoint;
     NBN_ConnectionVector *clients; /* Vector of clients connections */
-    NBN_ConnectionTable *clients_table; /* Hash table of clients connections */
     NBN_ConnectionListNode *closed_clients_head;
     NBN_GameServerStats stats;
     NBN_Event last_event;
@@ -966,11 +965,11 @@ NBN_Connection *NBN_GameServer_CreateClientConnection(int, void *, uint32_t);
 /**
  * Close a client's connection without a specific code (default code is -1)
  *
- * @param connection_handle The connection to close
+ * @param conn The connection to close
  * 
  * @return 0 when successful, -1 otherwise
  */
-int NBN_GameServer_CloseClient(NBN_ConnectionHandle connection_handle);
+int NBN_GameServer_CloseClient(NBN_Connection *conn);
 
 /**
  * Close a client's connection with a specific code.
@@ -978,11 +977,11 @@ int NBN_GameServer_CloseClient(NBN_ConnectionHandle connection_handle);
  * The code is an arbitrary integer to let the client knows
  * why his connection was closed.
  *
- * @param connection_handle The connection to close
+ * @param conn The connection to close
  * 
  * @return 0 when successful, -1 otherwise
  */
-int NBN_GameServer_CloseClientWithCode(NBN_ConnectionHandle connection_handle, int code);
+int NBN_GameServer_CloseClientWithCode(NBN_Connection *conn, int code);
 
 // TODO: doc
 void NBN_GameServer_CreateMessage(uint8_t type, uint8_t channel_id);
@@ -991,7 +990,7 @@ void NBN_GameServer_CreateUnreliableMessage(uint8_t type);
 // TODO: doc
 void NBN_GameServer_CreateReliableMessage(uint8_t type);
 // TODO: doc
-int NBN_GameServer_SendMessageTo(NBN_ConnectionHandle connection_handle);
+int NBN_GameServer_SendMessageTo(NBN_Connection *conn);
 // TODO: doc
 int NBN_GameServer_BroadcastMessage(void);
 
@@ -1032,21 +1031,21 @@ int NBN_GameServer_RejectIncomingConnection(void);
  * 
  * Call this function after receiving a NBN_NEW_CONNECTION event.
  * 
- * @return A NBN_ConnectionHandle for the new connection
+ * @return A pointer to a NBN_Connection representing the new connection
  */
-NBN_ConnectionHandle NBN_GameServer_GetIncomingConnection(void);
+NBN_Connection *NBN_GameServer_GetIncomingConnection(void);
 
 // TODO: doc
 NBN_Reader *NBN_GameServer_GetConnectionDataReader(void);
 
 /**
- * Return the last disconnected client.
+ * Return the last disconnected client's connection.
  * 
- * Call this function after receiving a NBN_CLIENT_DISCONNECTED event.
+ * Call this function after receiving a NBN_CLIENT_DISCONNECTED event
  * 
- * @return The last disconnected connection
+ * @return the last disconnected client's connection
  */
-NBN_ConnectionHandle NBN_GameServer_GetDisconnectedClient(void);
+NBN_Connection *NBN_GameServer_GetDisconnectedClient(void);
 
 /**
  * Retrieve the info about the last received message.
@@ -1746,7 +1745,7 @@ int NBN_Packet_WriteMessage(NBN_Packet *packet, NBN_OutgoingMessage *out_msg)
     NBN_Message *message = out_msg->message;
 
     NBN_LogTrace("Write message %d (type: %d, length: %d) to packet %d",
-            message->header.id, message->header.type, message->header.length,
+            out_msg->id, message->header.type, message->header.length,
             packet->header.seq_number);
 
     NBN_Assert(
@@ -2039,7 +2038,7 @@ int NBN_Connection_FlushChannels(NBN_Endpoint *endpoint, NBN_Connection *connect
               )
         {
             NBN_Message *message = out_msg.message;
-            uint8_t msg_id = out_msg.id;
+            uint16_t msg_id = out_msg.id;
             bool message_sent = false;
             int ret = NBN_Packet_WriteMessage(&packet, &out_msg);
 
@@ -2086,8 +2085,7 @@ int NBN_Connection_FlushChannels(NBN_Endpoint *endpoint, NBN_Connection *connect
                         msg_id, packet.header.seq_number,
                         message->header.length, message->header.type);
 
-                // TODO: this does not work, last_send_time needs to be updated in the channel buffer
-                out_msg.last_send_time = time;
+                Channel_UpdateMessageSendTime(channel, msg_id, time);
 
                 packet_entry->messages[packet_entry->messages_count++] = (NBN_MessageEntry){
                     msg_id, channel->id
@@ -2659,6 +2657,14 @@ int NBN_Channel_ReconstructMessageFromChunks(NBN_Channel *channel, NBN_Connectio
 /*    channel->read_chunk_buffer_size = size;*/
 /*}*/
 
+static void Channel_UpdateMessageSendTime(NBN_Channel *channel, uint16_t msg_id, double time)
+{
+    NBN_OutgoingMessage *out_msg = &channel->outgoing_messages_buffer[msg_id % NBN_CHANNEL_BUFFER_SIZE];
+    NBN_Assert(msg_id == out_msg->id);
+
+    out_msg->last_send_time = time;
+}
+
 /* Unreliable ordered */
 
 static bool UnreliableOrderedChannel_AddReceivedMessage(NBN_Endpoint *, NBN_Channel *, NBN_Message *);
@@ -2878,7 +2884,7 @@ static bool ReliableOrderedChannel_AddOutgoingMessage(NBN_Channel *channel, NBN_
     channel->next_outgoing_message_id++;
     channel->outgoing_message_count++;
 
-    NBN_LogTrace("Added outgoing message %d of type %d to channel %d (index: %d)",
+    NBN_LogTrace("Added outgoing message %d of type %d to reliable channel %d (index: %d)",
                  msg_id, message->header.type, channel->id, index);
 
     return true;
@@ -3962,14 +3968,6 @@ int NBN_GameServer_Start(NBN_GameServer_Config config)
         NBN_Abort();
     }
 
-    // TODO: get rid of the table? I think we only need it because we pass
-    // connection IDs to user code, could we just pass connection pointer?
-    if ((nbn_game_server.clients_table = NBN_ConnectionTable_Create()) == NULL)
-    {
-        NBN_LogError("Failed to create connections table");
-        NBN_Abort();
-    }
-
     nbn_game_server.closed_clients_head = NULL;
 
     for (unsigned int i = 0; i < NBN_MAX_DRIVERS; i++)
@@ -4001,7 +3999,6 @@ void NBN_GameServer_Stop(void)
     }
 
     NBN_ConnectionVector_Destroy(nbn_game_server.clients);
-    NBN_ConnectionTable_Destroy(nbn_game_server.clients_table);
 
     for (unsigned int i = 0; i < NBN_MAX_DRIVERS; i++)
     {
@@ -4140,30 +4137,14 @@ NBN_Connection *NBN_GameServer_CreateClientConnection(int driver_id, void *drive
     return client;
 }
 
-int NBN_GameServer_CloseClientWithCode(NBN_ConnectionHandle connection_handle, int code)
+int NBN_GameServer_CloseClientWithCode(NBN_Connection *conn, int code)
 {
-    NBN_Connection *client = NBN_ConnectionTable_Get(nbn_game_server.clients_table, connection_handle);
-
-    if (client == NULL)
-    {
-        NBN_LogError("Client %d does not exist", connection_handle);
-        return NBN_ERROR;
-    }
-
-    return GameServer_CloseClientWithCode(client, code, false);
+    return GameServer_CloseClientWithCode(conn, code, false);
 }
 
-int NBN_GameServer_CloseClient(NBN_ConnectionHandle connection_handle)
+int NBN_GameServer_CloseClient(NBN_Connection *conn)
 {
-    NBN_Connection *client = NBN_ConnectionTable_Get(nbn_game_server.clients_table, connection_handle);
-
-    if (client == NULL)
-    {
-        NBN_LogError("Client %d does not exist", connection_handle);
-        return NBN_ERROR;
-    }
-
-    return GameServer_CloseClientWithCode(client, -1, false);
+    return GameServer_CloseClientWithCode(conn, -1, false);
 }
 
 void NBN_GameServer_CreateMessage(uint8_t type, uint8_t channel_id)
@@ -4183,7 +4164,7 @@ void NBN_GameServer_CreateReliableMessage(uint8_t type)
     NBN_GameServer_CreateMessage(type, NBN_CHANNEL_RESERVED_RELIABLE);
 }
 
-int NBN_GameServer_SendMessageTo(NBN_ConnectionHandle connection_handle)
+int NBN_GameServer_SendMessageTo(NBN_Connection *conn)
 {
     NBN_Endpoint *endpoint = &nbn_game_server.endpoint;
     NBN_Message *message = endpoint->write_message;
@@ -4191,16 +4172,7 @@ int NBN_GameServer_SendMessageTo(NBN_ConnectionHandle connection_handle)
 
     message->header.length = endpoint->message_writer.position;
 
-    // TODO: remove that table
-    NBN_Connection *client = NBN_ConnectionTable_Get(nbn_game_server.clients_table, connection_handle);
-
-    if (client == NULL)
-    {
-        NBN_LogWarning("Cannot send message to client %d (does not exist)", connection_handle);
-        return 0;
-    }
-
-    return GameServer_SendMessageTo(client, message);
+    return GameServer_SendMessageTo(conn, message);
 }
 
 int NBN_GameServer_BroadcastMessage(void)
@@ -4292,7 +4264,7 @@ int NBN_GameServer_AcceptIncomingConnection(void)
         NBN_Writer_WriteUInt32(writer, 0);
     }
 
-    if (NBN_GameServer_SendMessageTo(client->id) < 0)
+    if (NBN_GameServer_SendMessageTo(client) < 0)
         return NBN_ERROR;
 
     client->is_accepted = true;
@@ -4318,12 +4290,12 @@ int NBN_GameServer_RejectIncomingConnection(void)
     return NBN_GameServer_RejectIncomingConnectionWithCode(-1);
 }
 
-NBN_ConnectionHandle NBN_GameServer_GetIncomingConnection(void)
+NBN_Connection *NBN_GameServer_GetIncomingConnection(void)
 {
     NBN_Assert(nbn_game_server.last_event.type == NBN_NEW_CONNECTION);
     NBN_Assert(nbn_game_server.last_event.data.connection != NULL);
 
-    return nbn_game_server.last_event.data.connection->id;
+    return nbn_game_server.last_event.data.connection;
 }
 
 NBN_Reader *NBN_GameServer_GetConnectionDataReader(void)
@@ -4337,11 +4309,11 @@ NBN_Reader *NBN_GameServer_GetConnectionDataReader(void)
     return &nbn_game_server.client_data_reader;
 }
 
-NBN_ConnectionHandle NBN_GameServer_GetDisconnectedClient(void)
+NBN_Connection *NBN_GameServer_GetDisconnectedClient(void)
 {
     NBN_Assert(nbn_game_server.last_event.type == NBN_CLIENT_DISCONNECTED);
 
-    return nbn_game_server.last_event.data.connection_handle;
+    return nbn_game_server.last_event.data.connection;
 }
 
 NBN_MessageInfo NBN_GameServer_GetMessageInfo(void)
@@ -4405,7 +4377,6 @@ static int GameServer_AddClient(NBN_Connection *client)
     }
 
     NBN_ConnectionVector_Add(nbn_game_server.clients, client);
-    NBN_ConnectionTable_Add(nbn_game_server.clients_table, client);
     NBN_LogDebug("Added client %d", client->id);
 
     return 0;
@@ -4420,7 +4391,7 @@ static int GameServer_CloseClientWithCode(NBN_Connection *client, int code, bool
             NBN_Event e;
 
             e.type = NBN_CLIENT_DISCONNECTED;
-            e.data.connection_handle = client->id;
+            e.data.connection = client;
 
             if (!NBN_EventQueue_Enqueue(&nbn_game_server.endpoint.event_queue, e))
                 return NBN_ERROR;
@@ -4450,7 +4421,7 @@ static int GameServer_CloseClientWithCode(NBN_Connection *client, int code, bool
         NBN_Writer *writer = NBN_GameServer_GetMessageWriter();
 
         NBN_Writer_WriteInt32(writer, code);
-        NBN_GameServer_SendMessageTo(client->id);
+        NBN_GameServer_SendMessageTo(client);
     }
 
     return 0;
@@ -4517,7 +4488,13 @@ static int GameServer_ProcessReceivedMessage(NBN_Message *message, NBN_Connectio
     }
     else
     {
-        NBN_MessageInfo msg_info = {message->header.type, message->header.channel_id, message->data, message->header.length, client->id};
+        NBN_MessageInfo msg_info = {
+            message->header.type,
+            message->header.channel_id,
+            message->data,
+            message->header.length,
+            client
+        };
 
         NBN_LogDebug("Received message (type: %d, id: %d) from client %d", message->header.type, message->header.id, client->id);
         ev.data.message_info = msg_info;
@@ -4577,14 +4554,6 @@ static void GameServer_RemoveClosedClientConnections(void)
                 NBN_Abort();
             }
 
-            bool table_rm = NBN_ConnectionTable_Remove(nbn_game_server.clients_table, client->id);
-
-            if (!table_rm)
-            {
-                NBN_LogError("Failed to remove client connection from connections table");
-                NBN_Abort();
-            }
-
             // Destroy the connection
 
             NBN_Connection_Destroy(&nbn_game_server.endpoint, client);
@@ -4629,17 +4598,9 @@ static int GameServer_HandleEvent(void)
 static int GameServer_HandleMessageReceivedEvent(void)
 {
     NBN_MessageInfo message_info = nbn_game_server.last_event.data.message_info;
-    NBN_Connection *sender = NBN_ConnectionTable_Get(nbn_game_server.clients_table, message_info.sender);
+    NBN_Connection *sender = message_info.sender;
 
-    if (sender == NULL)
-    {
-        NBN_LogTrace("Received message (type: %d) from unknown client (ID: %d)", message_info.type, message_info.sender);
-
-        return NBN_SKIP_EVENT;
-    }
-
-    if (sender->is_closed || sender->is_stale)
-        return NBN_SKIP_EVENT;
+    if (sender->is_closed || sender->is_stale) return NBN_SKIP_EVENT;
 
     if (message_info.type == NBN_DISCONNECTION_MESSAGE_TYPE)
     {
@@ -4651,7 +4612,7 @@ static int GameServer_HandleMessageReceivedEvent(void)
         sender->is_stale = true;
 
         nbn_game_server.last_event.type = NBN_CLIENT_DISCONNECTED;
-        nbn_game_server.last_event.data.connection_handle = sender->id;
+        nbn_game_server.last_event.data.connection = sender;
 
         GameServer_RemoveClosedClientConnections();
 
