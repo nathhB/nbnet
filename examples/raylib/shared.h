@@ -99,11 +99,6 @@ typedef struct tagMSG *LPMSG;
 #include "../../net_drivers/webrtc.h"
 #else
 #include "../../net_drivers/udp.h"
-
-#ifdef SOAK_WEBRTC_C_DRIVER
-#include "../../net_drivers/webrtc_c.h"
-#endif
-
 #endif // __EMSCRIPTEN__
 
 #define TICK_RATE 60 // Simulation tick rate
@@ -124,6 +119,10 @@ typedef struct tagMSG *LPMSG;
 // A code passed by the server when closing a client connection due to being full (max client count reached)
 #define SERVER_FULL_CODE 42
 
+#define CHANGE_COLOR_MESSAGE_MAX_LENGTH 4
+#define UPDATE_STATE_MESSAGE_MAX_LENGTH 20 // ClientState is 20 bytes
+#define GAME_STATE_MESSAGE_MAX_LENGTH ((20 * MAX_CLIENTS) + 4)
+
 // Message ids
 enum
 {
@@ -131,15 +130,6 @@ enum
     UPDATE_STATE_MESSAGE,
     GAME_STATE_MESSAGE
 };
-
-// Messages
-
-typedef struct
-{
-    int x;
-    int y;
-    float val;
-} UpdateStateMessage;
 
 // Client colors used for ChangeColorMessage and GameStateMessage messages
 typedef enum
@@ -153,11 +143,6 @@ typedef enum
     CLI_PINK
 } ClientColor;
 
-typedef struct
-{
-    ClientColor color;
-} ChangeColorMessage;
-
 // Client state, represents a client over the network
 typedef struct
 {
@@ -168,11 +153,12 @@ typedef struct
     ClientColor color;
 } ClientState;
 
+// Represents the state of all clients
 typedef struct
 {
     unsigned int client_count;
     ClientState client_states[MAX_CLIENTS];
-} GameStateMessage;
+} GameState;
 
 // Store all options from the command line
 typedef struct
@@ -183,19 +169,13 @@ typedef struct
     float jitter;
 } Options;
 
-ChangeColorMessage *ChangeColorMessage_Create(void);
-void ChangeColorMessage_Destroy(ChangeColorMessage *);
-int ChangeColorMessage_Serialize(ChangeColorMessage *msg, NBN_Stream *);
-
-UpdateStateMessage *UpdateStateMessage_Create(void);
-void UpdateStateMessage_Destroy(UpdateStateMessage *);
-int UpdateStateMessage_Serialize(UpdateStateMessage *, NBN_Stream *);
-
-GameStateMessage *GameStateMessage_Create(void);
-void GameStateMessage_Destroy(GameStateMessage *);
-int GameStateMessage_Serialize(GameStateMessage *, NBN_Stream *);
-
 int ReadCommandLine(int, char *[]);
 Options GetOptions(void);
+void ChangeColorMessage_Write(NBN_Writer *writer, ClientColor color);
+int ChangeColorMessage_Read(NBN_Reader *reader, ClientColor *color);
+void UpdateClientStateMessage_Write(NBN_Writer *writer, ClientState state);
+int UpdateClientStateMessage_Read(NBN_Reader *reader, ClientState *state);
+void GameStateMessage_Write(NBN_Writer *writer, GameState *state);
+int GameStateMessage_Read(NBN_Reader *reader, GameState *state);
 
 #endif /* RAYLIB_EXAMPLE_SHARED_H */

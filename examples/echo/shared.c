@@ -20,17 +20,18 @@
 
 */
 
+#include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 
 // Sleep function
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/emscripten.h>
 #elif defined(_WIN32) || defined(_WIN64)
-#include <winsock2.h>
-#include <windows.h>
 #include <synchapi.h>
+#include <windows.h>
+#include <winsock2.h>
 #else
 #include <time.h>
 #endif
@@ -39,8 +40,7 @@
 
 // Sleep for a given amount of seconds
 // Used to limit client and server tick rate
-void EchoSleep(double sec)
-{
+void EchoSleep(double sec) {
 #if defined(__EMSCRIPTEN__)
     emscripten_sleep(sec * 1000);
 #elif defined(_WIN32) || defined(_WIN64)
@@ -53,17 +53,10 @@ void EchoSleep(double sec)
 #endif
 }
 
-static const char *log_type_strings[] = {
-    "INFO",
-    "ERROR",
-    "DEBUG",
-    "TRACE",
-    "WARNING"
-};
+static const char *log_type_strings[] = {"INFO", "ERROR", "DEBUG", "TRACE", "WARNING"};
 
 // Basic logging function
-void Log(int type, const char *fmt, ...)
-{
+void Log(int type, const char *fmt, ...) {
     va_list args;
 
     va_start(args, fmt);
@@ -74,3 +67,12 @@ void Log(int type, const char *fmt, ...)
 
     va_end(args);
 }
+
+uint8_t *AllocateMessage(uint8_t type, uint16_t *length) {
+    NBN_Assert(type == ECHO_MESSAGE_TYPE);
+
+    *length = ECHO_MESSAGE_MAX_LENGTH;
+    return (uint8_t *)NBN_Allocator(*length);
+}
+
+void DeallocateMessage(uint8_t type, uint8_t *data) { NBN_Deallocator(data); }

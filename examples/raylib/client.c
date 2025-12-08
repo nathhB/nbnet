@@ -60,7 +60,7 @@ Color client_colors_to_raylib_colors[] = {
 
 static void SpawnLocalClient(int x, int y, uint32_t client_id)
 {
-    TraceLog(LOG_INFO, "Received spawn message, position: (%d, %d), client id: %d", x, y, client_id);
+    TraceLog(LOG_INFO, "Spawning at (%d, %d), client id: %d", x, y, client_id);
 
     // Update the local client state based on spawn info sent by the server
     local_client_state.client_id = client_id;
@@ -70,25 +70,32 @@ static void SpawnLocalClient(int x, int y, uint32_t client_id)
     spawned = true;
 }
 
-static void HandleConnection(void)
+static int HandleConnection(void)
 {
-    uint8_t data[32];
-    unsigned int data_len = NBN_GameClient_ReadServerData(data);
-    NBN_ReadStream rs;
+    TraceLog(LOG_INFO, "Connected, reading connection data...");
 
-    NBN_ReadStream_Init(&rs, data, data_len);
+    uint32_t x, y, client_id;
+    NBN_Reader *reader = NBN_GameClient_GetServerDataReader();
 
-    unsigned int x = 0;
-    unsigned int y = 0;
-    unsigned int client_id = 0;
+    if (NBN_Reader_ReadUInt32(reader, &x) < 0)
+    {
+        return -1;
+    }
 
-    NBN_SerializeUInt(((NBN_Stream *)&rs), x, 0, GAME_WIDTH);
-    NBN_SerializeUInt(((NBN_Stream *)&rs), y, 0, GAME_HEIGHT);
-    NBN_SerializeUInt(((NBN_Stream *)&rs), client_id, 0, UINT_MAX);
+    if (NBN_Reader_ReadUInt32(reader, &y) < 0)
+    {
+        return -1;
+    }
+
+    if (NBN_Reader_ReadUInt32(reader, &client_id) < 0)
+    {
+        return -1;
+    }
 
     SpawnLocalClient(x, y, client_id);
 
     connected = true;
+    return 0;
 }
 
 static void HandleDisconnection(void)
@@ -211,37 +218,43 @@ static void DestroyDisconnectedClients(void)
     }
 }
 
-static void HandleGameStateMessage(GameStateMessage *msg)
+static void HandleGameStateMessage(void)
 {
-    if (!spawned)
-        return;
+    if (!spawned) return;
 
     // Start by resetting the updated client ids array
     for (int i = 0; i < MAX_CLIENTS; i++)
-        updated_ids[i] = -1;
-
-    // Loop over the received client states
-    for (unsigned int i = 0; i < msg->client_count; i++)
     {
-        ClientState state = msg->client_states[i];
+        updated_ids[i] = -1;
+    }
+
+    static GameState recv_game_state;
+
+    // Read the game state from the received GAME_STATE_MESSAGE message
+    NBN_Reader *reader = NBN_GameClient_GetMessageReader();
+
+    GameStateMessage_Read(reader, &recv_game_state);
+
+    // Loop over the received client states and update the clients
+    for (unsigned int i = 0; i < recv_game_state.client_count; i++)
+    {
+        ClientState cli_state = recv_game_state.client_states[i];
 
         // Ignore the state of the local client
-        if (state.client_id != local_client_state.client_id)
+        if (cli_state.client_id != local_client_state.client_id)
         {
             // If the client already exists we update it with the latest received state
-            if (ClientExists(state.client_id))
-                UpdateClient(state);
+            if (ClientExists(cli_state.client_id))
+                UpdateClient(cli_state);
             else // If the client does not exist, we create it
-                CreateClient(state);
+                CreateClient(cli_state);
 
-            updated_ids[i] = state.client_id;
+            updated_ids[i] = cli_state.client_id;
         }
     }
 
     // Destroy disconnected clients
     DestroyDisconnectedClients();
-
-    GameStateMessage_Destroy(msg);
 }
 
 static void HandleReceivedMessage(void)
@@ -253,58 +266,71 @@ static void HandleReceivedMessage(void)
     {
     // We received the latest game state from the server
     case GAME_STATE_MESSAGE:
-        HandleGameStateMessage(msg_info.data);
-        break;
+        HandleGameStateMessage();
+        return;
     }
+
+    TraceLog(LOG_ERROR, "Received unexpected message");
+    abort();
 }
 
 static void HandleGameClientEvent(int ev)
 {
     switch (ev)
     {
-    case NBN_CONNECTED:
-        // We are connected to the server
-        HandleConnection();
-        break;
+        case NBN_CONNECTED:
+            // We are connected to the server
+            if (HandleConnection() < 0)
+            {
+                TraceLog(LOG_ERROR, "Failed to handle connection");
+                abort();
+            }
+            break;
 
-    case NBN_DISCONNECTED:
-        // The server has closed our connection
-        HandleDisconnection();
-        break;
+        case NBN_DISCONNECTED:
+            // The server has closed our connection
+            HandleDisconnection();
+            break;
 
-    case NBN_MESSAGE_RECEIVED:
-        // We received a message from the server
-        HandleReceivedMessage();
-        break;
+        case NBN_MESSAGE_RECEIVED:
+            // We received a message from the server
+            HandleReceivedMessage();
+            break;
     }
 }
 
-static int SendPositionUpdate(void)
+static int SendStateUpdate(void)
 {
-    UpdateStateMessage *msg = UpdateStateMessage_Create();
+    // Create a new UPDATE_STATE_MESSAGE unreliable message
+    NBN_GameClient_CreateUnreliableMessage(UPDATE_STATE_MESSAGE);
+    NBN_Writer *writer = NBN_GameClient_GetMessageWriter();
 
-    // Fill message data
-    msg->x = local_client_state.x;
-    msg->y = local_client_state.y;
-    msg->val = local_client_state.val;
+    // Write the local client state to the message
+    UpdateClientStateMessage_Write(writer, local_client_state);
 
-    // Unreliably send it to the server
-    if (NBN_GameClient_SendUnreliableMessage(UPDATE_STATE_MESSAGE, msg) < 0)
+    // Send the message to the server
+    if (NBN_GameClient_SendMessage() < 0)
+    {
         return -1;
+    }
 
     return 0;
 }
 
 static int SendColorUpdate(void)
 {
-    ChangeColorMessage *msg = ChangeColorMessage_Create();
+    // Create a new CHANGE_COLOR_MESSAGE reliable message
+    NBN_GameClient_CreateReliableMessage(CHANGE_COLOR_MESSAGE);
+    NBN_Writer *writer = NBN_GameClient_GetMessageWriter();
 
-    // Fill message data
-    msg->color = local_client_state.color;
+    // Write the new client color to the message
+    ChangeColorMessage_Write(writer, local_client_state.color);
 
-    // Reliably send it to the server
-    if (NBN_GameClient_SendReliableMessage(CHANGE_COLOR_MESSAGE, msg) < 0)
+    // Send the message to the server
+    if (NBN_GameClient_SendMessage() < 0)
+    {
         return -1;
+    }
 
     return 0;
 }
@@ -354,7 +380,7 @@ static int Update(void)
         local_client_state.val = MAX(MIN_FLOAT_VAL, local_client_state.val - 0.005);
 
     // Send the latest local client state to the server
-    if (SendPositionUpdate() < 0)
+    if (SendStateUpdate() < 0)
     {
         TraceLog(LOG_WARNING, "Failed to send client state update");
 
@@ -502,7 +528,7 @@ int main(int argc, char *argv[])
     (void)argv;
 #endif
 
-    SetTraceLogLevel(LOG_DEBUG);
+    SetTraceLogLevel(LOG_TRACE);
     InitWindow(GAME_WIDTH, GAME_HEIGHT, "raylib client");
 
     // Set target FPS to 100 when we are not running in a web browser
@@ -516,34 +542,24 @@ int main(int argc, char *argv[])
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__
 
-    // Initialize the client with a protocol name (must be the same than the one used by the server), the server ip address and port
+    // Create a client configuration with a protocol name, the server host and the server port
+    // protocol name has to be the same as the one used by the server
+    NBN_GameClient_Config config = NBN_GameClient_CreateConfig(
+        RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT);
 
-    // Start the client with a protocol name (must be the same than the one used by the server)
-    // the server host and port
-    if (NBN_GameClient_StartEx(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, NULL, 0) < 0)
+    // Register all the messages of our protocol
+    // both server and clients have to register the same messages
+    NBN_GameClient_RegisterMessageType(&config, CHANGE_COLOR_MESSAGE, CHANGE_COLOR_MESSAGE_MAX_LENGTH);
+    NBN_GameClient_RegisterMessageType(&config, UPDATE_STATE_MESSAGE, UPDATE_STATE_MESSAGE_MAX_LENGTH);
+    NBN_GameClient_RegisterMessageType(&config, GAME_STATE_MESSAGE, GAME_STATE_MESSAGE_MAX_LENGTH);
+
+    // Start the client with the configuration
+    if (NBN_GameClient_Start(config) < 0)
     {
         TraceLog(LOG_WARNING, "Game client failed to start. Exit");
 
         return 1;
     }
-
-    // Register messages, have to be done after NBN_GameClient_StartEx
-    // Messages need to be registered on both client and server side
-    NBN_GameClient_RegisterMessage(
-        CHANGE_COLOR_MESSAGE,
-        (NBN_MessageBuilder)ChangeColorMessage_Create,
-        (NBN_MessageDestructor)ChangeColorMessage_Destroy,
-        (NBN_MessageSerializer)ChangeColorMessage_Serialize);
-    NBN_GameClient_RegisterMessage(
-        UPDATE_STATE_MESSAGE,
-        (NBN_MessageBuilder)UpdateStateMessage_Create,
-        (NBN_MessageDestructor)UpdateStateMessage_Destroy,
-        (NBN_MessageSerializer)UpdateStateMessage_Serialize);
-    NBN_GameClient_RegisterMessage(
-        GAME_STATE_MESSAGE,
-        (NBN_MessageBuilder)GameStateMessage_Create,
-        (NBN_MessageDestructor)GameStateMessage_Destroy,
-        (NBN_MessageSerializer)GameStateMessage_Serialize);
 
     // Network conditions simulated variables (read from the command line, default is always 0)
     NBN_GameClient_SetPing(GetOptions().ping);

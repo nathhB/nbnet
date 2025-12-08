@@ -26,7 +26,7 @@
 #define ECHO_PROTOCOL_NAME "echo-example"
 #define ECHO_EXAMPLE_PORT 42042
 #define ECHO_MESSAGE_TYPE 0
-#define ECHO_MESSAGE_LENGTH 255
+#define ECHO_MESSAGE_MAX_LENGTH 255
 #define ECHO_TICK_RATE 30
 
 // An arbitrary chosen code used when rejecting a client to let it know that another client is already connected
@@ -34,16 +34,9 @@
 
 // nbnet logging
 // nbnet does not implement any logging capabilities, you need to provide your own
-enum
-{
-    LOG_INFO,
-    LOG_ERROR,
-    LOG_DEBUG,
-    LOG_TRACE,
-    LOG_WARNING
-};
+enum { LOG_INFO, LOG_ERROR, LOG_DEBUG, LOG_TRACE, LOG_WARNING };
 
-#define NBN_LogInfo(...) Log(LOG_INFO,  __VA_ARGS__)
+#define NBN_LogInfo(...) Log(LOG_INFO, __VA_ARGS__)
 #define NBN_LogError(...) Log(LOG_ERROR, __VA_ARGS__)
 #define NBN_LogDebug(...) Log(LOG_DEBUG, __VA_ARGS__)
 #define NBN_LogTrace(...) Log(LOG_TRACE, __VA_ARGS__)
@@ -70,5 +63,7 @@ void Log(int, const char *, ...);
 #endif // __EMSCRIPTEN__
 
 void EchoSleep(double);
+uint8_t *AllocateMessage(uint8_t type, uint16_t *);
+void DeallocateMessage(uint8_t type, uint8_t *data);
 
 #endif /* ECHO_EXAMPLE_SHARED_H */

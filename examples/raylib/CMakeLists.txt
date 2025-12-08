@@ -85,4 +85,5 @@ endif()
 
 if (APPLE)
   target_link_libraries(raylib_client "-framework OpenGL -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo")
+  target_link_libraries(raylib_server "-framework OpenGL -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo")
 endif (APPLE)

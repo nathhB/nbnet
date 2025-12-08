@@ -41,63 +41,99 @@ enum
 
 static Options options = {0};
 
-ChangeColorMessage *ChangeColorMessage_Create(void)
+void ChangeColorMessage_Write(NBN_Writer *writer, ClientColor color)
 {
-    return malloc(sizeof(ChangeColorMessage));
+    NBN_Writer_WriteUInt32(writer, (uint32_t)color);
 }
 
-void ChangeColorMessage_Destroy(ChangeColorMessage *msg)
+int ChangeColorMessage_Read(NBN_Reader *reader, ClientColor *color)
 {
-    free(msg);
+    return NBN_Reader_ReadUInt32(reader, (uint32_t *)color);
 }
 
-int ChangeColorMessage_Serialize(ChangeColorMessage *msg, NBN_Stream *stream)
+void UpdateClientStateMessage_Write(NBN_Writer *writer, ClientState state)
 {
-    NBN_SerializeUInt(stream, msg->color, 0, MAX_COLORS - 1);
-
-    return 0;
+    NBN_Writer_WriteInt32(writer, state.x);
+    NBN_Writer_WriteInt32(writer, state.y);
+    NBN_Writer_WriteFloat(writer, state.val);
 }
 
-UpdateStateMessage *UpdateStateMessage_Create(void)
+int UpdateClientStateMessage_Read(NBN_Reader *reader, ClientState *state)
 {
-    return malloc(sizeof(UpdateStateMessage));
-}
-
-void UpdateStateMessage_Destroy(UpdateStateMessage *msg)
-{
-    free(msg);
-}
-
-int UpdateStateMessage_Serialize(UpdateStateMessage *msg, NBN_Stream *stream)
-{
-    NBN_SerializeUInt(stream, msg->x, 0, GAME_WIDTH);
-    NBN_SerializeUInt(stream, msg->y, 0, GAME_HEIGHT);
-    NBN_SerializeFloat(stream, msg->val, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-
-    return 0;
-}
-
-GameStateMessage *GameStateMessage_Create(void)
-{
-    return malloc(sizeof(GameStateMessage));
-}
-
-void GameStateMessage_Destroy(GameStateMessage *msg)
-{
-    free(msg);
-}
-
-int GameStateMessage_Serialize(GameStateMessage *msg, NBN_Stream *stream)
-{
-    NBN_SerializeUInt(stream, msg->client_count, 0, MAX_CLIENTS);
-
-    for (unsigned int i = 0; i < msg->client_count; i++)
+    if (NBN_Reader_ReadInt32(reader, &state->x) < 0)
     {
-        NBN_SerializeUInt(stream, msg->client_states[i].client_id, 0, UINT_MAX);
-        NBN_SerializeUInt(stream, msg->client_states[i].color, 0, MAX_COLORS - 1);
-        NBN_SerializeUInt(stream, msg->client_states[i].x, 0, GAME_WIDTH);
-        NBN_SerializeUInt(stream, msg->client_states[i].y, 0, GAME_HEIGHT);
-        NBN_SerializeFloat(stream, msg->client_states[i].val, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
+        return -1;
+    }
+
+    if (NBN_Reader_ReadInt32(reader, &state->y) < 0)
+    {
+        return -1;
+    }
+
+    if (NBN_Reader_ReadFloat(reader, &state->val) < 0)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+void GameStateMessage_Write(NBN_Writer *writer, GameState *state)
+{
+    NBN_Writer_WriteUInt32(writer, state->client_count);
+
+    for (unsigned int i = 0; i < state->client_count; i++)
+    {
+        ClientState cli_state = state->client_states[i];
+
+        NBN_Writer_WriteUInt32(writer, cli_state.client_id);
+        NBN_Writer_WriteUInt32(writer, (uint32_t)cli_state.color);
+        NBN_Writer_WriteInt32(writer, cli_state.x);
+        NBN_Writer_WriteInt32(writer, cli_state.y);
+        NBN_Writer_WriteFloat(writer, cli_state.val);
+    }
+}
+
+int GameStateMessage_Read(NBN_Reader *reader, GameState *state)
+{
+    if (NBN_Reader_ReadUInt32(reader, &state->client_count) < 0)
+    {
+        return -1;
+    }
+
+    if (state->client_count > MAX_CLIENTS)
+    {
+        return -1;
+    }
+
+    for (unsigned int i = 0; i < state->client_count; i++)
+    {
+        ClientState *cli_state = &state->client_states[i];
+
+        if (NBN_Reader_ReadUInt32(reader, &cli_state->client_id) < 0)
+        {
+            return -1;
+        }
+
+        if (NBN_Reader_ReadUInt32(reader, (uint32_t *)&cli_state->color) < 0)
+        {
+            return -1;
+        }
+
+        if (NBN_Reader_ReadInt32(reader, &cli_state->x) < 0)
+        {
+            return -1;
+        }
+
+        if (NBN_Reader_ReadInt32(reader, &cli_state->y) < 0)
+        {
+            return -1;
+        }
+
+        if (NBN_Reader_ReadFloat(reader, &cli_state->val) < 0)
+        {
+            return -1;
+        }
     }
 
     return 0;
