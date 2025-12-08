@@ -93,7 +93,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install prerequisites
-        run: sudo apt-get install build-essential cmake git python2 g++ -y
+        run: sudo apt-get install build-essential cmake git python3 g++ -y
       - name: Install emsdk
         run: ./bin/github-actions/install_emsdk.sh $EMSDK_VERSION
       - name: Install nbnet NPM dependencies
