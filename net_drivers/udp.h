@@ -39,7 +39,10 @@ void NBN_UDP_Register(void);
 #include <assert.h>
 #include <errno.h>
 #include <math.h>
+#include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define NBN_UDP_DRIVER_ID 0
 #define NBN_UDP_DRIVER_NAME "UDP"
@@ -135,9 +138,9 @@ static NBN_UDP_HTable *NBN_UDP_HTable_Create(void) {
 }
 
 static NBN_UDP_HTable *NBN_UDP_HTable_CreateWithCapacity(unsigned int capacity) {
-    NBN_UDP_HTable *htable = (NBN_UDP_HTable *)NBN_Allocator(sizeof(NBN_UDP_HTable));
+    NBN_UDP_HTable *htable = (NBN_UDP_HTable *)malloc(sizeof(NBN_UDP_HTable));
 
-    htable->internal_array = (NBN_UDP_HTableEntry **)NBN_Allocator(sizeof(NBN_UDP_HTableEntry *) * capacity);
+    htable->internal_array = (NBN_UDP_HTableEntry **)malloc(sizeof(NBN_UDP_HTableEntry *) * capacity);
     htable->capacity = capacity;
     htable->count = 0;
     htable->load_factor = 0;
@@ -153,15 +156,15 @@ static void NBN_UDP_HTable_Destroy(NBN_UDP_HTable *htable) {
         NBN_UDP_HTableEntry *entry = htable->internal_array[i];
 
         if (entry)
-            NBN_Deallocator(entry);
+            free(entry);
     }
 
-    NBN_Deallocator(htable->internal_array);
-    NBN_Deallocator(htable);
+    free(htable->internal_array);
+    free(htable);
 }
 
 static void NBN_UDP_HTable_Add(NBN_UDP_HTable *htable, NBN_IPAddress ip_addr, NBN_UDP_Connection *conn) {
-    NBN_UDP_HTableEntry *entry = (NBN_UDP_HTableEntry *)NBN_Allocator(sizeof(NBN_UDP_HTableEntry));
+    NBN_UDP_HTableEntry *entry = (NBN_UDP_HTableEntry *)malloc(sizeof(NBN_UDP_HTableEntry));
 
     entry->ip_addr = ip_addr;
     entry->conn = conn;
@@ -207,7 +210,7 @@ static void NBN_UDP_HTable_InsertEntry(NBN_UDP_HTable *htable, NBN_UDP_HTableEnt
 static void NBN_UDP_HTable_RemoveEntry(NBN_UDP_HTable *htable, NBN_UDP_HTableEntry *entry) {
     htable->internal_array[entry->slot] = NULL;
 
-    NBN_Deallocator(entry);
+    free(entry);
 
     htable->count--;
     htable->load_factor = (float)htable->count / htable->capacity;
@@ -234,7 +237,7 @@ static unsigned int NBN_UDP_HTable_FindFreeSlot(NBN_UDP_HTable *htable, NBN_UDP_
     {
         *use_existing_slot = true;
 
-        NBN_Deallocator(current_entry);
+        free(current_entry);
     }
 
     return slot;
@@ -268,7 +271,7 @@ static void NBN_UDP_HTable_Grow(NBN_UDP_HTable *htable) {
     unsigned int new_capacity = old_capacity * 2;
     NBN_UDP_HTableEntry **old_internal_array = htable->internal_array;
     NBN_UDP_HTableEntry **new_internal_array =
-        (NBN_UDP_HTableEntry **)NBN_Allocator(sizeof(NBN_UDP_HTableEntry *) * new_capacity);
+        (NBN_UDP_HTableEntry **)malloc(sizeof(NBN_UDP_HTableEntry *) * new_capacity);
 
     for (unsigned int i = 0; i < new_capacity; i++) {
         new_internal_array[i] = NULL;
@@ -286,7 +289,7 @@ static void NBN_UDP_HTable_Grow(NBN_UDP_HTable *htable) {
             NBN_UDP_HTable_InsertEntry(htable, old_internal_array[i]);
     }
 
-    NBN_Deallocator(old_internal_array);
+    free(old_internal_array);
 }
 
 static unsigned long NBN_UDP_HTable_HashSDBM(NBN_IPAddress ip_addr) { return ip_addr.host ^ ip_addr.port; }
@@ -367,7 +370,7 @@ static int BindSocket(uint16_t port) {
 
 static int ResolveIpAddress(const char *host, uint16_t port, NBN_IPAddress *address) {
     size_t host_len = strlen(host);
-    char *dup_host = (char *)NBN_Allocator(host_len + 1);
+    char *dup_host = (char *)malloc(host_len + 1);
     memcpy(dup_host, host, host_len + 1);
     uint8_t arr[4];
 
@@ -390,7 +393,7 @@ static int ResolveIpAddress(const char *host, uint16_t port, NBN_IPAddress *addr
     address->host = (arr[0] << 24) | (arr[1] << 16) | (arr[2] << 8) | arr[3];
     address->port = port;
 
-    NBN_Deallocator(dup_host);
+    free(dup_host);
 
     return 0;
 }
@@ -487,7 +490,7 @@ static void NBN_UDP_ServRemoveClientConnection(NBN_Connection *connection) {
     if (udp_conn) {
         NBN_LogDebug("Destroyed UDP connection %d", connection->id);
 
-        NBN_Deallocator(udp_conn);
+        free(udp_conn);
     }
 }
 
@@ -519,7 +522,7 @@ static NBN_Connection *FindOrCreateClientConnectionByAddress(NBN_IPAddress addre
         if (GameServer_GetClientCount() >= NBN_MAX_CLIENTS)
             return NULL;
 
-        udp_conn = (NBN_UDP_Connection *)NBN_Allocator(sizeof(NBN_UDP_Connection));
+        udp_conn = (NBN_UDP_Connection *)malloc(sizeof(NBN_UDP_Connection));
 
         udp_conn->id = nbn_udp_serv.next_conn_id++;
         udp_conn->address = address;
@@ -557,7 +560,7 @@ static NBN_UDP_Client nbn_udp_cli = {NULL, 0};
 static int ResolveIpAddress(const char *, uint16_t, NBN_IPAddress *);
 
 static int NBN_UDP_CliStart(uint32_t protocol_id, const char *host, uint16_t port) {
-    NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)NBN_Allocator(sizeof(NBN_Connection));
+    NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)malloc(sizeof(NBN_Connection));
 
     nbn_udp_cli.protocol_id = protocol_id;
 
@@ -581,7 +584,7 @@ static int NBN_UDP_CliStart(uint32_t protocol_id, const char *host, uint16_t por
 static void NBN_UDP_CliStop(void) {
     NBN_UDP_Connection *udp_conn = (NBN_UDP_Connection *)nbn_udp_cli.server_conn->driver_data;
 
-    NBN_Deallocator(udp_conn);
+    free(udp_conn);
     DeinitSocket();
 }
 

@@ -89,7 +89,7 @@ unsigned int Soak_GetCreatedIncomingSoakMessageCount(void);
 unsigned int Soak_GetDestroyedIncomingSoakMessageCount(void);
 void SoakMessage_Write(NBN_Writer *, unsigned int, uint8_t *, unsigned int);
 int SoakMessage_Read(NBN_Reader *reader, unsigned int *msg_id, uint8_t *data, unsigned int *data_length);
-uint8_t *AllocateMessage(uint8_t type, uint16_t *);
-void DeallocateMessage(uint8_t type, uint8_t *data);
+bool AllocateMessage(NBN_MessageHeader header, NBN_MessageType type, uint8_t **buffer);
+void DeallocateMessage(NBN_MessageHeader header, NBN_MessageType type, uint8_t *buffer);
 
 #endif // SOAK_H_INCLUDED

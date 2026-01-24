@@ -39,6 +39,8 @@
 
 #endif // __EMSCRIPTEN__
 
+#include <assert.h>
+
 typedef struct {
     uint8_t data[SOAK_MESSAGE_BIG_MAX_LENGTH];
     uint8_t channel_id;
@@ -305,12 +307,10 @@ int main(int argc, char *argv[]) {
 
 #endif // __EMSCRIPTEN__
 
-    NBN_GameClient_Config config =
-        NBN_GameClient_CreateConfig(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT, AllocateMessage, DeallocateMessage);
+    NBN_GameClient_Init(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT);
+    NBN_GameClient_EnableCustomChannels(options.channel_count);
 
-    NBN_GameClient_EnableCustomChannels(&config, options.channel_count);
-
-    if (NBN_GameClient_Start(config) < 0) {
+    if (NBN_GameClient_Start() < 0) {
         Soak_LogError("Failed to start game client. Exit");
 
 #ifdef __EMSCRIPTEN__

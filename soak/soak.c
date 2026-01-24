@@ -22,7 +22,9 @@
 
 */
 
+#include <assert.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 #ifdef __EMSCRIPTEN__
@@ -247,13 +249,18 @@ int SoakMessage_Read(NBN_Reader *reader, unsigned int *msg_id, uint8_t *data, un
     return 0;
 }
 
-uint8_t *AllocateMessage(uint8_t type, uint16_t *length) {
-    if (type == SOAK_MESSAGE_SMALL) {
-        *length = SOAK_MESSAGE_SMALL_MAX_DATA_LENGTH + 32;
-        return (uint8_t *)NBN_Allocator(*length);
+bool AllocateMessage(NBN_MessageHeader header, NBN_MessageType type, uint8_t **buffer) {
+    if (header.type == SOAK_MESSAGE_SMALL) {
+        *buffer = malloc(SOAK_MESSAGE_SMALL_MAX_DATA_LENGTH + 32);
+
+        return true;
     }
 
-    NBN_Abort();
+    return false;
 }
 
-void DeallocateMessage(uint8_t type, uint8_t *data) { NBN_Deallocator(data); }
+void DeallocateMessage(NBN_MessageHeader header, NBN_MessageType type, uint8_t *buffer) {
+    assert(header.type == SOAK_MESSAGE_SMALL);
+
+    free(buffer);
+}

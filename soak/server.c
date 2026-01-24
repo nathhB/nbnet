@@ -351,12 +351,11 @@ int main(int argc, char *argv[]) {
 #endif // WEBRTC_NATIVE
 
     SoakOptions options = Soak_GetOptions();
-    NBN_GameServer_Config config =
-        NBN_GameServer_CreateConfig(SOAK_PROTOCOL_NAME, SOAK_PORT, AllocateMessage, DeallocateMessage);
 
-    NBN_GameServer_EnableCustomChannels(&config, options.channel_count);
+    NBN_GameServer_Init(SOAK_PROTOCOL_NAME, SOAK_PORT);
+    NBN_GameServer_EnableCustomChannels(options.channel_count);
 
-    if (NBN_GameServer_Start(config)) {
+    if (NBN_GameServer_Start()) {
         Soak_LogError("Failed to start game server");
 
         return 1;
