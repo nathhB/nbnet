@@ -87,17 +87,16 @@ static void HandleNewConnection(void) {
     NBN_GameServer_AcceptIncomingConnection();
 
     SoakClient *soak_client = (SoakClient *)malloc(sizeof(SoakClient));
-    unsigned int channel_count = Soak_GetOptions().channel_count;
 
     soak_client->conn = conn;
     soak_client->error = false;
     soak_client->is_closed = false;
-    soak_client->channels = (SoakChannel *)malloc(sizeof(SoakChannel) * channel_count);
+    soak_client->channels = (SoakChannel *)malloc(sizeof(SoakChannel) * NBN_CHANNEL_COUNT);
 
-    for (unsigned int c = 0; c < channel_count; c++) {
+    for (unsigned int c = 0; c < NBN_CHANNEL_COUNT; c++) {
         SoakChannel *channel = &soak_client->channels[c];
 
-        channel->id = 2 + c;
+        channel->id = c;
         channel->recved_messages_count = 0;
         channel->last_recved_message_id = 0;
 
@@ -130,15 +129,13 @@ static void HandleClientDisconnection(NBN_DisconnectionInfo info) {
 }
 
 static void EchoReceivedSoakMessages(void) {
-    unsigned int channel_count = Soak_GetOptions().channel_count;
-
     for (unsigned int i = 0; i < SOAK_MAX_CLIENTS; i++) {
         SoakClient *soak_client = clients[i];
 
         if (soak_client == NULL || soak_client->is_closed)
             continue;
 
-        for (unsigned int c = 0; c < channel_count; c++) {
+        for (unsigned int c = 0; c < NBN_CHANNEL_COUNT; c++) {
             SoakChannel *channel = &soak_client->channels[c];
 
             while (channel->echo_queue.count > 0) {
@@ -179,7 +176,7 @@ static int HandleReceivedSoakMessage(NBN_Reader *reader, NBN_Connection *sender,
     if (!soak_client || soak_client->error)
         return 0;
 
-    SoakChannel *channel = &soak_client->channels[channel_id - 2];
+    SoakChannel *channel = &soak_client->channels[channel_id];
 
     unsigned int msg_id;
     unsigned int data_length;
@@ -292,35 +289,7 @@ static int Tick(void *data) {
     return 0;
 }
 
-static void SigintHandler(int dummy) {
-    int active_out_msg = NBN_GameServer_GetActiveOutgoingMessageCount();
-    bool leak = false;
-
-    if (active_out_msg > 0) {
-        Soak_LogError("Outgoing message leak detected: %d", active_out_msg);
-        leak = true;
-    }
-
-    int active_inc_buffer_count = NBN_GameServer_GetActiveIncomingMessageBufferCount();
-
-    if (active_inc_buffer_count > 0) {
-        Soak_LogError("Incoming message buffer leak detected: %d", active_inc_buffer_count);
-        leak = true;
-    }
-
-    int active_out_buffer_count = NBN_GameServer_GetActiveOutgoingMessageCount();
-
-    if (active_out_buffer_count > 0) {
-        Soak_LogError("Outgoing message buffer leak detected: %d", active_out_buffer_count);
-        leak = true;
-    }
-
-    if (!leak) {
-        Soak_LogInfo("No memory leak detected! Cool... cool cool cool");
-    }
-
-    Soak_Stop();
-}
+static void SigintHandler(int dummy) { Soak_Stop(); }
 
 int main(int argc, char *argv[]) {
     signal(SIGINT, SigintHandler);
@@ -353,7 +322,6 @@ int main(int argc, char *argv[]) {
     SoakOptions options = Soak_GetOptions();
 
     NBN_GameServer_Init(SOAK_PROTOCOL_NAME, SOAK_PORT);
-    NBN_GameServer_EnableCustomChannels(options.channel_count);
 
     if (NBN_GameServer_Start()) {
         Soak_LogError("Failed to start game server");

@@ -48,17 +48,17 @@ static void Usage(void) {
 #ifdef SOAK_CLIENT
 
 #ifdef WEBRTC_NATIVE
-    printf("Usage: client --message_count=<value> --channel_count=<value> [--packet_loss=<value>] \
+    printf("Usage: client --message_count=<value> [--packet_loss=<value>] \
 [--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>] [--webrtc]\n");
 #else
-    printf("Usage: client --message_count=<value> --channel_count=<value> [--packet_loss=<value>] \
+    printf("Usage: client --message_count=<value> [--packet_loss=<value>] \
 [--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
 #endif // WEBRTC_NATIVE
 
 #endif // SOAK_CLIENT
 
 #ifdef SOAK_SERVER
-    printf("Usage: server --channel_count=<value> [--packet_loss=<value>] \
+    printf("Usage: server [--packet_loss=<value>] \
 [--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
 #endif
 }
@@ -109,7 +109,6 @@ int Soak_ReadCommandLine(int argc, char *argv[]) {
 
 #endif // SOAK_CLIENT
 
-        {'c', NULL, "channel_count", "VALUE", "Number of channels (1 - 8)"},
         {'l', NULL, "packet_loss", "VALUE", "Packet loss frenquency (0-1)"},
         {'d', NULL, "packet_duplication", "VALUE", "Packet duplication frequency (0-1)"},
         {'p', NULL, "ping", "VALUE", "Ping in seconds"},
@@ -136,13 +135,7 @@ int Soak_ReadCommandLine(int argc, char *argv[]) {
         if (false) {
         }
 #endif
-        else if (option == 'c') {
-            const char *val = cag_option_get_value(&context);
-
-            if (val) {
-                soak_options.channel_count = atoi(val);
-            }
-        } else if (option == 'l') {
+        else if (option == 'l') {
             soak_options.packet_loss = atof(cag_option_get_value(&context));
         } else if (option == 'd') {
             soak_options.packet_duplication = atof(cag_option_get_value(&context));
@@ -151,16 +144,6 @@ int Soak_ReadCommandLine(int argc, char *argv[]) {
         } else if (option == 'j') {
             soak_options.jitter = atof(cag_option_get_value(&context));
         }
-    }
-
-    if (soak_options.channel_count <= 0) {
-        Usage();
-        return -1;
-    }
-
-    if (soak_options.channel_count > NBN_MAX_CUSTOM_CHANNELS) {
-        Soak_LogError("Channel count cannot exceed %d", NBN_MAX_CUSTOM_CHANNELS);
-        return -1;
     }
 
 #ifdef SOAK_CLIENT

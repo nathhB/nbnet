@@ -44,6 +44,7 @@
 #define NBN_LogError Soak_LogError
 #define NBN_LogWarning Soak_LogWarn
 
+#define NBN_CHANNEL_COUNT 4
 #include "../nbnet.h"
 
 #define SOAK_PROTOCOL_NAME "nbnet_soak"
@@ -68,7 +69,6 @@
 
 typedef struct {
     unsigned int message_count;
-    unsigned int channel_count;
     float packet_loss;        /* 0 - 1 */
     float packet_duplication; /* 0 - 1 */
     float ping;               /* in seconds */
@@ -89,7 +89,5 @@ unsigned int Soak_GetCreatedIncomingSoakMessageCount(void);
 unsigned int Soak_GetDestroyedIncomingSoakMessageCount(void);
 void SoakMessage_Write(NBN_Writer *, unsigned int, uint8_t *, unsigned int);
 int SoakMessage_Read(NBN_Reader *reader, unsigned int *msg_id, uint8_t *data, unsigned int *data_length);
-bool AllocateMessage(NBN_MessageHeader header, NBN_MessageType type, uint8_t **buffer);
-void DeallocateMessage(NBN_MessageHeader header, NBN_MessageType type, uint8_t *buffer);
 
 #endif // SOAK_H_INCLUDED

@@ -181,6 +181,10 @@ int main(int argc, const char **argv) {
             }
         }
 
+        if (error) {
+            break;
+        }
+
         // Pack all enqueued messages as packets and send them
         if (NBN_GameServer_SendPackets() < 0) {
             Log(LOG_ERROR, "Failed to send packets");
