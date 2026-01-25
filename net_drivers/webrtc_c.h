@@ -44,6 +44,10 @@ freely, subject to the following restrictions:
 #include <string.h>
 #include <time.h>
 
+#ifndef NBNET_H
+#include "../nbnet.h"
+#endif
+
 #define NBN_WEBRTC_C_DRIVER_ID 2
 #define NBN_WEBRTC_C_DRIVER_NAME "WebRTC_C"
 

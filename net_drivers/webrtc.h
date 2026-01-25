@@ -34,6 +34,10 @@ freely, subject to the following restrictions:
 
 #include <stdbool.h>
 
+#ifndef NBNET_H
+#include "../nbnet.h"
+#endif
+
 typedef struct NBN_WebRTC_Config {
     bool enable_tls;
     const char *cert_path;

@@ -117,10 +117,9 @@ int main(int argc, const char **argv) {
 
     // Start the server with a protocol name and a port
 
-    NBN_GameServer_Config config =
-        NBN_GameServer_CreateConfig(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT, AllocateMessage, DeallocateMessage);
+    NBN_GameServer_Init(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT);
 
-    if (NBN_GameServer_Start(config) < 0) {
+    if (NBN_GameServer_Start() < 0) {
         Log(LOG_ERROR, "Failed to start the server");
 
         // Error, quit the server application

@@ -284,7 +284,6 @@ int NBN_Packet_InitRead(NBN_Packet *, uint32_t, unsigned int);
 
 #define NBN_MAX_CUSTOM_CHANNELS 8
 #define NBN_CHANNEL_BUFFER_SIZE 1024
-#define NBN_CHANNEL_OUTGOING_MESSAGE_POOL_SIZE 512
 
 /* Library reserved unreliable ordered channel */
 #define NBN_CHANNEL_RESERVED_UNRELIABLE 0

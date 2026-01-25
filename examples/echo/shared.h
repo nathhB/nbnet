@@ -63,7 +63,5 @@ void Log(int, const char *, ...);
 #endif // __EMSCRIPTEN__
 
 void EchoSleep(double);
-uint8_t *AllocateMessage(uint8_t type, uint16_t *);
-void DeallocateMessage(uint8_t type, uint8_t *data);
 
 #endif /* ECHO_EXAMPLE_SHARED_H */

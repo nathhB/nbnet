@@ -20,6 +20,7 @@
 
 */
 
+#include <assert.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -67,12 +68,3 @@ void Log(int type, const char *fmt, ...) {
 
     va_end(args);
 }
-
-uint8_t *AllocateMessage(uint8_t type, uint16_t *length) {
-    NBN_Assert(type == ECHO_MESSAGE_TYPE);
-
-    *length = ECHO_MESSAGE_MAX_LENGTH;
-    return (uint8_t *)NBN_Allocator(*length);
-}
-
-void DeallocateMessage(uint8_t type, uint8_t *data) { NBN_Deallocator(data); }
