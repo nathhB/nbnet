@@ -39,6 +39,10 @@
 
 #define NBNET_WINDOWS
 
+#else
+
+#include <arpa/inet.h>
+
 #endif
 
 #ifndef NBNET_WINDOWS
