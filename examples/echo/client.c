@@ -74,14 +74,13 @@ void OnMessageReceived(void) {
 }
 
 int SendMessage(const char *msg) {
-    NBN_GameClient_CreateReliableMessage(ECHO_MESSAGE_TYPE);
-    NBN_Writer *writer = NBN_GameClient_GetMessageWriter();
+    NBN_Writer *writer = NBN_GameClient_CreateReliableMessage(ECHO_MESSAGE_TYPE);
     unsigned int length = strlen(msg);
 
     NBN_Writer_WriteUInt32(writer, length);
     NBN_Writer_WriteBytes(writer, (uint8_t *)msg, length);
 
-    return NBN_GameClient_SendMessage();
+    return NBN_GameClient_EnqueueMessage();
 }
 
 int main(int argc, char *argv[]) {
@@ -213,7 +212,7 @@ int main(int argc, char *argv[]) {
         }
 
         // Pack all enqueued messages as packets and send them
-        if (NBN_GameClient_SendPackets() < 0) {
+        if (NBN_GameClient_Flush() < 0) {
             Log(LOG_ERROR, "Failed to send packets. Exit");
 
             // Stop main loop

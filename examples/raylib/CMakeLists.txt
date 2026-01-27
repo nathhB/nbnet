@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.5)
 
 project(raylib_example C)
 
@@ -7,7 +7,7 @@ set(raylib_DIR cmake)
 set(CLIENT_SOURCES client.c shared.c)
 set(SERVER_SOURCES server.c shared.c)
 
-add_compile_options(-Wall -Wextra -Wpedantic -Wno-unknown-pragmas -Wno-type-limits -std=c99)
+add_compile_options(-Wall -Wextra -Wpedantic -Wno-unknown-pragmas -std=c99)
 
 add_executable(raylib_client ${CLIENT_SOURCES})
 add_executable(raylib_server ${SERVER_SOURCES})
@@ -42,13 +42,8 @@ if (WEBRTC_C_DRIVER)
 
   target_compile_definitions(raylib_server PUBLIC SOAK_WEBRTC_C_DRIVER)
 
-  target_link_libraries(raylib_server ${LIBFACILIO_LIBRARY_PATH})
-  target_link_libraries(raylib_server ${LIBCRYPTO_LIBRARY_PATH})
-  target_link_libraries(raylib_server ${LIBSSL_LIBRARY_PATH})
   target_link_libraries(raylib_server ${LIBDATACHANNEL_LIBRARY_PATH})
 
-  target_include_directories(raylib_server PUBLIC "${LIBFACILIO_INCLUDE_PATH}")
-  target_include_directories(raylib_server PUBLIC "${OPENSSL_INCLUDE_PATH}")
   target_include_directories(raylib_server PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
 
   if (USE_HTTPS)

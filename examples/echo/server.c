@@ -57,13 +57,12 @@ static int EchoReceivedMessage(void) {
         msg_info.channel_id);
 
     // create and send an echo of the received message
-    NBN_GameServer_CreateReliableMessage(ECHO_MESSAGE_TYPE);
-    NBN_Writer *writer = NBN_GameServer_GetMessageWriter();
+    NBN_Writer *writer = NBN_GameServer_CreateReliableMessage(ECHO_MESSAGE_TYPE);
 
     NBN_Writer_WriteUInt32(writer, length);
     NBN_Writer_WriteBytes(writer, (uint8_t *)msg_str, length);
 
-    return NBN_GameServer_SendMessageTo(connection);
+    return NBN_GameServer_EnqueueMessageFor(connection);
 }
 
 static bool error = false;
@@ -186,7 +185,7 @@ int main(int argc, const char **argv) {
         }
 
         // Pack all enqueued messages as packets and send them
-        if (NBN_GameServer_SendPackets() < 0) {
+        if (NBN_GameServer_Flush() < 0) {
             Log(LOG_ERROR, "Failed to send packets");
 
             // Error, quit the server application

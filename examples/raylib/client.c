@@ -19,6 +19,7 @@
 
 */
 
+#include <assert.h>
 #include <stdio.h>
 
 #ifdef __EMSCRIPTEN__
@@ -58,8 +59,7 @@ Color client_colors_to_raylib_colors[] = {
     PINK    // CLI_PINK
 };
 
-static void SpawnLocalClient(int x, int y, uint32_t client_id)
-{
+static void SpawnLocalClient(int x, int y, uint32_t client_id) {
     TraceLog(LOG_INFO, "Spawning at (%d, %d), client id: %d", x, y, client_id);
 
     // Update the local client state based on spawn info sent by the server
@@ -70,25 +70,21 @@ static void SpawnLocalClient(int x, int y, uint32_t client_id)
     spawned = true;
 }
 
-static int HandleConnection(void)
-{
+static int HandleConnection(void) {
     TraceLog(LOG_INFO, "Connected, reading connection data...");
 
     uint32_t x, y, client_id;
     NBN_Reader *reader = NBN_GameClient_GetServerDataReader();
 
-    if (NBN_Reader_ReadUInt32(reader, &x) < 0)
-    {
+    if (NBN_Reader_ReadUInt32(reader, &x) < 0) {
         return -1;
     }
 
-    if (NBN_Reader_ReadUInt32(reader, &y) < 0)
-    {
+    if (NBN_Reader_ReadUInt32(reader, &y) < 0) {
         return -1;
     }
 
-    if (NBN_Reader_ReadUInt32(reader, &client_id) < 0)
-    {
+    if (NBN_Reader_ReadUInt32(reader, &client_id) < 0) {
         return -1;
     }
 
@@ -98,8 +94,7 @@ static int HandleConnection(void)
     return 0;
 }
 
-static void HandleDisconnection(void)
-{
+static void HandleDisconnection(void) {
     int code = NBN_GameClient_GetServerCloseCode(); // Get the server code used when closing the client connection
 
     TraceLog(LOG_INFO, "Disconnected from server (code: %d)", code);
@@ -108,10 +103,8 @@ static void HandleDisconnection(void)
     server_close_code = code;
 }
 
-static bool ClientExists(uint32_t client_id)
-{
-    for (int i = 0; i < MAX_CLIENTS - 1; i++)
-    {
+static bool ClientExists(uint32_t client_id) {
+    for (int i = 0; i < MAX_CLIENTS - 1; i++) {
         if (clients[i] && clients[i]->client_id == client_id)
             return true;
     }
@@ -119,18 +112,15 @@ static bool ClientExists(uint32_t client_id)
     return false;
 }
 
-static void CreateClient(ClientState state)
-{
+static void CreateClient(ClientState state) {
     TraceLog(LOG_DEBUG, "CreateClient %d", state.client_id);
     assert(client_count < MAX_CLIENTS - 1);
 
     ClientState *client = NULL;
 
     // Create a new remote client state and store it in the remote clients array at the first free slot found
-    for (int i = 0; i < MAX_CLIENTS - 1; i++)
-    {
-        if (clients[i] == NULL)
-        {
+    for (int i = 0; i < MAX_CLIENTS - 1; i++) {
+        if (clients[i] == NULL) {
             client = malloc(sizeof(ClientState));
             clients[i] = client;
 
@@ -148,15 +138,12 @@ static void CreateClient(ClientState state)
     TraceLog(LOG_INFO, "New remote client (ID: %d)", client->client_id);
 }
 
-static void UpdateClient(ClientState state)
-{
+static void UpdateClient(ClientState state) {
     ClientState *client = NULL;
 
     // Find the client matching the client id of the received remote client state
-    for (int i = 0; i < MAX_CLIENTS - 1; i++)
-    {
-        if (clients[i] && clients[i]->client_id == state.client_id)
-        {
+    for (int i = 0; i < MAX_CLIENTS - 1; i++) {
+        if (clients[i] && clients[i]->client_id == state.client_id) {
             client = clients[i];
 
             break;
@@ -169,15 +156,12 @@ static void UpdateClient(ClientState state)
     memcpy(client, &state, sizeof(ClientState));
 }
 
-static void DestroyClient(uint32_t client_id)
-{
+static void DestroyClient(uint32_t client_id) {
     // Find the client matching the client id and destroy it
-    for (int i = 0; i < MAX_CLIENTS - 1; i++)
-    {
+    for (int i = 0; i < MAX_CLIENTS - 1; i++) {
         ClientState *client = clients[i];
 
-        if (client && client->client_id == client_id)
-        {
+        if (client && client->client_id == client_id) {
             TraceLog(LOG_INFO, "Destroy disconnected client (ID: %d)", client->client_id);
 
             free(client);
@@ -189,24 +173,20 @@ static void DestroyClient(uint32_t client_id)
     }
 }
 
-static void DestroyDisconnectedClients(void)
-{
+static void DestroyDisconnectedClients(void) {
     /* Loop over all remote client states and remove the one that have not
      * been updated with the last received game state.
      * This is how we detect disconnected clients.
      */
-    for (int i = 0; i < MAX_CLIENTS - 1; i++)
-    {
+    for (int i = 0; i < MAX_CLIENTS - 1; i++) {
         if (clients[i] == NULL)
             continue;
 
         uint32_t client_id = clients[i]->client_id;
         bool disconnected = true;
 
-        for (int j = 0; j < MAX_CLIENTS; j++)
-        {
-            if ((int)client_id == updated_ids[j])
-            {
+        for (int j = 0; j < MAX_CLIENTS; j++) {
+            if ((int)client_id == updated_ids[j]) {
                 disconnected = false;
 
                 break;
@@ -218,13 +198,12 @@ static void DestroyDisconnectedClients(void)
     }
 }
 
-static void HandleGameStateMessage(void)
-{
-    if (!spawned) return;
+static void HandleGameStateMessage(void) {
+    if (!spawned)
+        return;
 
     // Start by resetting the updated client ids array
-    for (int i = 0; i < MAX_CLIENTS; i++)
-    {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
         updated_ids[i] = -1;
     }
 
@@ -236,13 +215,11 @@ static void HandleGameStateMessage(void)
     GameStateMessage_Read(reader, &recv_game_state);
 
     // Loop over the received client states and update the clients
-    for (unsigned int i = 0; i < recv_game_state.client_count; i++)
-    {
+    for (unsigned int i = 0; i < recv_game_state.client_count; i++) {
         ClientState cli_state = recv_game_state.client_states[i];
 
         // Ignore the state of the local client
-        if (cli_state.client_id != local_client_state.client_id)
-        {
+        if (cli_state.client_id != local_client_state.client_id) {
             // If the client already exists we update it with the latest received state
             if (ClientExists(cli_state.client_id))
                 UpdateClient(cli_state);
@@ -257,13 +234,11 @@ static void HandleGameStateMessage(void)
     DestroyDisconnectedClients();
 }
 
-static void HandleReceivedMessage(void)
-{
+static void HandleReceivedMessage(void) {
     // Fetch info about the last received message
     NBN_MessageInfo msg_info = NBN_GameClient_GetMessageInfo();
 
-    switch (msg_info.type)
-    {
+    switch (msg_info.type) {
     // We received the latest game state from the server
     case GAME_STATE_MESSAGE:
         HandleGameStateMessage();
@@ -274,61 +249,52 @@ static void HandleReceivedMessage(void)
     abort();
 }
 
-static void HandleGameClientEvent(int ev)
-{
-    switch (ev)
-    {
-        case NBN_CONNECTED:
-            // We are connected to the server
-            if (HandleConnection() < 0)
-            {
-                TraceLog(LOG_ERROR, "Failed to handle connection");
-                abort();
-            }
-            break;
+static void HandleGameClientEvent(int ev) {
+    switch (ev) {
+    case NBN_CONNECTED:
+        // We are connected to the server
+        if (HandleConnection() < 0) {
+            TraceLog(LOG_ERROR, "Failed to handle connection");
+            abort();
+        }
+        break;
 
-        case NBN_DISCONNECTED:
-            // The server has closed our connection
-            HandleDisconnection();
-            break;
+    case NBN_DISCONNECTED:
+        // The server has closed our connection
+        HandleDisconnection();
+        break;
 
-        case NBN_MESSAGE_RECEIVED:
-            // We received a message from the server
-            HandleReceivedMessage();
-            break;
+    case NBN_MESSAGE_RECEIVED:
+        // We received a message from the server
+        HandleReceivedMessage();
+        break;
     }
 }
 
-static int SendStateUpdate(void)
-{
+static int SendStateUpdate(void) {
     // Create a new UPDATE_STATE_MESSAGE unreliable message
-    NBN_GameClient_CreateUnreliableMessage(UPDATE_STATE_MESSAGE);
-    NBN_Writer *writer = NBN_GameClient_GetMessageWriter();
+    NBN_Writer *writer = NBN_GameClient_CreateUnreliableMessage(UPDATE_STATE_MESSAGE);
 
     // Write the local client state to the message
     UpdateClientStateMessage_Write(writer, local_client_state);
 
     // Send the message to the server
-    if (NBN_GameClient_SendMessage() < 0)
-    {
+    if (NBN_GameClient_EnqueueMessage() < 0) {
         return -1;
     }
 
     return 0;
 }
 
-static int SendColorUpdate(void)
-{
+static int SendColorUpdate(void) {
     // Create a new CHANGE_COLOR_MESSAGE reliable message
-    NBN_GameClient_CreateReliableMessage(CHANGE_COLOR_MESSAGE);
-    NBN_Writer *writer = NBN_GameClient_GetMessageWriter();
+    NBN_Writer *writer = NBN_GameClient_CreateReliableMessage(CHANGE_COLOR_MESSAGE);
 
     // Write the new client color to the message
     ChangeColorMessage_Write(writer, local_client_state.color);
 
     // Send the message to the server
-    if (NBN_GameClient_SendMessage() < 0)
-    {
+    if (NBN_GameClient_EnqueueMessage() < 0) {
         return -1;
     }
 
@@ -337,8 +303,7 @@ static int SendColorUpdate(void)
 
 bool color_key_pressed = false;
 
-static int Update(void)
-{
+static int Update(void) {
     if (!spawned)
         return 0;
 
@@ -354,15 +319,13 @@ static int Update(void)
         local_client_state.x = MIN(GAME_WIDTH - 50, local_client_state.x + 5);
 
     // Color switching
-    if (IsKeyDown(KEY_SPACE) && !color_key_pressed)
-    {
+    if (IsKeyDown(KEY_SPACE) && !color_key_pressed) {
         color_key_pressed = true;
         local_client_state.color = (local_client_state.color + 1) % MAX_COLORS;
 
         TraceLog(LOG_INFO, "Switched color, new color: %d", local_client_state.color);
 
-        if (SendColorUpdate() < 0)
-        {
+        if (SendColorUpdate() < 0) {
             TraceLog(LOG_WARNING, "Failed to send color update");
 
             return -1;
@@ -380,8 +343,7 @@ static int Update(void)
         local_client_state.val = MAX(MIN_FLOAT_VAL, local_client_state.val - 0.005);
 
     // Send the latest local client state to the server
-    if (SendStateUpdate() < 0)
-    {
+    if (SendStateUpdate() < 0) {
         TraceLog(LOG_WARNING, "Failed to send client state update");
 
         return -1;
@@ -390,8 +352,7 @@ static int Update(void)
     return 0;
 }
 
-void DrawClient(ClientState *state, bool is_local)
-{
+void DrawClient(ClientState *state, bool is_local) {
     Color color = client_colors_to_raylib_colors[state->color];
     const char *text = TextFormat("%.3f", state->val);
     int font_size = 20;
@@ -404,8 +365,7 @@ void DrawClient(ClientState *state, bool is_local)
         DrawRectangleLinesEx((Rectangle){state->x, state->y, 50, 50}, 3, DARKBROWN);
 }
 
-void DrawHUD(void)
-{
+void DrawHUD(void) {
     NBN_ConnectionStats stats = NBN_GameClient_GetStats();
     unsigned int ping = stats.ping * 1000;
     unsigned int packet_loss = stats.packet_loss * 100;
@@ -417,30 +377,22 @@ void DrawHUD(void)
     DrawText(TextFormat("Download: %.1f Bps", stats.download_bandwidth), 450, 550, 32, MAROON);
 }
 
-void Draw(void)
-{
+void Draw(void) {
     BeginDrawing();
     ClearBackground(LIGHTGRAY);
 
-    if (disconnected)
-    {
-        if (server_close_code == -1)
-        {
+    if (disconnected) {
+        if (server_close_code == -1) {
             if (connected)
                 DrawText("Connection to the server was lost", 265, 280, 20, RED);
             else
                 DrawText("Server cannot be reached", 265, 280, 20, RED);
-        }
-        else if (server_close_code == SERVER_FULL_CODE)
-        {
+        } else if (server_close_code == SERVER_FULL_CODE) {
             DrawText("Cannot connect, server is full", 265, 280, 20, RED);
         }
-    }
-    else if (connected && spawned)
-    {
+    } else if (connected && spawned) {
         // Start by drawing the remote clients
-        for (int i = 0; i < MAX_CLIENTS - 1; i++)
-        {
+        for (int i = 0; i < MAX_CLIENTS - 1; i++) {
             if (clients[i])
                 DrawClient(clients[i], false);
         }
@@ -450,9 +402,7 @@ void Draw(void)
 
         // Finally draw the HUD
         DrawHUD();
-    }
-    else
-    {
+    } else {
         DrawText("Connecting to server...", 265, 280, 20, RED);
     }
 
@@ -462,8 +412,7 @@ void Draw(void)
 static double tick_dt = 1.0 / TICK_RATE; // Tick delta time (in seconds)
 static double acc = 0;
 
-void UpdateAndDraw(void)
-{
+void UpdateAndDraw(void) {
     // Very basic fixed timestep implementation.
     // Target FPS is either 100 (in desktop) or whatever the browser frame rate is (in web) but the simulation runs at
     // TICK_RATE ticks per second.
@@ -473,14 +422,11 @@ void UpdateAndDraw(void)
     acc += GetFrameTime(); // Accumulates time
 
     // Simulates as many ticks as we can
-    while (acc >= tick_dt)
-    {
+    while (acc >= tick_dt) {
         int ev;
 
-        while ((ev = NBN_GameClient_Poll()) != NBN_NO_EVENT)
-        {
-            if (ev < 0)
-            {
+        while ((ev = NBN_GameClient_Poll()) != NBN_NO_EVENT) {
+            if (ev < 0) {
                 TraceLog(LOG_WARNING, "An occured while polling network events. Exit");
 
                 break;
@@ -489,16 +435,13 @@ void UpdateAndDraw(void)
             HandleGameClientEvent(ev);
         }
 
-        if (connected && !disconnected)
-        {
+        if (connected && !disconnected) {
             if (Update() < 0)
                 break;
         }
 
-        if (!disconnected)
-        {
-            if (NBN_GameClient_SendPackets() < 0)
-            {
+        if (!disconnected) {
+            if (NBN_GameClient_Flush() < 0) {
                 TraceLog(LOG_ERROR, "An occured while flushing the send queue. Exit");
 
                 break;
@@ -511,13 +454,11 @@ void UpdateAndDraw(void)
     Draw();
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     // Read command line arguments expect when we are running in a web browser.
     // When running in web browser we need another way to provide arguments (TODO)
 #ifdef __EMSCRIPTEN__
-    if (ReadCommandLine(argc, argv) < 0)
-    {
+    if (ReadCommandLine(argc, argv) < 0) {
         printf("Usage: client [--packet_loss=<value>] [--packet_duplication=<value>] [--ping=<value>] \
 [--jitter=<value>]\n");
 
@@ -542,20 +483,12 @@ int main(int argc, char *argv[])
     NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__
 
-    // Create a client configuration with a protocol name, the server host and the server port
+    // Initialize the client with a protocol name, the server host and the server port
     // protocol name has to be the same as the one used by the server
-    NBN_GameClient_Config config = NBN_GameClient_CreateConfig(
-        RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT);
-
-    // Register all the messages of our protocol
-    // both server and clients have to register the same messages
-    NBN_GameClient_RegisterMessageType(&config, CHANGE_COLOR_MESSAGE, CHANGE_COLOR_MESSAGE_MAX_LENGTH);
-    NBN_GameClient_RegisterMessageType(&config, UPDATE_STATE_MESSAGE, UPDATE_STATE_MESSAGE_MAX_LENGTH);
-    NBN_GameClient_RegisterMessageType(&config, GAME_STATE_MESSAGE, GAME_STATE_MESSAGE_MAX_LENGTH);
+    NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT);
 
     // Start the client with the configuration
-    if (NBN_GameClient_Start(config) < 0)
-    {
+    if (NBN_GameClient_Start() < 0) {
         TraceLog(LOG_WARNING, "Game client failed to start. Exit");
 
         return 1;
@@ -565,12 +498,11 @@ int main(int argc, char *argv[])
     NBN_GameClient_SetPing(GetOptions().ping);
     NBN_GameClient_SetJitter(GetOptions().jitter);
     NBN_GameClient_SetPacketLoss(GetOptions().packet_loss);
-    NBN_GameClient_SetPacketDuplication(GetOptions().packet_duplication); 
+    NBN_GameClient_SetPacketDuplication(GetOptions().packet_duplication);
 
     // Main loop
 #ifdef __EMSCRIPTEN__
-    while (true)
-    {
+    while (true) {
         UpdateAndDraw();
 
         // Since we don't set any target FPS when running in a web browser we need to sleep for the correct amount
@@ -578,8 +510,7 @@ int main(int argc, char *argv[])
         emscripten_sleep(1000 / TARGET_FPS);
     }
 #else
-    while (!WindowShouldClose())
-    {
+    while (!WindowShouldClose()) {
         UpdateAndDraw();
     }
 #endif
