@@ -215,9 +215,6 @@ typedef struct NBN_MessageInfo {
     NBN_Connection *sender;
 } NBN_MessageInfo;
 
-typedef bool (*NBN_MessageAllocator)(NBN_MessageHeader, NBN_MessageType, uint8_t **);
-typedef void (*NBN_MessageDeallocator)(NBN_MessageHeader, NBN_MessageType, uint8_t *);
-
 #pragma endregion /* NBN_Message */
 
 #pragma region NBN_Packet
@@ -548,13 +545,6 @@ void NBN_PacketSimulator_Stop(NBN_PacketSimulator *);
 
 #pragma region NBN_Endpoint
 
-typedef struct NBN_Endpoint_Config {
-    const char *protocol_name;
-    uint16_t port;
-    NBN_MessageAllocator msg_allocator;
-    NBN_MessageDeallocator msg_deallocator;
-} NBN_Endpoint_Config;
-
 struct NBN_Endpoint {
     NBN_EventQueue event_queue;
     uint32_t protocol_id;
@@ -563,8 +553,6 @@ struct NBN_Endpoint {
     NBN_Message write_message;
     NBN_Writer message_writer;
     NBN_Reader message_reader;
-    NBN_MessageAllocator msg_allocator;
-    NBN_MessageDeallocator msg_deallocator;
 
 #ifdef NBN_DEBUG
     /* Debug callbacks */
@@ -592,8 +580,9 @@ enum {
 };
 
 typedef struct NBN_GameClient_Config {
-    NBN_Endpoint_Config endpoint;
+    const char *protocol_name;
     const char *host;
+    uint16_t port;
 } NBN_GameClient_Config;
 
 typedef struct NBN_GameClient {
@@ -741,7 +730,8 @@ typedef struct NBN_GameServerStats {
 } NBN_GameServerStats;
 
 typedef struct NBN_GameServer_Config {
-    NBN_Endpoint_Config endpoint;
+    const char *protocol_name;
+    uint16_t port;
 } NBN_GameServer_Config;
 
 typedef struct NBN_GameServer {
@@ -2039,7 +2029,7 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *event_queue) { return event_queue->c
 
 #pragma region NBN_Endpoint
 
-static void Endpoint_Init(NBN_Endpoint *, NBN_Endpoint_Config, uint32_t, bool);
+static void Endpoint_Init(NBN_Endpoint *, uint32_t, bool);
 static void Endpoint_Deinit(NBN_Endpoint *);
 static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *, uint32_t, int, void *);
 static uint32_t Endpoint_BuildProtocolId(const char *);
@@ -2047,11 +2037,9 @@ static int Endpoint_ProcessReceivedPacket(NBN_Endpoint *, NBN_Packet *, NBN_Conn
 static int Endpoint_EnqueueOutgoingMessage(NBN_Endpoint *, NBN_Connection *, NBN_Message *);
 static void Endpoint_UpdateTime(NBN_Endpoint *);
 
-static void Endpoint_Init(NBN_Endpoint *endpoint, NBN_Endpoint_Config config, uint32_t protocol_id, bool is_server) {
+static void Endpoint_Init(NBN_Endpoint *endpoint, uint32_t protocol_id, bool is_server) {
     endpoint->is_server = is_server;
     endpoint->protocol_id = protocol_id;
-    endpoint->msg_allocator = config.msg_allocator;
-    endpoint->msg_deallocator = config.msg_deallocator;
 
     NBN_EventQueue_Init(&endpoint->event_queue);
 
@@ -2144,7 +2132,7 @@ static int Endpoint_ProcessReceivedPacket(NBN_Endpoint *endpoint, NBN_Packet *pa
 static void Endpoint_CreateOutgoingMessage(NBN_Endpoint *endpoint, uint8_t type, uint8_t channel_id) {
     NBN_Message *message = &endpoint->write_message;
 
-    message->header = (NBN_MessageHeader){-1, 0, type, channel_id};
+    message->header = (NBN_MessageHeader){0, 0, type, channel_id};
     message->sender = NULL;
     message->type = NBN_OUTGOING_MESSAGE;
 
@@ -2239,9 +2227,7 @@ static int GameClient_HandleEvent(void);
 static int GameClient_HandleMessageReceivedEvent(void);
 
 void NBN_GameClient_Init(const char *protocol_name, const char *host, uint16_t port) {
-    nbn_game_client.config = (NBN_GameClient_Config){
-        .host = host,
-        .endpoint = {.protocol_name = protocol_name, .port = port, .msg_allocator = NULL, .msg_deallocator = NULL}};
+    nbn_game_client.config = (NBN_GameClient_Config){.host = host, .protocol_name = protocol_name, .port = port};
 }
 
 NBN_Writer *NBN_GameClient_GetConnectionDataWriter(void) {
@@ -2258,12 +2244,12 @@ int NBN_GameClient_Start(void) {
     }
 
     NBN_GameClient_Config config = nbn_game_client.config;
-    const char *protocol_name = config.endpoint.protocol_name;
+    const char *protocol_name = config.protocol_name;
     const char *host = config.host;
-    uint16_t port = config.endpoint.port;
+    uint16_t port = config.port;
     uint32_t protocol_id = Endpoint_BuildProtocolId(protocol_name);
 
-    Endpoint_Init(&nbn_game_client.endpoint, config.endpoint, protocol_id, false);
+    Endpoint_Init(&nbn_game_client.endpoint, protocol_id, false);
 
     nbn_game_client.server_connection = NULL;
     nbn_game_client.is_connected = false;
@@ -2639,8 +2625,7 @@ static int GameServer_HandleEvent(void);
 static int GameServer_HandleMessageReceivedEvent(void);
 
 void NBN_GameServer_Init(const char *protocol_name, uint16_t port) {
-    nbn_game_server.config = (NBN_GameServer_Config){
-        .endpoint = {.protocol_name = protocol_name, .port = port, .msg_allocator = NULL, .msg_deallocator = NULL}};
+    nbn_game_server.config = (NBN_GameServer_Config){.protocol_name = protocol_name, .port = port};
 }
 
 int NBN_GameServer_Start(void) {
@@ -2650,11 +2635,11 @@ int NBN_GameServer_Start(void) {
     }
 
     NBN_GameServer_Config config = nbn_game_server.config;
-    const char *protocol_name = config.endpoint.protocol_name;
-    uint16_t port = config.endpoint.port;
+    const char *protocol_name = config.protocol_name;
+    uint16_t port = config.port;
     uint32_t protocol_id = Endpoint_BuildProtocolId(protocol_name);
 
-    Endpoint_Init(&nbn_game_server.endpoint, config.endpoint, protocol_id, true);
+    Endpoint_Init(&nbn_game_server.endpoint, protocol_id, true);
 
     if ((nbn_game_server.clients = NBN_ConnectionVector_Create()) == NULL) {
         NBN_LogError("Failed to create connections vector");
@@ -2865,7 +2850,7 @@ int NBN_GameServer_EnqueueBroadcastMessage(void) {
 
         if (GameServer_EnqueueMessageFor(conn, &endpoint->write_message) < 0) {
             NBN_LogError("Failed to send message to client %d when broadcasting", conn->id);
-            ret = -1;
+            ret = NBN_ERROR;
             break;
         }
     }
