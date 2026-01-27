@@ -238,6 +238,7 @@ static int BroadcastGameState(void) {
 static bool running = true;
 
 #ifndef __EMSCRIPTEN__
+#include <signal.h>
 
 static void SigintHandler(int dummy) { running = false; }
 
