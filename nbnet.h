@@ -2227,7 +2227,7 @@ static int GameClient_HandleEvent(void);
 static int GameClient_HandleMessageReceivedEvent(void);
 
 void NBN_GameClient_Init(const char *protocol_name, const char *host, uint16_t port) {
-    nbn_game_client.config = (NBN_GameClient_Config){.host = host, .protocol_name = protocol_name, .port = port};
+    nbn_game_client.config = (NBN_GameClient_Config){.protocol_name = protocol_name, .host = host, .port = port};
 }
 
 NBN_Writer *NBN_GameClient_GetConnectionDataWriter(void) {

@@ -231,19 +231,3 @@ int SoakMessage_Read(NBN_Reader *reader, unsigned int *msg_id, uint8_t *data, un
 
     return 0;
 }
-
-bool AllocateMessage(NBN_MessageHeader header, NBN_MessageType type, uint8_t **buffer) {
-    if (header.type == SOAK_MESSAGE_SMALL) {
-        *buffer = malloc(SOAK_MESSAGE_SMALL_MAX_DATA_LENGTH + 32);
-
-        return true;
-    }
-
-    return false;
-}
-
-void DeallocateMessage(NBN_MessageHeader header, NBN_MessageType type, uint8_t *buffer) {
-    assert(header.type == SOAK_MESSAGE_SMALL);
-
-    free(buffer);
-}
