@@ -66,198 +66,6 @@ typedef struct {
     NBN_Connection *conn;
 } NBN_WebRTC_Peer;
 
-#pragma region Hashtable
-
-#define HTABLE_DEFAULT_INITIAL_CAPACITY 32
-#define HTABLE_LOAD_FACTOR_THRESHOLD 0.75
-
-typedef struct {
-    uint32_t peer_id;
-    NBN_WebRTC_Peer *peer;
-    unsigned int slot;
-} NBN_WebRTC_HTableEntry;
-
-typedef struct {
-    NBN_WebRTC_HTableEntry **internal_array;
-    unsigned int capacity;
-    unsigned int count;
-    float load_factor;
-} NBN_WebRTC_HTable;
-
-static NBN_WebRTC_HTable *NBN_WebRTC_HTable_Create(void);
-static NBN_WebRTC_HTable *NBN_WebRTC_HTable_CreateWithCapacity(unsigned int);
-static void NBN_WebRTC_HTable_Destroy(NBN_WebRTC_HTable *);
-static void NBN_WebRTC_HTable_Add(NBN_WebRTC_HTable *, uint32_t, NBN_WebRTC_Peer *);
-static NBN_WebRTC_Peer *NBN_WebRTC_HTable_Get(NBN_WebRTC_HTable *, uint32_t);
-static NBN_WebRTC_Peer *NBN_WebRTC_HTable_Remove(NBN_WebRTC_HTable *, uint32_t);
-static void NBN_WebRTC_HTable_InsertEntry(NBN_WebRTC_HTable *, NBN_WebRTC_HTableEntry *);
-static void NBN_WebRTC_HTable_RemoveEntry(NBN_WebRTC_HTable *, NBN_WebRTC_HTableEntry *);
-static unsigned int NBN_WebRTC_HTable_FindFreeSlot(NBN_WebRTC_HTable *, NBN_WebRTC_HTableEntry *, bool *);
-static NBN_WebRTC_HTableEntry *NBN_WebRTC_HTable_FindEntry(NBN_WebRTC_HTable *, uint32_t);
-static void NBN_WebRTC_HTable_Grow(NBN_WebRTC_HTable *);
-
-static NBN_WebRTC_HTable *NBN_WebRTC_HTable_Create(void) {
-    return NBN_WebRTC_HTable_CreateWithCapacity(HTABLE_DEFAULT_INITIAL_CAPACITY);
-}
-
-static NBN_WebRTC_HTable *NBN_WebRTC_HTable_CreateWithCapacity(unsigned int capacity) {
-    NBN_WebRTC_HTable *htable = (NBN_WebRTC_HTable *)malloc(sizeof(NBN_WebRTC_HTable));
-
-    htable->internal_array = (NBN_WebRTC_HTableEntry **)malloc(sizeof(NBN_WebRTC_HTableEntry *) * capacity);
-    htable->capacity = capacity;
-    htable->count = 0;
-    htable->load_factor = 0;
-
-    for (unsigned int i = 0; i < htable->capacity; i++)
-        htable->internal_array[i] = NULL;
-
-    return htable;
-}
-
-static void NBN_WebRTC_HTable_Destroy(NBN_WebRTC_HTable *htable) {
-    for (unsigned int i = 0; i < htable->capacity; i++) {
-        NBN_WebRTC_HTableEntry *entry = htable->internal_array[i];
-
-        if (entry)
-            free(entry);
-    }
-
-    free(htable->internal_array);
-    free(htable);
-}
-
-static void NBN_WebRTC_HTable_Add(NBN_WebRTC_HTable *htable, uint32_t peer_id, NBN_WebRTC_Peer *peer) {
-    NBN_WebRTC_HTableEntry *entry = (NBN_WebRTC_HTableEntry *)malloc(sizeof(NBN_WebRTC_HTableEntry));
-
-    entry->peer_id = peer_id;
-    entry->peer = peer;
-
-    NBN_WebRTC_HTable_InsertEntry(htable, entry);
-
-    if (htable->load_factor >= HTABLE_LOAD_FACTOR_THRESHOLD)
-        NBN_WebRTC_HTable_Grow(htable);
-}
-
-static NBN_WebRTC_Peer *NBN_WebRTC_HTable_Get(NBN_WebRTC_HTable *htable, uint32_t peer_id) {
-    NBN_WebRTC_HTableEntry *entry = NBN_WebRTC_HTable_FindEntry(htable, peer_id);
-
-    return entry ? entry->peer : NULL;
-}
-
-static NBN_WebRTC_Peer *NBN_WebRTC_HTable_Remove(NBN_WebRTC_HTable *htable, uint32_t peer_id) {
-    NBN_WebRTC_HTableEntry *entry = NBN_WebRTC_HTable_FindEntry(htable, peer_id);
-
-    if (entry) {
-        NBN_WebRTC_Peer *peer = entry->peer;
-
-        NBN_WebRTC_HTable_RemoveEntry(htable, entry);
-
-        return peer;
-    }
-
-    return NULL;
-}
-
-static void NBN_WebRTC_HTable_InsertEntry(NBN_WebRTC_HTable *htable, NBN_WebRTC_HTableEntry *entry) {
-    bool use_existing_slot = false;
-    unsigned int slot = NBN_WebRTC_HTable_FindFreeSlot(htable, entry, &use_existing_slot);
-
-    entry->slot = slot;
-    htable->internal_array[slot] = entry;
-
-    if (!use_existing_slot) {
-        htable->count++;
-        htable->load_factor = (float)htable->count / htable->capacity;
-    }
-}
-
-static void NBN_WebRTC_HTable_RemoveEntry(NBN_WebRTC_HTable *htable, NBN_WebRTC_HTableEntry *entry) {
-    htable->internal_array[entry->slot] = NULL;
-
-    free(entry);
-
-    htable->count--;
-    htable->load_factor = htable->count / htable->capacity;
-}
-
-static unsigned int NBN_WebRTC_HTable_FindFreeSlot(NBN_WebRTC_HTable *htable, NBN_WebRTC_HTableEntry *entry,
-                                                   bool *use_existing_slot) {
-    unsigned long hash = entry->peer_id;
-    unsigned int slot;
-
-    // quadratic probing
-
-    NBN_WebRTC_HTableEntry *current_entry;
-    unsigned int i = 0;
-
-    do {
-        slot = (hash + (int)pow(i, 2)) % htable->capacity;
-        current_entry = htable->internal_array[slot];
-
-        i++;
-    } while (current_entry != NULL && current_entry->peer_id != entry->peer_id);
-
-    if (current_entry != NULL) // it means the current entry as the same key as the inserted entry
-    {
-        *use_existing_slot = true;
-
-        free(current_entry);
-    }
-
-    return slot;
-}
-
-static NBN_WebRTC_HTableEntry *NBN_WebRTC_HTable_FindEntry(NBN_WebRTC_HTable *htable, uint32_t peer_id) {
-    unsigned long hash = peer_id;
-    unsigned int slot;
-
-    // quadratic probing
-
-    NBN_WebRTC_HTableEntry *current_entry;
-    unsigned int i = 0;
-
-    do {
-        slot = (hash + (int)pow(i, 2)) % htable->capacity;
-        current_entry = htable->internal_array[slot];
-
-        if (current_entry != NULL && current_entry->peer_id == peer_id) {
-            return current_entry;
-        }
-
-        i++;
-    } while (i < htable->capacity);
-
-    return NULL;
-}
-
-static void NBN_WebRTC_HTable_Grow(NBN_WebRTC_HTable *htable) {
-    unsigned int old_capacity = htable->capacity;
-    unsigned int new_capacity = old_capacity * 2;
-    NBN_WebRTC_HTableEntry **old_internal_array = htable->internal_array;
-    NBN_WebRTC_HTableEntry **new_internal_array =
-        (NBN_WebRTC_HTableEntry **)malloc(sizeof(NBN_WebRTC_HTableEntry *) * new_capacity);
-
-    for (unsigned int i = 0; i < new_capacity; i++) {
-        new_internal_array[i] = NULL;
-    }
-
-    htable->internal_array = new_internal_array;
-    htable->capacity = new_capacity;
-    htable->count = 0;
-    htable->load_factor = 0;
-
-    // rehash
-
-    for (unsigned int i = 0; i < old_capacity; i++) {
-        if (old_internal_array[i])
-            NBN_WebRTC_HTable_InsertEntry(htable, old_internal_array[i]);
-    }
-
-    free(old_internal_array);
-}
-
-#pragma endregion // Hashtable
-
 #pragma region Game server
 
 /* --- JS API --- */
@@ -272,7 +80,10 @@ NBN_EXTERN void __js_game_server_stop(void);
 /* --- Driver implementation --- */
 
 typedef struct NBN_WebRTC_Server {
-    NBN_WebRTC_HTable *peers;
+    struct {
+        int key;
+        NBN_WebRTC_Peer *value;
+    } *peers;
     uint8_t packet_buffer[NBN_PACKET_MAX_SIZE];
     uint32_t protocol_id;
 } NBN_WebRTC_Server;
@@ -286,25 +97,25 @@ static int NBN_WebRTC_ServStart(uint32_t protocol_id, uint16_t port) {
     if (__js_game_server_start(port) < 0)
         return -1;
 
-    nbn_wrtc_serv.peers = NBN_WebRTC_HTable_Create();
     nbn_wrtc_serv.protocol_id = protocol_id;
+
+    hmdefault(nbn_wrtc_serv.peers, NULL);
 
     return 0;
 }
 
 static void NBN_WebRTC_ServStop(void) {
     __js_game_server_stop();
-    NBN_WebRTC_HTable_Destroy(nbn_wrtc_serv.peers);
+    hmfree(nbn_wrtc_serv.peers);
 }
 
 static int NBN_WebRTC_ServRecvPackets(void) {
+    static NBN_Packet packet = {0};
     uint32_t peer_id;
     unsigned int len;
 
     while ((len = __js_game_server_dequeue_packet(&peer_id, (uint8_t *)nbn_wrtc_serv.packet_buffer)) > 0) {
-        NBN_Packet packet;
-
-        NBN_WebRTC_Peer *peer = NBN_WebRTC_HTable_Get(nbn_wrtc_serv.peers, peer_id);
+        NBN_WebRTC_Peer *peer = hmget(nbn_wrtc_serv.peers, peer_id);
 
         if (peer == NULL) {
             if (GameServer_GetClientCount() >= NBN_MAX_CLIENTS)
@@ -318,7 +129,7 @@ static int NBN_WebRTC_ServRecvPackets(void) {
             peer->conn =
                 NBN_GameServer_CreateClientConnection(NBN_WEBRTC_DRIVER_ID, peer, nbn_wrtc_serv.protocol_id, peer_id);
 
-            NBN_WebRTC_HTable_Add(nbn_wrtc_serv.peers, peer_id, peer);
+            hmput(nbn_wrtc_serv.peers, peer_id, peer);
 
             NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_CONNECTED, peer->conn);
         }
@@ -339,9 +150,10 @@ static void NBN_WebRTC_ServRemoveClientConnection(NBN_Connection *conn) {
 
     __js_game_server_close_client_peer(conn->id);
 
-    NBN_WebRTC_Peer *peer = NBN_WebRTC_HTable_Remove(nbn_wrtc_serv.peers, ((NBN_WebRTC_Peer *)conn->driver_data)->id);
+    NBN_WebRTC_Peer *peer = (NBN_WebRTC_Native_Peer *)conn->driver_data;
+    int ret = hmdel(nbn_wrtc_c_serv.peers, peer->id);
 
-    if (peer) {
+    if (ret == 1) {
         NBN_LogDebug("Destroyed peer %d", peer->id);
 
         free(peer);
@@ -388,11 +200,10 @@ static int NBN_WebRTC_CliStart(uint32_t protocol_id, const char *host, uint16_t 
 static void NBN_WebRTC_CliStop(void) { __js_game_client_close(); }
 
 static int NBN_WebRTC_CliRecvPackets(void) {
+    static NBN_Packet packet = {0};
     unsigned int len;
 
     while ((len = __js_game_client_dequeue_packet((uint8_t *)nbn_wrtc_serv.packet_buffer)) > 0) {
-        NBN_Packet packet;
-
         if (NBN_Packet_InitRead(&packet, nbn_wrtc_cli.server_conn, nbn_wrtc_serv.packet_buffer, len) < 0)
             continue;
 
