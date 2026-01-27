@@ -140,16 +140,14 @@ static void EchoReceivedSoakMessages(void) {
 
             while (channel->echo_queue.count > 0) {
                 Soak_MessageEntry *msg_entry = &channel->echo_queue.messages[channel->echo_queue.head];
-
-                NBN_GameServer_CreateMessage(SOAK_MESSAGE_SMALL, channel->id); // TODO: support big
-                NBN_Writer *writer = NBN_GameServer_GetMessageWriter();
+                NBN_Writer *writer = NBN_GameServer_CreateMessage(SOAK_MESSAGE_SMALL, channel->id); // TODO: support big
 
                 SoakMessage_Write(writer, msg_entry->msg_id, msg_entry->data, msg_entry->length);
 
                 Soak_LogInfo("Send soak message %d's echo (length: %d) to client %d", msg_entry->msg_id,
                              msg_entry->length, soak_client->conn->id);
 
-                if (NBN_GameServer_SendMessageTo(soak_client->conn) < 0) {
+                if (NBN_GameServer_EnqueueMessageFor(soak_client->conn) < 0) {
                     Soak_LogError("Failed to send soak message to client %d, closing client", soak_client->conn->id);
 
                     if (NBN_GameServer_CloseClient(soak_client->conn) < 0) {
@@ -280,7 +278,7 @@ static int Tick(void *data) {
 
     EchoReceivedSoakMessages();
 
-    if (NBN_GameServer_SendPackets() < 0) {
+    if (NBN_GameServer_Flush() < 0) {
         Soak_LogError("Failed to flush game server send queue. Exit");
 
         return -1;

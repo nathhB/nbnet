@@ -121,12 +121,11 @@ static int SendSoakMessages(SoakChannel *channel, uint8_t channel_id) {
             Soak_LogInfo("Send soak message (id: %d, data length: %d)", msg_id, data_length);
 
             // TODO: support big messages
-            NBN_GameClient_CreateMessage(SOAK_MESSAGE_SMALL, channel->id);
-            NBN_Writer *writer = NBN_GameClient_GetMessageWriter();
+            NBN_Writer *writer = NBN_GameClient_CreateMessage(SOAK_MESSAGE_SMALL, channel->id);
 
             SoakMessage_Write(writer, msg_id, entry->data, entry->length);
 
-            if (NBN_GameClient_SendMessage() < 0)
+            if (NBN_GameClient_EnqueueMessage() < 0)
                 return -1;
 
             channel->sent_message_count++;
@@ -257,7 +256,7 @@ static int Tick(void *data) {
         }
     }
 
-    if (NBN_GameClient_SendPackets() < 0) {
+    if (NBN_GameClient_Flush() < 0) {
         Soak_LogError("Failed to flush game client send queue. Exit");
 
         return -1;
