@@ -466,38 +466,22 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *);
 #endif               /* NBNET_WINDOWS */
 
 #define NBN_GameClient_SetPing(v)                                                                                      \
-    {                                                                                                                  \
-        nbn_game_client.endpoint.packet_simulator.ping = v;                                                            \
-    }
+    { nbn_game_client.endpoint.packet_simulator.ping = v; }
 #define NBN_GameClient_SetJitter(v)                                                                                    \
-    {                                                                                                                  \
-        nbn_game_client.endpoint.packet_simulator.jitter = v;                                                          \
-    }
+    { nbn_game_client.endpoint.packet_simulator.jitter = v; }
 #define NBN_GameClient_SetPacketLoss(v)                                                                                \
-    {                                                                                                                  \
-        nbn_game_client.endpoint.packet_simulator.packet_loss_ratio = v;                                               \
-    }
+    { nbn_game_client.endpoint.packet_simulator.packet_loss_ratio = v; }
 #define NBN_GameClient_SetPacketDuplication(v)                                                                         \
-    {                                                                                                                  \
-        nbn_game_client.endpoint.packet_simulator.packet_duplication_ratio = v;                                        \
-    }
+    { nbn_game_client.endpoint.packet_simulator.packet_duplication_ratio = v; }
 
 #define NBN_GameServer_SetPing(v)                                                                                      \
-    {                                                                                                                  \
-        nbn_game_server.endpoint.packet_simulator.ping = v;                                                            \
-    }
+    { nbn_game_server.endpoint.packet_simulator.ping = v; }
 #define NBN_GameServer_SetJitter(v)                                                                                    \
-    {                                                                                                                  \
-        nbn_game_server.endpoint.packet_simulator.jitter = v;                                                          \
-    }
+    { nbn_game_server.endpoint.packet_simulator.jitter = v; }
 #define NBN_GameServer_SetPacketLoss(v)                                                                                \
-    {                                                                                                                  \
-        nbn_game_server.endpoint.packet_simulator.packet_loss_ratio = v;                                               \
-    }
+    { nbn_game_server.endpoint.packet_simulator.packet_loss_ratio = v; }
 #define NBN_GameServer_SetPacketDuplication(v)                                                                         \
-    {                                                                                                                  \
-        nbn_game_server.endpoint.packet_simulator.packet_duplication_ratio = v;                                        \
-    }
+    { nbn_game_server.endpoint.packet_simulator.packet_duplication_ratio = v; }
 
 typedef struct NBN_PacketSimulatorEntry NBN_PacketSimulatorEntry;
 
@@ -1026,6 +1010,10 @@ int NBN_Driver_RaiseEvent(NBN_DriverEvent ev, void *data);
 #pragma region Implementations
 
 #ifdef NBNET_IMPL
+
+#define STB_DS_IMPLEMENTATION
+
+#include "stb_ds.h"
 
 #pragma region NBN_ConnectionVector
 

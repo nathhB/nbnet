@@ -34,7 +34,7 @@
 #include "../net_drivers/udp.h"
 
 #ifdef WEBRTC_NATIVE
-#include "../net_drivers/webrtc_c.h"
+#include "../net_drivers/webrtc_native.h"
 #endif
 
 #endif // __EMSCRIPTEN__
@@ -274,23 +274,23 @@ int main(int argc, char *argv[]) {
     SoakOptions options = Soak_GetOptions();
 
 #ifdef __EMSCRIPTEN__
-    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false}); // Register the WebRTC driver
+    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false}); // Register the JS WebRTC driver
 #else
 
 #ifdef WEBRTC_NATIVE
 
     if (options.webrtc) {
-        // Register native WebRTC driver
+        // Register the native WebRTC driver
         const char *ice_servers[] = {"stun:stun01.sipphone.com"};
-        NBN_WebRTC_C_Config cfg = {.ice_servers = ice_servers,
-                                   .ice_servers_count = 1,
-                                   .enable_tls = false,
-                                   .cert_path = NULL,
-                                   .key_path = NULL,
-                                   .passphrase = NULL,
-                                   .log_level = RTC_LOG_VERBOSE};
+        NBN_WebRTC_Native_Config cfg = {.ice_servers = ice_servers,
+                                        .ice_servers_count = 1,
+                                        .enable_tls = false,
+                                        .cert_path = NULL,
+                                        .key_path = NULL,
+                                        .passphrase = NULL,
+                                        .log_level = RTC_LOG_VERBOSE};
 
-        NBN_WebRTC_C_Register(cfg);
+        NBN_WebRTC_Native_Register(cfg);
     } else {
         NBN_UDP_Register();
     }
@@ -353,7 +353,7 @@ int main(int argc, char *argv[]) {
 #ifdef WEBRTC_NATIVE
 
     if (options.webrtc) {
-        NBN_WebRTC_C_Unregister();
+        NBN_WebRTC_Native_Unregister();
     }
 
 #endif // WEBRTC_NATIVE

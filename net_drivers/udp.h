@@ -48,9 +48,6 @@ void NBN_UDP_Register(void);
 #include "../nbnet.h"
 #endif
 
-#define STB_DS_IMPLEMENTATION
-#include "../stb_ds.h"
-
 #define NBN_UDP_DRIVER_ID 0
 #define NBN_UDP_DRIVER_NAME "UDP"
 

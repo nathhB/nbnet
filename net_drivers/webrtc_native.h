@@ -38,7 +38,6 @@ freely, subject to the following restrictions:
    NBN_GameServer_Start
 */
 
-#include "../stb_ds.h"
 #include "json.h"
 #include <rtc/rtc.h>
 #include <stdbool.h>
@@ -51,7 +50,7 @@ freely, subject to the following restrictions:
 #endif
 
 #define NBN_WEBRTC_NATIVE_DRIVER_ID 2
-#define NBN_WEBRTC_NATIVE_DRIVER_NAME "WebRTC_C"
+#define NBN_WEBRTC_NATIVE_DRIVER_NAME "WebRTC_Native"
 
 typedef struct NBN_WebRTC_Native_Config {
     bool enable_tls;
@@ -322,10 +321,9 @@ typedef struct NBN_WebRTC_Native_Server {
     } *peers;
     uint16_t ws_port;
     uint32_t protocol_id;
-    char packet_buffer[NBN_PACKET_MAX_SIZE];
 } NBN_WebRTC_Native_Server;
 
-static NBN_WebRTC_Native_Server nbn_wrtc_c_serv = {0, NULL, false, 0, 0, {0}};
+static NBN_WebRTC_Native_Server nbn_wrtc_native_serv = {0, NULL, 0, 0};
 
 static void NBN_WebRTC_Native_Serv_OnLocalDescription(int pc, const char *sdp, const char *type, void *user_ptr) {
     NBN_LogDebug("Processing local description of type '%s'", type);
@@ -360,10 +358,8 @@ static void NBN_WebRTC_Native_Serv_OnWsOpen(int ws, void *user_ptr) {
         return;
     }
 
-    peer->conn =
-        NBN_GameServer_CreateClientConnection(NBN_WEBRTC_C_DRIVER_ID, peer, nbn_wrtc_c_serv.protocol_id, peer->id);
-
-    hmput(nbn_wrtc_c_serv.peers, peer->id, peer);
+    peer->conn = NBN_GameServer_CreateClientConnection(NBN_WEBRTC_NATIVE_DRIVER_ID, peer, peer->id);
+    hmput(nbn_wrtc_native_serv.peers, peer->id, peer);
 }
 
 static void NBN_WebRTC_Native_Serv_OnWsClosed(int ws, void *user_ptr) {
@@ -393,9 +389,9 @@ static void NBN_WebRTC_Native_Serv_OnWsConnection(int wsserver, int ws, void *us
 }
 
 static int NBN_WebRTC_Native_ServStart(uint32_t protocol_id, uint16_t port) {
-    nbn_wrtc_c_serv.ws_port = port;
-    nbn_wrtc_c_serv.protocol_id = protocol_id;
-    nbn_wrtc_c_serv.wsserver = -1;
+    nbn_wrtc_native_serv.ws_port = port;
+    nbn_wrtc_native_serv.protocol_id = protocol_id;
+    nbn_wrtc_native_serv.wsserver = -1;
 
     rtcInitLogger(nbn_wrtc_c_cfg.log_level, NBN_WebRTC_Native_Log);
     rtcPreload();
@@ -413,18 +409,18 @@ static int NBN_WebRTC_Native_ServStart(uint32_t protocol_id, uint16_t port) {
         return NBN_ERROR;
     }
 
-    nbn_wrtc_c_serv.wsserver = wsserver;
+    nbn_wrtc_native_serv.wsserver = wsserver;
 
-    hmdefault(nbn_wrtc_c_serv.peers, NULL);
+    hmdefault(nbn_wrtc_native_serv.peers, NULL);
 
     return 0;
 }
 
 static void NBN_WebRTC_Native_ServStop(void) {
-    hmfree(nbn_wrtc_c_serv.peers);
+    hmfree(nbn_wrtc_native_serv.peers);
 
-    if (nbn_wrtc_c_serv.wsserver >= 0) {
-        rtcDeleteWebSocketServer(nbn_wrtc_c_serv.wsserver);
+    if (nbn_wrtc_native_serv.wsserver >= 0) {
+        rtcDeleteWebSocketServer(nbn_wrtc_native_serv.wsserver);
     }
 
     rtcCleanup();
@@ -432,14 +428,14 @@ static void NBN_WebRTC_Native_ServStop(void) {
 
 static int NBN_WebRTC_Native_ServRecvPackets(void) {
     static NBN_Packet packet = {0};
-    const int buffer_size = sizeof(nbn_wrtc_c_serv.packet_buffer);
+    const int buffer_size = sizeof(packet.buffer);
     int size = buffer_size;
 
-    for (unsigned int i = 0; i < hmlen(nbn_wrtc_c_serv.peers); i++) {
-        NBN_WebRTC_Native_Peer *peer = nbn_wrtc_c_serv.peers[i].value;
+    for (unsigned int i = 0; i < hmlen(nbn_wrtc_native_serv.peers); i++) {
+        NBN_WebRTC_Native_Peer *peer = nbn_wrtc_native_serv.peers[i].value;
 
-        while (rtcReceiveMessage(peer->channel_id, nbn_wrtc_c_serv.packet_buffer, &size) == RTC_ERR_SUCCESS) {
-            if (NBN_Packet_InitRead(&packet, peer->conn, (uint8_t *)nbn_wrtc_c_serv.packet_buffer, size) < 0)
+        while (rtcReceiveMessage(peer->channel_id, (char *)packet.buffer, &size) == RTC_ERR_SUCCESS) {
+            if (NBN_Packet_InitRead(&packet, nbn_wrtc_native_serv.protocol_id, size) < 0)
                 continue;
 
             packet.sender = peer->conn;
@@ -454,7 +450,7 @@ static int NBN_WebRTC_Native_ServRecvPackets(void) {
 static void NBN_WebRTC_Native_ServRemoveClientConnection(NBN_Connection *conn) {
     NBN_WebRTC_Native_Peer *peer = (NBN_WebRTC_Native_Peer *)conn->driver_data;
 
-    int ret = hmdel(nbn_wrtc_c_serv.peers, peer->id);
+    int ret = hmdel(nbn_wrtc_native_serv.peers, peer->id);
 
     NBN_Assert(ret == 1);
     NBN_WebRTC_Native_DestroyPeer(peer);
@@ -481,10 +477,9 @@ typedef struct NBN_WebRTC_Native_Client {
     uint32_t protocol_id;
     bool is_connected;
     NBN_WebRTC_Native_Peer *peer;
-    char packet_buffer[NBN_PACKET_MAX_SIZE];
 } NBN_WebRTC_Native_Client;
 
-static NBN_WebRTC_Native_Client nbn_wrtc_c_cli = {0, false, false, NULL, {0}};
+static NBN_WebRTC_Native_Client nbn_wrtc_native_cli = {0, false, false};
 
 static void NBN_WebRTC_Native_Cli_OnLocalDescription(int pc, const char *sdp, const char *type, void *user_ptr) {
     NBN_LogDebug("Processing local description of type '%s'", type);
@@ -504,7 +499,7 @@ static void NBN_WebRTC_Native_Cli_OnPeerStateChanged(int pc, rtcState state, voi
         NBN_WebRTC_Native_Peer *peer = (NBN_WebRTC_Native_Peer *)user_ptr;
 
         NBN_LogDebug("Server peer is connected !", pc);
-        nbn_wrtc_c_cli.is_connected = true;
+        nbn_wrtc_native_cli.is_connected = true;
     }
 }
 
@@ -521,8 +516,8 @@ static void NBN_WebRTC_Native_Cli_OnWsOpen(int ws, void *user_ptr) {
 
     NBN_LogDebug("Successfully created peer: %d", peer->id);
 
-    peer->conn = NBN_GameClient_CreateServerConnection(NBN_WEBRTC_C_DRIVER_ID, peer, nbn_wrtc_c_cli.protocol_id);
-    nbn_wrtc_c_cli.peer = peer;
+    peer->conn = NBN_GameClient_CreateServerConnection(NBN_WEBRTC_NATIVE_DRIVER_ID, peer);
+    nbn_wrtc_native_cli.peer = peer;
 }
 
 static void NBN_WebRTC_Native_Cli_OnWsClosed(int ws, void *user_ptr) {
@@ -559,12 +554,12 @@ static int AttemptConnection(void) {
             return NBN_ERROR;
         }
 #endif
-        if (--retries <= 0 || nbn_wrtc_c_cli.is_connected) {
+        if (--retries <= 0 || nbn_wrtc_native_cli.is_connected) {
             break;
         }
     }
 
-    if (!nbn_wrtc_c_cli.is_connected) {
+    if (!nbn_wrtc_native_cli.is_connected) {
         NBN_LogError("Failed to connect");
 
         return NBN_ERROR;
@@ -588,7 +583,7 @@ static int NBN_WebRTC_Native_CliStart(uint32_t protocol_id, const char *host, ui
         return NBN_ERROR;
     }
 
-    nbn_wrtc_c_cli.protocol_id = protocol_id;
+    nbn_wrtc_native_cli.protocol_id = protocol_id;
 
     NBN_LogDebug("Successfully created client WS: %d", cli_ws);
 
@@ -601,24 +596,24 @@ static int NBN_WebRTC_Native_CliStart(uint32_t protocol_id, const char *host, ui
 }
 
 static void NBN_WebRTC_Native_CliStop(void) {
-    NBN_WebRTC_Native_Peer *peer = nbn_wrtc_c_cli.peer;
+    NBN_WebRTC_Native_Peer *peer = nbn_wrtc_native_cli.peer;
 
     if (peer) {
         NBN_WebRTC_Native_DestroyPeer(peer);
     }
 
-    nbn_wrtc_c_cli.is_connected = false;
+    nbn_wrtc_native_cli.is_connected = false;
     rtcCleanup();
 }
 
 static int NBN_WebRTC_Native_CliRecvPackets(void) {
     static NBN_Packet packet = {0};
-    const int buffer_size = sizeof(nbn_wrtc_c_cli.packet_buffer);
+    const int buffer_size = sizeof(packet.buffer);
     int size = buffer_size;
-    NBN_WebRTC_Native_Peer *peer = nbn_wrtc_c_cli.peer;
+    NBN_WebRTC_Native_Peer *peer = nbn_wrtc_native_cli.peer;
 
-    while (rtcReceiveMessage(peer->channel_id, nbn_wrtc_c_cli.packet_buffer, &size) == RTC_ERR_SUCCESS) {
-        if (NBN_Packet_InitRead(&packet, peer->conn, (uint8_t *)nbn_wrtc_c_cli.packet_buffer, size) < 0)
+    while (rtcReceiveMessage(peer->channel_id, (char *)packet.buffer, &size) == RTC_ERR_SUCCESS) {
+        if (NBN_Packet_InitRead(&packet, nbn_wrtc_native_cli.protocol_id, size) < 0)
             continue;
 
         packet.sender = peer->conn;
@@ -630,7 +625,7 @@ static int NBN_WebRTC_Native_CliRecvPackets(void) {
 }
 
 static int NBN_WebRTC_Native_CliSendPacket(NBN_Packet *packet) {
-    NBN_WebRTC_Native_Peer *peer = nbn_wrtc_c_cli.peer;
+    NBN_WebRTC_Native_Peer *peer = nbn_wrtc_native_cli.peer;
 
     if (rtcSendMessage(peer->channel_id, (char *)packet->buffer, packet->size) < 0) {
         NBN_LogError("rtcSendMessage failed for peer %d", peer->id);
@@ -674,7 +669,7 @@ void NBN_WebRTC_Native_Register(NBN_WebRTC_Native_Config config) {
                                             NBN_WebRTC_Native_ServRecvPackets, NBN_WebRTC_Native_ServSendPacketTo,
                                             NBN_WebRTC_Native_ServRemoveClientConnection};
 
-    NBN_Driver_Register(NBN_WEBRTC_C_DRIVER_ID, NBN_WEBRTC_C_DRIVER_NAME, driver_impl);
+    NBN_Driver_Register(NBN_WEBRTC_NATIVE_DRIVER_ID, NBN_WEBRTC_NATIVE_DRIVER_NAME, driver_impl);
 }
 
 void NBN_WebRTC_Native_Unregister(void) {
