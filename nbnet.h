@@ -35,6 +35,8 @@
 
 #include <winsock2.h>
 #define WIN32_LEAN_AND_MEAN
+// prevent inclusion of winnt.h in windows.h
+#define _WINNT_
 #include <windows.h>
 
 #define NBNET_WINDOWS
@@ -1275,7 +1277,9 @@ int NBN_Packet_Seal(NBN_Packet *packet) {
 }
 
 int NBN_Packet_InitRead(NBN_Packet *packet, uint32_t protocol_id, unsigned int size) {
-    NBN_Assert(size >= NBN_PACKET_HEADER_SIZE);
+    if (size < NBN_PACKET_HEADER_SIZE || size > NBN_PACKET_MAX_SIZE) {
+        return NBN_ERROR;
+    }
 
     packet->mode = NBN_PACKET_MODE_READ;
     packet->size = size;
