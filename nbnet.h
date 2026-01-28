@@ -33,10 +33,11 @@
 
 #if defined(_WIN32) || defined(_WIN64)
 
-#include <winsock2.h>
 #define WIN32_LEAN_AND_MEAN
 // prevent inclusion of winnt.h in windows.h
 #define _WINNT_
+
+#include <winsock2.h>
 #include <windows.h>
 
 #define NBNET_WINDOWS
