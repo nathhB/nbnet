@@ -33,6 +33,7 @@ freely, subject to the following restrictions:
 */
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifndef NBNET_H
 #include "../nbnet.h"
@@ -84,11 +85,10 @@ typedef struct NBN_WebRTC_Server {
         int key;
         NBN_WebRTC_Peer *value;
     } *peers;
-    uint8_t packet_buffer[NBN_PACKET_MAX_SIZE];
     uint32_t protocol_id;
 } NBN_WebRTC_Server;
 
-static NBN_WebRTC_Server nbn_wrtc_serv = {NULL, {0}, 0};
+static NBN_WebRTC_Server nbn_wrtc_serv = {NULL, 0};
 static NBN_WebRTC_Config nbn_wrtc_cfg;
 
 static int NBN_WebRTC_ServStart(uint32_t protocol_id, uint16_t port) {
@@ -114,7 +114,7 @@ static int NBN_WebRTC_ServRecvPackets(void) {
     uint32_t peer_id;
     unsigned int len;
 
-    while ((len = __js_game_server_dequeue_packet(&peer_id, (uint8_t *)nbn_wrtc_serv.packet_buffer)) > 0) {
+    while ((len = __js_game_server_dequeue_packet(&peer_id, packet.buffer)) > 0) {
         NBN_WebRTC_Peer *peer = hmget(nbn_wrtc_serv.peers, peer_id);
 
         if (peer == NULL) {
@@ -126,15 +126,14 @@ static int NBN_WebRTC_ServRecvPackets(void) {
             peer = (NBN_WebRTC_Peer *)malloc(sizeof(NBN_WebRTC_Peer));
 
             peer->id = peer_id;
-            peer->conn =
-                NBN_GameServer_CreateClientConnection(NBN_WEBRTC_DRIVER_ID, peer, nbn_wrtc_serv.protocol_id, peer_id);
+            peer->conn = NBN_GameServer_CreateClientConnection(NBN_WEBRTC_DRIVER_ID, peer, peer_id);
 
             hmput(nbn_wrtc_serv.peers, peer_id, peer);
 
             NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_CONNECTED, peer->conn);
         }
 
-        if (NBN_Packet_InitRead(&packet, peer->conn, nbn_wrtc_serv.packet_buffer, len) < 0)
+        if (NBN_Packet_InitRead(&packet, nbn_wrtc_serv.protocol_id, len) < 0)
             continue;
 
         packet.sender = peer->conn;
@@ -150,8 +149,8 @@ static void NBN_WebRTC_ServRemoveClientConnection(NBN_Connection *conn) {
 
     __js_game_server_close_client_peer(conn->id);
 
-    NBN_WebRTC_Peer *peer = (NBN_WebRTC_Native_Peer *)conn->driver_data;
-    int ret = hmdel(nbn_wrtc_c_serv.peers, peer->id);
+    NBN_WebRTC_Peer *peer = (NBN_WebRTC_Peer *)conn->driver_data;
+    int ret = hmdel(nbn_wrtc_serv.peers, peer->id);
 
     if (ret == 1) {
         NBN_LogDebug("Destroyed peer %d", peer->id);
@@ -179,15 +178,17 @@ NBN_EXTERN void __js_game_client_close(void);
 /* --- Driver implementation --- */
 
 typedef struct NBN_WebRTC_Client {
+    uint32_t protocol_id;
     NBN_Connection *server_conn;
 } NBN_WebRTC_Client;
 
-static NBN_WebRTC_Client nbn_wrtc_cli = {NULL};
+static NBN_WebRTC_Client nbn_wrtc_cli = {0, NULL};
 
 static int NBN_WebRTC_CliStart(uint32_t protocol_id, const char *host, uint16_t port) {
     __js_game_client_init(protocol_id, nbn_wrtc_cfg.enable_tls);
 
-    nbn_wrtc_cli.server_conn = NBN_GameClient_CreateServerConnection(NBN_WEBRTC_DRIVER_ID, NULL, protocol_id);
+    nbn_wrtc_cli.protocol_id = protocol_id;
+    nbn_wrtc_cli.server_conn = NBN_GameClient_CreateServerConnection(NBN_WEBRTC_DRIVER_ID, NULL);
 
     int res;
 
@@ -203,8 +204,8 @@ static int NBN_WebRTC_CliRecvPackets(void) {
     static NBN_Packet packet = {0};
     unsigned int len;
 
-    while ((len = __js_game_client_dequeue_packet((uint8_t *)nbn_wrtc_serv.packet_buffer)) > 0) {
-        if (NBN_Packet_InitRead(&packet, nbn_wrtc_cli.server_conn, nbn_wrtc_serv.packet_buffer, len) < 0)
+    while ((len = __js_game_client_dequeue_packet(packet.buffer)) > 0) {
+        if (NBN_Packet_InitRead(&packet, nbn_wrtc_cli.protocol_id, len) < 0)
             continue;
 
         NBN_Driver_RaiseEvent(NBN_DRIVER_CLI_PACKET_RECEIVED, &packet);
