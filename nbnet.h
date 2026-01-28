@@ -33,22 +33,22 @@
 
 #if defined(_WIN32) || defined(_WIN64)
 
-#include <wincrypt.h>
 #include <windows.h>
 #include <winsock2.h>
 
 #define NBNET_WINDOWS
 
-#else
-
-#include <arpa/inet.h>
-
 #endif
 
 #ifndef NBNET_WINDOWS
 
+#include <arpa/inet.h>
 #include <sys/time.h>
 #include <time.h>
+
+#ifndef CLOCK_MONOTONIC_RAW
+#define CLOCK_MONOTONIC_RAW CLOCK_MONOTONIC
+#endif
 
 #endif
 
