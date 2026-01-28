@@ -44,6 +44,12 @@
 
 #endif
 
+#ifdef __EMSCRIPTEN__
+
+#include <emscripten.h>
+
+#endif
+
 #ifndef NBNET_WINDOWS
 
 #include <arpa/inet.h>
@@ -2166,8 +2172,10 @@ static int Endpoint_EnqueueOutgoingMessage(NBN_Endpoint *endpoint, NBN_Connectio
 }
 
 static void Endpoint_UpdateTime(NBN_Endpoint *endpoint) {
-#ifdef NBNET_WINDOWS
+#if defined(NBNET_WINDOWS)
     endpoint->time = GetTickCount64() / 1000.0;
+#elif defined(__EMSCRIPTEN__)
+    endpoint->time = emscripten_get_now() / 1000;
 #else
     static struct timespec tp;
 
