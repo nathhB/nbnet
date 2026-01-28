@@ -34,6 +34,7 @@
 #if defined(_WIN32) || defined(_WIN64)
 
 #include <winsock2.h>
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 #define NBNET_WINDOWS
