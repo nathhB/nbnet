@@ -73,7 +73,7 @@ void OnMessageReceived(void) {
     Log(LOG_INFO, "Received echo: %s (length: %d, channel: %d)", msg_str, msg_info.length, msg_info.channel_id);
 }
 
-int SendMessage(const char *msg) {
+int SendEcho(const char *msg) {
     NBN_Writer *writer = NBN_GameClient_CreateReliableMessage(ECHO_MESSAGE_TYPE);
     unsigned int length = strlen(msg);
 
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
     }
 
     const char *msg = argv[1];
-    // reserve 4 bytes to write the message length in the message (see the SendMessage function)
+    // reserve 4 bytes to write the message length in the message (see the SendEcho function)
     unsigned int msg_max_len = ECHO_MESSAGE_MAX_LENGTH - 4;
 
     if (strlen(msg) > msg_max_len) {
@@ -202,7 +202,7 @@ int main(int argc, char *argv[]) {
             break;
 
         if (connected) {
-            if (SendMessage(msg) < 0) {
+            if (SendEcho(msg) < 0) {
                 Log(LOG_ERROR, "Failed to send message. Exit");
 
                 // Stop main loop
