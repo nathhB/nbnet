@@ -1,7 +1,7 @@
 {
     "scripts": {
-        "server": "node --experimental-wasm-threads build_web/server.js",
-        "client": "node --experimental-wasm-threads build_web/client.js"
+        "server": "node build_web/server.js",
+        "client": "node build_web/client.js"
     },
     "dependencies": {
         "nbnet": "file:../net_drivers/webrtc"
