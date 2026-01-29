@@ -25,20 +25,10 @@
 #include <signal.h>
 #include <string.h>
 
-#define NBNET_IMPL
+#define NBN_UDP
+#define NBN_IMPLEMENTATION
 
 #include "soak.h"
-
-#ifdef __EMSCRIPTEN__
-#include "../net_drivers/webrtc.h"
-#else
-#include "../net_drivers/udp.h"
-
-#ifdef WEBRTC_NATIVE
-#include "../net_drivers/webrtc_native.h"
-#endif
-
-#endif // __EMSCRIPTEN__
 
 typedef struct {
     uint8_t channel_id;
@@ -62,33 +52,17 @@ typedef struct {
 } SoakChannel;
 
 typedef struct {
-    NBN_Connection *conn;
     bool error;
     bool is_closed;
     SoakChannel *channels;
 } SoakClient;
 
-static SoakClient *clients[SOAK_MAX_CLIENTS] = {NULL};
-static unsigned int client_count = 0;
-
 static void HandleNewConnection(void) {
-    if (client_count == SOAK_MAX_CLIENTS) {
-        NBN_LogInfo("Connection rejected");
-
-        NBN_GameServer_RejectIncomingConnectionWithCode(SOAK_SERVER_FULL_CODE);
-
-        return;
-    }
-
-    NBN_Connection *conn = NBN_GameServer_GetIncomingConnection();
-
-    assert(clients[conn->id - 1] == NULL);
-
     NBN_GameServer_AcceptIncomingConnection();
 
+    NBN_Connection *conn = NBN_GameServer_GetIncomingConnection();
     SoakClient *soak_client = (SoakClient *)malloc(sizeof(SoakClient));
 
-    soak_client->conn = conn;
     soak_client->error = false;
     soak_client->is_closed = false;
     soak_client->channels = (SoakChannel *)malloc(sizeof(SoakChannel) * NBN_CHANNEL_COUNT);
@@ -108,14 +82,13 @@ static void HandleNewConnection(void) {
         memset(channel->echo_queue.messages, 0, sizeof(channel->echo_queue.messages));
     }
 
-    clients[conn->id - 1] = soak_client;
-    client_count++;
+    conn->user_data = soak_client;
 
-    Soak_LogInfo("Client has connected (ID: %d)", soak_client->conn->id);
+    Soak_LogInfo("Client has connected (ID: %llu)", conn->id);
 }
 
 static void HandleClientDisconnection(NBN_DisconnectionInfo info) {
-    SoakClient *soak_client = clients[info.conn_id - 1];
+    SoakClient *soak_client = (SoakClient *)info.user_data;
 
     assert(soak_client != NULL);
 
@@ -123,16 +96,20 @@ static void HandleClientDisconnection(NBN_DisconnectionInfo info) {
 
     free(soak_client->channels);
     free(soak_client);
-
-    clients[info.conn_id - 1] = NULL;
-    client_count--;
 }
 
 static void EchoReceivedSoakMessages(void) {
-    for (unsigned int i = 0; i < SOAK_MAX_CLIENTS; i++) {
-        SoakClient *soak_client = clients[i];
+    for (unsigned int i = 0; i < NBN_GameServer_GetClientCount(); i++) {
+        NBN_Connection *conn = NBN_GameServer_GetClientByIndex(i);
 
-        if (soak_client == NULL || soak_client->is_closed)
+        if (!conn->is_accepted)
+            continue;
+
+        SoakClient *soak_client = (SoakClient *)conn->user_data;
+
+        assert(soak_client != NULL);
+
+        if (soak_client->is_closed)
             continue;
 
         for (unsigned int c = 0; c < NBN_CHANNEL_COUNT; c++) {
@@ -144,14 +121,14 @@ static void EchoReceivedSoakMessages(void) {
 
                 SoakMessage_Write(writer, msg_entry->msg_id, msg_entry->data, msg_entry->length);
 
-                Soak_LogInfo("Send soak message %d's echo (length: %d) to client %d", msg_entry->msg_id,
-                             msg_entry->length, soak_client->conn->id);
+                Soak_LogInfo("Send soak message %d's echo (length: %d) to client %llu", msg_entry->msg_id,
+                             msg_entry->length, conn->id);
 
-                if (NBN_GameServer_EnqueueMessageFor(soak_client->conn) < 0) {
-                    Soak_LogError("Failed to send soak message to client %d, closing client", soak_client->conn->id);
+                if (NBN_GameServer_EnqueueMessageFor(conn) < 0) {
+                    Soak_LogError("Failed to send soak message to client %llu, closing client", conn->id);
 
-                    if (NBN_GameServer_CloseClient(soak_client->conn) < 0) {
-                        Soak_LogError("Failed to close client %d", soak_client->conn->id);
+                    if (NBN_GameServer_CloseClient(conn) < 0) {
+                        Soak_LogError("Failed to close client %llu", conn->id);
                         abort();
                     }
 
@@ -169,13 +146,14 @@ static void EchoReceivedSoakMessages(void) {
 }
 
 static int HandleReceivedSoakMessage(NBN_Reader *reader, NBN_Connection *sender, uint8_t channel_id) {
-    SoakClient *soak_client = clients[sender->id - 1];
+    SoakClient *soak_client = (SoakClient *)sender->user_data;
 
-    if (!soak_client || soak_client->error)
+    assert(soak_client != NULL);
+
+    if (soak_client->error)
         return 0;
 
     SoakChannel *channel = &soak_client->channels[channel_id];
-
     unsigned int msg_id;
     unsigned int data_length;
     static uint8_t recv_buffer[SOAK_MESSAGE_BIG_MAX_DATA_LENGTH];
@@ -195,8 +173,8 @@ static int HandleReceivedSoakMessage(NBN_Reader *reader, NBN_Connection *sender,
         return -1;
     }
 
-    Soak_LogInfo("Received soak message %d (length: %d) from client %d on channel %d", msg_id, data_length, sender->id,
-                 channel_id);
+    Soak_LogInfo("Received soak message %d (length: %d) from client %llu on channel %d", msg_id, data_length,
+                 sender->id, channel_id);
 
     channel->recved_messages_count++;
     channel->last_recved_message_id = msg_id;
@@ -206,8 +184,7 @@ static int HandleReceivedSoakMessage(NBN_Reader *reader, NBN_Connection *sender,
     assert(channel->echo_queue.count < SOAK_CLIENT_MAX_PENDING_MESSAGES);
     assert(msg_entry->length == 0);
 
-    Soak_LogInfo("Enqueue soak message %d's echo for client %d on channel %d", msg_id, soak_client->conn->id,
-                 channel_id);
+    Soak_LogInfo("Enqueue soak message %d's echo for client %llu on channel %d", msg_id, sender->id, channel_id);
 
     memcpy(msg_entry->data, recv_buffer, data_length);
     msg_entry->msg_id = msg_id;
@@ -223,13 +200,13 @@ static int HandleReceivedSoakMessage(NBN_Reader *reader, NBN_Connection *sender,
 static void HandleReceivedMessage(void) {
     NBN_MessageInfo msg_info = NBN_GameServer_GetMessageInfo();
     NBN_Reader *reader = NBN_GameServer_GetMessageReader();
-    SoakClient *soak_client = clients[msg_info.sender->id - 1];
+    SoakClient *soak_client = (SoakClient *)msg_info.sender->user_data;
 
     switch (msg_info.type) {
     case SOAK_MESSAGE_SMALL:
         if (HandleReceivedSoakMessage(reader, msg_info.sender, msg_info.channel_id) < 0) {
             if (NBN_GameServer_CloseClient(msg_info.sender) < 0) {
-                Soak_LogError("Failed to close client %d", msg_info.sender->id);
+                Soak_LogError("Failed to close client %llu", msg_info.sender->id);
                 abort();
             }
 
@@ -243,7 +220,7 @@ static void HandleReceivedMessage(void) {
         Soak_LogError("Received unexpected message (type: %d, channel_id: %d)", msg_info.type, msg_info.channel_id);
 
         if (NBN_GameServer_CloseClient(msg_info.sender) < 0) {
-            Soak_LogError("Failed to close client %d", msg_info.sender->id);
+            Soak_LogError("Failed to close client %llu", msg_info.sender->id);
             abort();
         }
 
@@ -300,7 +277,6 @@ int main(int argc, char *argv[]) {
 #ifdef __EMSCRIPTEN__
     NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false}); // Register JS WebRTC driver
 #else
-    NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__
 
 #ifdef WEBRTC_NATIVE

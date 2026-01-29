@@ -21,23 +21,10 @@
 
 */
 
-#define NBNET_IMPL
+#define NBN_UDP
+#define NBN_IMPLEMENTATION
 
 #include "soak.h"
-
-#ifdef __EMSCRIPTEN__
-
-#include "../net_drivers/webrtc.h"
-
-#else
-
-#include "../net_drivers/udp.h"
-
-#ifdef WEBRTC_NATIVE
-#include "../net_drivers/webrtc_native.h"
-#endif
-
-#endif // __EMSCRIPTEN__
 
 #include <assert.h>
 
@@ -296,8 +283,6 @@ int main(int argc, char *argv[]) {
     }
 
 #else
-
-    NBN_UDP_Register();
 
 #endif // WEBRTC_NATIVE
 

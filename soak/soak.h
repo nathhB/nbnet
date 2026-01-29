@@ -48,7 +48,7 @@
 #include "../nbnet.h"
 
 #define SOAK_PROTOCOL_NAME "nbnet_soak"
-#define SOAK_PORT 42043
+#define SOAK_PORT 42044
 #define SOAK_TICK_RATE 60
 #define SOAK_TICK_DT (1.0 / SOAK_TICK_RATE)
 #define SOAK_MESSAGE_HEADER_LENGTH 8 // 4 bytes for ID, 4 bytes for data length
@@ -63,7 +63,6 @@
 #define SOAK_MESSAGE_BIG 43 // may get chunked
 #define SOAK_SEED time(NULL)
 #define SOAK_DONE 1
-#define SOAK_MAX_CLIENTS 256
 #define SOAK_CLIENT_MAX_PENDING_MESSAGES 50 // max number of unacked messages at a time
 #define SOAK_SERVER_FULL_CODE 1234
 

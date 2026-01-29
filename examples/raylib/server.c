@@ -21,6 +21,7 @@
 */
 
 #include <assert.h>
+#include <stddef.h>
 #include <stdio.h>
 
 // For Sleep function
@@ -84,6 +85,12 @@ static int HandleNewConnection(void) {
     NBN_Connection *conn;
 
     conn = NBN_GameServer_GetIncomingConnection();
+
+    // Read the connection request data transmitted by the client
+    // NBN_Reader *reader = NBN_GameServer_GetConnectionRequestDataReader();
+    // char name[CLIENT_NAME_MAX_LEN];
+    //
+    // NBN_Reader_ReadString(reader, name, sizeof(name));
 
     // Get a spawning position for the client
     Vector2 spawn = spawns[conn->id % MAX_CLIENTS];

@@ -59,6 +59,12 @@ Color client_colors_to_raylib_colors[] = {
     PINK    // CLI_PINK
 };
 
+static void WriteConnectionRequestData(const char *name) {
+    NBN_Writer *writer = NBN_GameClient_GetConnectionRequestDataWriter();
+
+    NBN_Writer_WriteString(writer, name, CLIENT_NAME_MAX_LEN);
+}
+
 static void SpawnLocalClient(int x, int y, uint32_t client_id) {
     TraceLog(LOG_INFO, "Spawning at (%d, %d), client id: %d", x, y, client_id);
 
@@ -480,12 +486,13 @@ int main(int argc, char *argv[]) {
 #ifdef __EMSCRIPTEN__
     NBN_WebRTC_Register(); // Register the WebRTC driver
 #else
-    NBN_UDP_Register(); // Register the UDP driver
 #endif // __EMSCRIPTEN__
 
     // Initialize the client with a protocol name, the server host and the server port
     // protocol name has to be the same as the one used by the server
     NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT);
+
+    // WriteConnectionRequestData("FOO");
 
     // Start the client with the configuration
     if (NBN_GameClient_Start() < 0) {

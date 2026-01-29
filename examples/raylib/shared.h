@@ -54,24 +54,24 @@
 #define NOKERNEL          // All KERNEL defines and routines
 #define NOUSER            // All USER defines and routines
 /*#define NONLS             // All NLS defines and routines*/
-#define NOMB              // MB_* and MessageBox()
-#define NOMEMMGR          // GMEM_*, LMEM_*, GHND, LHND, associated routines
-#define NOMETAFILE        // typedef METAFILEPICT
-#define NOMINMAX          // Macros min(a,b) and max(a,b)
-#define NOMSG             // typedef MSG and associated routines
-#define NOOPENFILE        // OpenFile(), OemToAnsi, AnsiToOem, and OF_*
-#define NOSCROLL          // SB_* and scrolling routines
-#define NOSERVICE         // All Service Controller routines, SERVICE_ equates, etc.
-#define NOSOUND           // Sound driver routines
-#define NOTEXTMETRIC      // typedef TEXTMETRIC and associated routines
-#define NOWH              // SetWindowsHook and WH_*
-#define NOWINOFFSETS      // GWL_*, GCL_*, associated routines
-#define NOCOMM            // COMM driver routines
-#define NOKANJI           // Kanji support stuff.
-#define NOHELP            // Help engine interface.
-#define NOPROFILER        // Profiler interface.
-#define NODEFERWINDOWPOS  // DeferWindowPos routines
-#define NOMCX             // Modem Configuration Extensions
+#define NOMB             // MB_* and MessageBox()
+#define NOMEMMGR         // GMEM_*, LMEM_*, GHND, LHND, associated routines
+#define NOMETAFILE       // typedef METAFILEPICT
+#define NOMINMAX         // Macros min(a,b) and max(a,b)
+#define NOMSG            // typedef MSG and associated routines
+#define NOOPENFILE       // OpenFile(), OemToAnsi, AnsiToOem, and OF_*
+#define NOSCROLL         // SB_* and scrolling routines
+#define NOSERVICE        // All Service Controller routines, SERVICE_ equates, etc.
+#define NOSOUND          // Sound driver routines
+#define NOTEXTMETRIC     // typedef TEXTMETRIC and associated routines
+#define NOWH             // SetWindowsHook and WH_*
+#define NOWINOFFSETS     // GWL_*, GCL_*, associated routines
+#define NOCOMM           // COMM driver routines
+#define NOKANJI          // Kanji support stuff.
+#define NOHELP           // Help engine interface.
+#define NOPROFILER       // Profiler interface.
+#define NODEFERWINDOWPOS // DeferWindowPos routines
+#define NOMCX            // Modem Configuration Extensions
 
 // Type required before windows.h inclusion
 typedef struct tagMSG *LPMSG;
@@ -107,8 +107,10 @@ typedef struct tagMSG *LPMSG;
 #define GAME_WIDTH 800
 #define GAME_HEIGHT 600
 
+#define CLIENT_NAME_MAX_LEN 16 // Client name maximum length
+
 #define MIN_FLOAT_VAL -5 // Minimum value of networked client float value
-#define MAX_FLOAT_VAL 5 // Maximum value of networked client float value
+#define MAX_FLOAT_VAL 5  // Maximum value of networked client float value
 
 // Maximum number of connected clients at a time
 #define MAX_CLIENTS 4
@@ -124,28 +126,13 @@ typedef struct tagMSG *LPMSG;
 #define GAME_STATE_MESSAGE_MAX_LENGTH ((20 * MAX_CLIENTS) + 4)
 
 // Message ids
-enum
-{
-    CHANGE_COLOR_MESSAGE,
-    UPDATE_STATE_MESSAGE,
-    GAME_STATE_MESSAGE
-};
+enum { CHANGE_COLOR_MESSAGE, UPDATE_STATE_MESSAGE, GAME_STATE_MESSAGE };
 
 // Client colors used for ChangeColorMessage and GameStateMessage messages
-typedef enum
-{
-    CLI_RED,
-    CLI_GREEN,
-    CLI_BLUE,
-    CLI_YELLOW,
-    CLI_ORANGE,
-    CLI_PURPLE,
-    CLI_PINK
-} ClientColor;
+typedef enum { CLI_RED, CLI_GREEN, CLI_BLUE, CLI_YELLOW, CLI_ORANGE, CLI_PURPLE, CLI_PINK } ClientColor;
 
 // Client state, represents a client over the network
-typedef struct
-{
+typedef struct {
     uint32_t client_id;
     int x;
     int y;
@@ -154,15 +141,13 @@ typedef struct
 } ClientState;
 
 // Represents the state of all clients
-typedef struct
-{
+typedef struct {
     unsigned int client_count;
     ClientState client_states[MAX_CLIENTS];
 } GameState;
 
 // Store all options from the command line
-typedef struct
-{
+typedef struct {
     float packet_loss;
     float packet_duplication;
     float ping;
