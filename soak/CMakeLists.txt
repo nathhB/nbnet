@@ -19,6 +19,8 @@ add_compile_options(-Wall -Wextra -Wpedantic -std=c99)
 
 target_compile_definitions(client PUBLIC NBN_DEBUG SOAK_CLIENT)
 target_compile_definitions(server PUBLIC NBN_DEBUG SOAK_SERVER)
+target_compile_definitions(client PUBLIC NBN_CHANNEL_COUNT=4)
+target_compile_definitions(server PUBLIC NBN_CHANNEL_COUNT=4)
 
 option(WEBRTC_NATIVE OFF)
 option(UDP OFF)

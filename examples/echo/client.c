@@ -23,6 +23,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 // Has to be defined in exactly *one* source file before including the nbnet header
 #define NBNET_IMPL
@@ -74,7 +75,7 @@ void OnMessageReceived(void) {
 }
 
 int SendEcho(const char *msg) {
-    NBN_Writer *writer = NBN_GameClient_CreateReliableMessage(ECHO_MESSAGE_TYPE);
+    NBN_Writer *writer = NBN_GameClient_CreateMessage(ECHO_MESSAGE_TYPE, 0);
     unsigned int length = strlen(msg);
 
     NBN_Writer_WriteUInt32(writer, length);
@@ -141,10 +142,6 @@ int main(int argc, char *argv[]) {
     NBN_WebRTC_C_Register(cfg);
 
 #endif // NBN_WEBRTC_NATIVE
-
-#if !defined(__EMSCRIPTEN__) && !defined(NBN_WEBRTC_NATIVE)
-    NBN_UDP_Register(); // Register the UDP driver
-#endif                  // __EMSCRIPTEN__
 
     // Initialize the client
 

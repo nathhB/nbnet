@@ -23,14 +23,12 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-
-// Has to be defined in exactly *one* source file before including the nbnet header
-#define NBNET_IMPL
+#include <assert.h>
 
 #include "shared.h"
 
 static NBN_Connection *connection = NULL;
-static uint32_t conn_id;
+static NBN_Connection_ID conn_id;
 
 // Echo the received message
 static int EchoReceivedMessage(void) {
@@ -57,7 +55,7 @@ static int EchoReceivedMessage(void) {
         msg_info.channel_id);
 
     // create and send an echo of the received message
-    NBN_Writer *writer = NBN_GameServer_CreateReliableMessage(ECHO_MESSAGE_TYPE);
+    NBN_Writer *writer = NBN_GameServer_CreateMessage(ECHO_MESSAGE_TYPE, 0);
 
     NBN_Writer_WriteUInt32(writer, length);
     NBN_Writer_WriteBytes(writer, (uint8_t *)msg_str, length);
@@ -109,10 +107,6 @@ int main(int argc, const char **argv) {
 
     NBN_WebRTC_C_Register(cfg);
 #endif // NBN_WEBRTC_NATIVE
-
-#if !defined(__EMSCRIPTEN__) && !defined(NBN_WEBRTC_NATIVE)
-    NBN_UDP_Register(); // Register the UDP driver
-#endif
 
     // Start the server with a protocol name and a port
 

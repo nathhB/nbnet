@@ -255,19 +255,10 @@ int NBN_Packet_InitRead(NBN_Packet *, uint32_t, unsigned int);
 #pragma region NBN_Channel
 
 #ifndef NBN_CHANNEL_COUNT
-/**
- * Number of channels per connection.
- */
 #define NBN_CHANNEL_COUNT 2
 #endif
 
 #define NBN_CHANNEL_BUFFER_SIZE 256
-
-/* Library reserved unreliable ordered channel */
-#define NBN_CHANNEL_RESERVED_UNRELIABLE 0
-
-/* Library reserved reliable ordered channel */
-#define NBN_CHANNEL_RESERVED_RELIABLE 1
 
 typedef enum NBN_ChannelType { NBN_CHANNEL_UNRELIABLE, NBN_CHANNEL_RELIABLE } NBN_ChannelType;
 
@@ -342,6 +333,7 @@ typedef struct NBN_IPAddress {
 typedef uint64_t NBN_Connection_ID;
 
 struct NBN_Connection {
+    // TODO: use 32 bits ID and 64 bits hash for the hashtable
     NBN_Connection_ID id;
     double last_recv_packet_time;  /* Used to detect stale connections */
     double last_flush_time;        /* Last time the send queue was flushed */
@@ -623,10 +615,6 @@ int NBN_GameClient_Flush(void);
 
 // TODO: doc
 NBN_Writer *NBN_GameClient_CreateMessage(uint8_t type, uint8_t channel_id);
-// TODO: doc
-NBN_Writer *NBN_GameClient_CreateUnreliableMessage(uint8_t type);
-// TODO: doc
-NBN_Writer *NBN_GameClient_CreateReliableMessage(uint8_t type);
 
 // TODO: doc
 int NBN_GameClient_EnqueueMessage(void);
@@ -796,10 +784,6 @@ int NBN_GameServer_CloseClientWithCode(NBN_Connection *conn, int code);
 // TODO: doc
 NBN_Writer *NBN_GameServer_CreateMessage(uint8_t type, uint8_t channel_id);
 // TODO: doc
-NBN_Writer *NBN_GameServer_CreateUnreliableMessage(uint8_t type);
-// TODO: doc
-NBN_Writer *NBN_GameServer_CreateReliableMessage(uint8_t type);
-// TODO: doc
 int NBN_GameServer_EnqueueMessageFor(NBN_Connection *conn);
 // TODO: doc
 int NBN_GameServer_EnqueueBroadcastMessage(void);
@@ -935,28 +919,5 @@ struct NBN_Driver {
 int NBN_Driver_RaiseEvent(NBN_DriverEvent ev, void *data);
 
 #pragma endregion /* Network driver */
-
-#pragma region Utils
-
-#ifndef MIN
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#endif
-
-#ifndef MAX
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
-#endif
-
-#ifndef ABS
-#define ABS(v) (((v) > 0) ? (v) : -(v))
-#endif
-
-#define SEQUENCE_NUMBER_GT(seq1, seq2)                                                                                 \
-    ((seq1 > seq2 && (seq1 - seq2) <= 32767) || (seq1 < seq2 && (seq2 - seq1) >= 32767))
-#define SEQUENCE_NUMBER_GTE(seq1, seq2)                                                                                \
-    ((seq1 >= seq2 && (seq1 - seq2) <= 32767) || (seq1 <= seq2 && (seq2 - seq1) >= 32767))
-#define SEQUENCE_NUMBER_LT(seq1, seq2)                                                                                 \
-    ((seq1 < seq2 && (seq2 - seq1) <= 32767) || (seq1 > seq2 && (seq1 - seq2) >= 32767))
-
-#pragma endregion /* Utils */
 
 #endif /* NBNET_H */

@@ -22,6 +22,7 @@
 
 */
 
+#include <stdint.h>
 #define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"
 
@@ -54,24 +55,16 @@ void NBN_SetLogFunction(NBN_LogFunc func) { nbn_log_func = func; }
 void NBN_SetLogLevel(NBN_LogLevel level) { nbn_log_level = level; }
 
 #define NBN_Abort abort
+#define NBN_Assert(cond) assert(cond)
 
-#ifdef NBN_DISABLE_ASSERTS
-
-#define NBN_Assert(cond)                                                                                               \
-    do {                                                                                                               \
-    } while (0);
-
-#else
-
-// TODO: log
-#define NBN_Assert(cond)                                                                                               \
-    do {                                                                                                               \
-        if (!(cond)) {                                                                                                 \
-            NBN_Abort();                                                                                               \
-        }                                                                                                              \
-    } while (0);
-
-#endif
+#define SEQUENCE_NUMBER_GT(seq1, seq2)                                                                                 \
+    ((seq1 > seq2 && (seq1 - seq2) <= 32767) || (seq1 < seq2 && (seq2 - seq1) >= 32767))
+#define SEQUENCE_NUMBER_GTE(seq1, seq2)                                                                                \
+    ((seq1 >= seq2 && (seq1 - seq2) <= 32767) || (seq1 <= seq2 && (seq2 - seq1) >= 32767))
+#define SEQUENCE_NUMBER_LT(seq1, seq2)                                                                                 \
+    ((seq1 < seq2 && (seq2 - seq1) <= 32767) || (seq1 > seq2 && (seq1 - seq2) >= 32767))
+#define SEQUENCE_NUMBER_LTE(seq1, seq2)                                                                                \
+    ((seq1 <= seq2 && (seq2 - seq1) <= 32767) || (seq1 >= seq2 && (seq1 - seq2) >= 32767))
 
 #ifdef NBN_UDP
 
@@ -402,7 +395,7 @@ static void Channel_Init(NBN_Channel *channel, uint8_t id, NBN_ChannelType type)
     channel->next_outgoing_message_id = 0;
     channel->next_recv_message_id = 0;
     channel->outgoing_message_count = 0;
-    channel->last_received_message_id = 0;
+    channel->last_received_message_id = -1;
     channel->next_outgoing_message_slot = 0;
     channel->oldest_unacked_message_id = 0;
     channel->most_recent_message_id = 0;
@@ -503,22 +496,26 @@ static bool Channel_AddOutgoingMessage(NBN_Channel *channel, NBN_Message *messag
 }
 
 static NBN_Message *Channel_GetNextRecvedMessage(NBN_Channel *channel) {
-    NBN_IncomingMessage *inc_msg =
-        &channel->incoming_messages_buffer[channel->next_recv_message_id % NBN_CHANNEL_BUFFER_SIZE];
-
     if (channel->type == NBN_CHANNEL_UNRELIABLE) {
-        while (SEQUENCE_NUMBER_LT(channel->next_recv_message_id, channel->last_received_message_id)) {
-            if (!inc_msg->free && inc_msg->message.header.id == channel->next_recv_message_id) {
+        while (SEQUENCE_NUMBER_LTE(channel->next_recv_message_id, channel->last_received_message_id)) {
+            NBN_IncomingMessage *inc_msg =
+                &channel->incoming_messages_buffer[channel->next_recv_message_id % NBN_CHANNEL_BUFFER_SIZE];
+            uint16_t msg_id = channel->next_recv_message_id;
+
+            channel->next_recv_message_id++;
+
+            if (!inc_msg->free && inc_msg->message.header.id == msg_id) {
                 inc_msg->free = true;
 
                 return &inc_msg->message;
             }
-
-            channel->next_recv_message_id++;
         }
 
         return NULL;
     } else if (channel->type == NBN_CHANNEL_RELIABLE) {
+        NBN_IncomingMessage *inc_msg =
+            &channel->incoming_messages_buffer[channel->next_recv_message_id % NBN_CHANNEL_BUFFER_SIZE];
+
         if (!inc_msg->free && inc_msg->message.header.id == channel->next_recv_message_id) {
             inc_msg->free = true;
             channel->next_recv_message_id++;
@@ -703,7 +700,7 @@ int NBN_Connection_ProcessReceivedPacket(NBN_Endpoint *endpoint, NBN_Connection 
                 connection->OnMessageAddedToRecvQueue(connection, &message);
 #endif
         } else {
-            LogDebug("Received message %d : discarded", message.header.id);
+            LogDebug("Message %d was discarded by channel %d", message.header.id, channel->id);
         }
     }
 
@@ -1172,7 +1169,8 @@ static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *endpoint, NBN_Con
     for (int i = 0; i < NBN_CHANNEL_COUNT; i++) {
         // channels are created in unreliable mode by default
         // TODO: expose a method to change the reliability mode of a channel
-        Channel_Init(&connection->channels[i], i, NBN_CHANNEL_RELIABLE);
+        // make sure we have at least one reliable channel for library messages
+        Channel_Init(&connection->channels[i], i, NBN_CHANNEL_UNRELIABLE);
     }
 
     switch (driver_id) {
@@ -1341,7 +1339,8 @@ int NBN_GameClient_Start(void) {
 
     unsigned int connection_data_len = nbn_game_client.client_data_writer.position;
 
-    NBN_GameClient_CreateReliableMessage(NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
+    // TODO: make sure it's a reliable channel
+    NBN_GameClient_CreateMessage(NBN_CONNECTION_REQUEST_MESSAGE_TYPE, 0);
     NBN_Writer *writer = NBN_GameClient_GetMessageWriter();
 
     if (connection_data_len > 0) {
@@ -1370,7 +1369,8 @@ void NBN_GameClient_Stop(void) {
         if (!nbn_game_client.server_connection->is_closed && !nbn_game_client.server_connection->is_stale) {
             LogInfo("Disconnecting...");
 
-            NBN_GameClient_CreateReliableMessage(NBN_DISCONNECTION_MESSAGE_TYPE);
+            // TODO: make sure it's a reliable channel
+            NBN_GameClient_CreateMessage(NBN_DISCONNECTION_MESSAGE_TYPE, 0);
 
             if (NBN_GameClient_EnqueueMessage() < 0) {
                 LogError("Failed to send disconnection message");
@@ -1479,6 +1479,8 @@ int NBN_GameClient_Flush(void) {
 }
 
 NBN_Writer *NBN_GameClient_CreateMessage(uint8_t type, uint8_t channel_id) {
+    NBN_Assert(channel_id < NBN_CHANNEL_COUNT);
+
     NBN_Endpoint *endpoint = &nbn_game_client.endpoint;
     NBN_Writer *writer = &endpoint->message_writer;
 
@@ -1486,14 +1488,6 @@ NBN_Writer *NBN_GameClient_CreateMessage(uint8_t type, uint8_t channel_id) {
     Endpoint_CreateOutgoingMessage(endpoint, type, channel_id);
 
     return writer;
-}
-
-NBN_Writer *NBN_GameClient_CreateUnreliableMessage(uint8_t type) {
-    return NBN_GameClient_CreateMessage(type, NBN_CHANNEL_RESERVED_UNRELIABLE);
-}
-
-NBN_Writer *NBN_GameClient_CreateReliableMessage(uint8_t type) {
-    return NBN_GameClient_CreateMessage(type, NBN_CHANNEL_RESERVED_RELIABLE);
 }
 
 int NBN_GameClient_EnqueueMessage(void) {
@@ -1869,6 +1863,7 @@ int NBN_GameServer_CloseClientWithCode(NBN_Connection *conn, int code) {
 int NBN_GameServer_CloseClient(NBN_Connection *conn) { return GameServer_CloseClientWithCode(conn, -1, false); }
 
 NBN_Writer *NBN_GameServer_CreateMessage(uint8_t type, uint8_t channel_id) {
+    NBN_Assert(channel_id < NBN_CHANNEL_COUNT);
     NBN_Endpoint *endpoint = &nbn_game_server.endpoint;
     NBN_Writer *writer = &endpoint->message_writer;
 
@@ -1876,14 +1871,6 @@ NBN_Writer *NBN_GameServer_CreateMessage(uint8_t type, uint8_t channel_id) {
     Endpoint_CreateOutgoingMessage(endpoint, type, channel_id);
 
     return writer;
-}
-
-NBN_Writer *NBN_GameServer_CreateUnreliableMessage(uint8_t type) {
-    return NBN_GameServer_CreateMessage(type, NBN_CHANNEL_RESERVED_UNRELIABLE);
-}
-
-NBN_Writer *NBN_GameServer_CreateReliableMessage(uint8_t type) {
-    return NBN_GameServer_CreateMessage(type, NBN_CHANNEL_RESERVED_RELIABLE);
 }
 
 int NBN_GameServer_EnqueueMessageFor(NBN_Connection *conn) {
@@ -1950,7 +1937,8 @@ int NBN_GameServer_AcceptIncomingConnection(void) {
 
     unsigned data_length = nbn_game_server.server_data_writer.position;
     NBN_Connection *client = nbn_game_server.last_event.data.connection;
-    NBN_Writer *writer = NBN_GameServer_CreateReliableMessage(NBN_CLIENT_ACCEPTED_MESSAGE_TYPE);
+    // TODO: make sure it's a reliable channel
+    NBN_Writer *writer = NBN_GameServer_CreateMessage(NBN_CLIENT_ACCEPTED_MESSAGE_TYPE, 0);
 
     if (data_length > 0) {
         NBN_Assert(data_length <= sizeof(nbn_game_server.endpoint.server_initial_data_buffer));
@@ -2086,7 +2074,8 @@ static int GameServer_CloseClientWithCode(NBN_Connection *client, int code, bool
     if (!disconnection) {
         LogDebug("Send close message for client %d (code: %d)", client->id, code);
 
-        NBN_Writer *writer = NBN_GameServer_CreateReliableMessage(NBN_CLIENT_CLOSED_MESSAGE_TYPE);
+        // TODO: make sure it's a reliable channel
+        NBN_Writer *writer = NBN_GameServer_CreateMessage(NBN_CLIENT_CLOSED_MESSAGE_TYPE, 0);
         NBN_Writer_WriteInt32(writer, code);
         NBN_GameServer_EnqueueMessageFor(client);
     }

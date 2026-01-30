@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.5)
 project(echo)
 
 option(CPP_COMPILE OFF)
-option(ENABLE_TLS OFF)
+option(UDP OFF)
 option(WEBRTC_NATIVE OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -23,44 +23,38 @@ if(CMAKE_COMPILER_IS_GNUCXX)
     add_compile_options(-Wextra -Wpedantic)
 endif (CMAKE_COMPILER_IS_GNUCXX)
 
-add_executable(echo_client client.c shared.c)
-add_executable(echo_server server.c shared.c)
+add_executable(echo_client client.c shared.c ../../nbnet.c)
+add_executable(echo_server server.c shared.c ../../nbnet.c)
 
-if (ENABLE_TLS)
-    message("Compile with TLS enabled")
-    target_compile_definitions(echo_server PUBLIC NBN_TLS)
-    target_compile_definitions(echo_client PUBLIC NBN_TLS)
-endif (ENABLE_TLS)
+if (UDP)
+  # can't compile UDP driver with emscripten
+  if (EMSCRIPTEN)
+    message(SEND_ERROR "Can't compile UDP driver with emscripten")
+  endif (EMSCRIPTEN)
 
-unset(ENABLE_TLS)
+  message("Compiling with UDP driver")
 
-if (WEBRTC_NATIVE_SERVER)
+  target_compile_definitions(echo_server PUBLIC NBN_UDP)
+  target_compile_definitions(echo_client PUBLIC NBN_UDP)
+endif (UDP)
+
+if (WEBRTC_NATIVE)
     if (EMSCRIPTEN)
-        message(FATAL_ERROR "Cannot compile native webrtc driver with emscripten")
+        message(FATAL_ERROR "Cannot compile native WebRTC driver with emscripten")
     endif (EMSCRIPTEN)
 
-    message("Compile server with webrtc native driver")
+    message("Compile with webrtc native driver")
 
     target_compile_definitions(echo_server PUBLIC NBN_WEBRTC_NATIVE)
     target_link_libraries(echo_server ${LIBDATACHANNEL_LIBRARY_PATH} m)
     target_include_directories(echo_server PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
-endif (WEBRTC_NATIVE_SERVER)
-
-unset(WEBRTC_NATIVE_SERVER)
-
-if (WEBRTC_NATIVE_CLIENT)
-    if (EMSCRIPTEN)
-        message(FATAL_ERROR "Cannot compile native webrtc driver with emscripten")
-    endif (EMSCRIPTEN)
-
-    message("Compile client with webrtc native driver")
 
     target_compile_definitions(echo_client PUBLIC NBN_WEBRTC_NATIVE)
     target_link_libraries(echo_client ${LIBDATACHANNEL_LIBRARY_PATH} m)
     target_include_directories(echo_client PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
-endif (WEBRTC_NATIVE_CLIENT)
+endif (WEBRTC_NATIVE)
 
-unset(WEBRTC_NATIVE_CLIENT)
+unset(WEBRTC_NATIVE)
 
 target_compile_definitions(echo_client PUBLIC NBN_DEBUG)
 target_compile_definitions(echo_server PUBLIC NBN_DEBUG)

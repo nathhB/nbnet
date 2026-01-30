@@ -21,8 +21,9 @@
 
 */
 
-#include "soak.h"
 #include <assert.h>
+#include <math.h>
+#include "soak.h"
 
 typedef struct {
     uint8_t data[SOAK_MESSAGE_BIG_MAX_LENGTH];
@@ -71,7 +72,7 @@ static int SendSoakMessages(SoakChannel *channel, uint8_t channel_id) {
 
         // number of messages to send on this tick
         unsigned int send_message_count =
-            MIN(SOAK_CLIENT_MAX_PENDING_MESSAGES - pending_message_count, remaining_message_count);
+            fmin(SOAK_CLIENT_MAX_PENDING_MESSAGES - pending_message_count, remaining_message_count);
 
         LogInfo("Will send %d soak messages this tick", send_message_count);
 
