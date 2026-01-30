@@ -12,15 +12,29 @@ endif (CPP_COMPILE)
 
 unset(CPP_COMPILE)
 
-add_executable(client client.c soak.c logging.c cargs.c)
-add_executable(server server.c soak.c logging.c cargs.c)
+add_executable(client client.c soak.c logging.c cargs.c ../nbnet.c)
+add_executable(server server.c soak.c logging.c cargs.c ../nbnet.c)
 
 add_compile_options(-Wall -Wextra -Wpedantic -std=c99)
 
-target_compile_definitions(client PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR SOAK_CLIENT)
-target_compile_definitions(server PUBLIC NBN_DEBUG NBN_DISABLE_STALE_CONNECTION_DETECTION NBN_USE_PACKET_SIMULATOR SOAK_SERVER)
+target_compile_definitions(client PUBLIC NBN_DEBUG SOAK_CLIENT)
+target_compile_definitions(server PUBLIC NBN_DEBUG SOAK_SERVER)
 
 option(WEBRTC_NATIVE OFF)
+option(UDP OFF)
+
+# compile with UDP driver
+if (UDP)
+  # can't compile UDP driver with emscripten
+  if (EMSCRIPTEN)
+    message(SEND_ERROR "Can't compile UDP driver with emscripten")
+  endif (EMSCRIPTEN)
+
+  message("Compiling with UDP driver")
+
+  target_compile_definitions(server PUBLIC NBN_UDP)
+  target_compile_definitions(client PUBLIC NBN_UDP)
+endif (UDP)
 
 # compile with C WebRTC driver
 if (WEBRTC_NATIVE)

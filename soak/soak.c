@@ -22,6 +22,7 @@
 
 */
 
+#include "logging.h"
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -68,8 +69,8 @@ int Soak_Init(int argc, char *argv[]) {
 
     SoakOptions options = Soak_GetOptions();
 
-    Soak_LogInfo("Soak test initialized (Packet loss: %f, Packet duplication: %f, Ping: %f, Jitter: %f)",
-                 options.packet_loss, options.packet_duplication, options.ping, options.jitter);
+    LogInfo("Soak test initialized (Packet loss: %f, Packet duplication: %f, Ping: %f, Jitter: %f)",
+            options.packet_loss, options.packet_duplication, options.ping, options.jitter);
 
     /* Packet simulator configuration */
 #ifdef SOAK_CLIENT
@@ -90,8 +91,8 @@ int Soak_Init(int argc, char *argv[]) {
 }
 
 void Soak_Deinit(void) {
-    Soak_LogInfo("Done.");
-    Soak_LogInfo("Memory report:\n");
+    LogInfo("Done.");
+    LogInfo("Memory report:\n");
     // TODO
 }
 
@@ -184,7 +185,7 @@ int Soak_MainLoop(int (*Tick)(void *), void *data) {
 void Soak_Stop(void) {
     running = false;
 
-    Soak_LogInfo("Soak test stopped");
+    LogInfo("Soak test stopped");
 }
 
 SoakOptions Soak_GetOptions(void) { return soak_options; }
