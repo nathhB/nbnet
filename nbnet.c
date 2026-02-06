@@ -1666,7 +1666,7 @@ void NBN_GameClient_SetChannelMode(uint8_t channel_id, NBN_ChannelMode mode) {
     nbn_game_client.endpoint.channel_modes[channel_id] = mode;
 }
 
-NBN_Writer *NBN_GameClient_GetConnectionRequestDataWriter(void) {
+NBN_Writer *NBN_GameClient_WriteConnectionRequestData(void) {
     NBN_Writer_Init(&nbn_game_client.client_data_writer, nbn_game_client.endpoint.connection_request_data_buffer,
                     sizeof(nbn_game_client.endpoint.connection_request_data_buffer));
 
@@ -1852,6 +1852,14 @@ NBN_Writer *NBN_GameClient_CreateMessage(uint8_t type, uint8_t channel_id) {
     Endpoint_CreateOutgoingMessage(endpoint, type, channel_id);
 
     return writer;
+}
+
+NBN_Writer *NBN_GameClient_CreateReliableMessage(uint8_t type) {
+    return NBN_GameClient_CreateMessage(type, NBN_RESERVED_RELIABLE_CHANNEL_ID);
+}
+
+NBN_Writer *NBN_GameClient_CreateUnreliableMessage(uint8_t type) {
+    return NBN_GameClient_CreateMessage(type, NBN_RESERVED_UNRELIABLE_CHANNEL_ID);
 }
 
 int NBN_GameClient_EnqueueMessage(void) {
@@ -2226,6 +2234,14 @@ NBN_Writer *NBN_GameServer_CreateMessage(uint8_t type, uint8_t channel_id) {
     return writer;
 }
 
+NBN_Writer *NBN_GameServer_CreateReliableMessage(uint8_t type) {
+    return NBN_GameServer_CreateMessage(type, NBN_RESERVED_RELIABLE_CHANNEL_ID);
+}
+
+NBN_Writer *NBN_GameServer_CreateUnreliableMessage(uint8_t type) {
+    return NBN_GameServer_CreateMessage(type, NBN_RESERVED_UNRELIABLE_CHANNEL_ID);
+}
+
 int NBN_GameServer_EnqueueMessageFor(NBN_ConnectionHandle *conn) {
     NBN_Endpoint *endpoint = &nbn_game_server.endpoint;
     NBN_Message *message = &endpoint->write_message;
@@ -2272,7 +2288,7 @@ NBN_Reader *NBN_GameServer_ReadMessage(void) {
     return reader;
 }
 
-NBN_Writer *NBN_GameServer_GetConnectionDataWriter(void) {
+NBN_Writer *NBN_GameServer_WriteConnectionData(void) {
     NBN_Assert(nbn_game_server.last_event.type == NBN_SERVER_NEW_CONNECTION);
     NBN_Assert(nbn_game_server.last_event.data.connection != NULL);
 
