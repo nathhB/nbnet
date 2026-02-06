@@ -229,7 +229,7 @@ int NBN_GameClient_Start(void);
 void NBN_GameClient_Stop(void);
 
 // TODO: doc
-NBN_Reader *NBN_GameClient_GetServerDataReader(void);
+NBN_Reader *NBN_GameClient_ReadServerData(void);
 
 /**
  * Poll game client events.
@@ -437,7 +437,7 @@ int NBN_GameServer_RejectIncomingConnection(void);
 NBN_ConnectionHandle *NBN_GameServer_GetIncomingConnection(void);
 
 // TODO: doc
-NBN_Reader *NBN_GameServer_GetConnectionRequestDataReader(void);
+NBN_Reader *NBN_GameServer_ReadConnectionRequestData(void);
 
 /**
  * Return the information about the last disconnected client.
@@ -509,22 +509,38 @@ typedef struct NBN_PacketSimulator {
 } NBN_PacketSimulator;
 
 #define NBN_GameClient_SetPing(v)                                                                                      \
-    { nbn_game_client.endpoint.packet_simulator.ping = v; }
+    {                                                                                                                  \
+        nbn_game_client.endpoint.packet_simulator.ping = v;                                                            \
+    }
 #define NBN_GameClient_SetJitter(v)                                                                                    \
-    { nbn_game_client.endpoint.packet_simulator.jitter = v; }
+    {                                                                                                                  \
+        nbn_game_client.endpoint.packet_simulator.jitter = v;                                                          \
+    }
 #define NBN_GameClient_SetPacketLoss(v)                                                                                \
-    { nbn_game_client.endpoint.packet_simulator.packet_loss_ratio = v; }
+    {                                                                                                                  \
+        nbn_game_client.endpoint.packet_simulator.packet_loss_ratio = v;                                               \
+    }
 #define NBN_GameClient_SetPacketDuplication(v)                                                                         \
-    { nbn_game_client.endpoint.packet_simulator.packet_duplication_ratio = v; }
+    {                                                                                                                  \
+        nbn_game_client.endpoint.packet_simulator.packet_duplication_ratio = v;                                        \
+    }
 
 #define NBN_GameServer_SetPing(v)                                                                                      \
-    { nbn_game_server.endpoint.packet_simulator.ping = v; }
+    {                                                                                                                  \
+        nbn_game_server.endpoint.packet_simulator.ping = v;                                                            \
+    }
 #define NBN_GameServer_SetJitter(v)                                                                                    \
-    { nbn_game_server.endpoint.packet_simulator.jitter = v; }
+    {                                                                                                                  \
+        nbn_game_server.endpoint.packet_simulator.jitter = v;                                                          \
+    }
 #define NBN_GameServer_SetPacketLoss(v)                                                                                \
-    { nbn_game_server.endpoint.packet_simulator.packet_loss_ratio = v; }
+    {                                                                                                                  \
+        nbn_game_server.endpoint.packet_simulator.packet_loss_ratio = v;                                               \
+    }
 #define NBN_GameServer_SetPacketDuplication(v)                                                                         \
-    { nbn_game_server.endpoint.packet_simulator.packet_duplication_ratio = v; }
+    {                                                                                                                  \
+        nbn_game_server.endpoint.packet_simulator.packet_duplication_ratio = v;                                        \
+    }
 
 #else
 

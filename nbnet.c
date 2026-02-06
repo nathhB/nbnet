@@ -222,7 +222,7 @@ typedef struct NBN_Message {
 
 typedef struct NBN_OutgoingMessage {
     NBN_Message message;
-    uint16_t id; // TODO: needed?
+    uint16_t id;
     double last_send_time;
     bool free;
 } NBN_OutgoingMessage;
@@ -383,15 +383,6 @@ typedef struct NBN_GameClient {
 static NBN_GameServer nbn_game_server;
 static NBN_GameClient nbn_game_client;
 
-typedef enum NBN_DriverEvent {
-    // Client events
-    NBN_DRIVER_CLI_PACKET_RECEIVED,
-
-    // Server events
-    NBN_DRIVER_SERV_CLIENT_CONNECTED,
-    NBN_DRIVER_SERV_CLIENT_PACKET_RECEIVED,
-} NBN_DriverEvent;
-
 typedef int (*NBN_Driver_Func_ClientStart)(NBN_GameClient *, const char *, uint16_t);
 typedef void (*NBN_Driver_Func_ClientStop)(NBN_GameClient *);
 typedef int (*NBN_Driver_Func_ClientSendPacket)(NBN_GameClient *, NBN_Packet *);
@@ -425,14 +416,6 @@ struct NBN_Driver {
     const char *name;
     NBN_Driver_Implementation impl;
 };
-
-/**
- * Let nbnet know about specific network events happening within a network driver.
- *
- * @param ev Event type
- * @param data Arbitrary data about the event
- */
-int NBN_Driver_RaiseEvent(NBN_DriverEvent ev, void *data);
 
 void NBN_Packet_InitWrite(NBN_Packet *, uint32_t, uint16_t, uint16_t, uint32_t);
 NBN_PacketResult NBN_Packet_WriteMessage(NBN_Packet *, NBN_OutgoingMessage *);
@@ -1645,24 +1628,6 @@ static void ClientDriver_OnPacketReceived(NBN_Packet *packet);
 static void ServerDriver_OnClientConnected(NBN_Connection *);
 static int ServerDriver_OnClientPacketReceived(NBN_Packet *);
 
-// TODO: just have the driver call functions from this file WTF
-int NBN_Driver_RaiseEvent(NBN_DriverEvent ev, void *data) {
-    switch (ev) {
-    case NBN_DRIVER_CLI_PACKET_RECEIVED:
-        ClientDriver_OnPacketReceived((NBN_Packet *)data);
-        break;
-
-    case NBN_DRIVER_SERV_CLIENT_CONNECTED:
-        ServerDriver_OnClientConnected((NBN_Connection *)data);
-        break;
-
-    case NBN_DRIVER_SERV_CLIENT_PACKET_RECEIVED:
-        return ServerDriver_OnClientPacketReceived((NBN_Packet *)data);
-    }
-
-    return 0;
-}
-
 #pragma endregion /* Network driver */
 
 #pragma region NBN_GameClient
@@ -1803,7 +1768,7 @@ void NBN_GameClient_Stop(void) {
     LogInfo("Stopped");
 }
 
-NBN_Reader *NBN_GameClient_GetServerDataReader(void) {
+NBN_Reader *NBN_GameClient_ReadServerData(void) {
     NBN_Endpoint *endpoint = &nbn_game_client.endpoint;
 
     NBN_Reader_Init(&nbn_game_client.server_data_reader, endpoint->server_initial_data_buffer,
@@ -2366,7 +2331,7 @@ NBN_ConnectionHandle *NBN_GameServer_GetIncomingConnection(void) {
     return (NBN_ConnectionHandle *)nbn_game_server.last_event.data.connection;
 }
 
-NBN_Reader *NBN_GameServer_GetConnectionRequestDataReader(void) {
+NBN_Reader *NBN_GameServer_ReadConnectionRequestData(void) {
     NBN_Assert(nbn_game_server.last_event.type == NBN_SERVER_NEW_CONNECTION);
 
     NBN_Endpoint *endpoint = &nbn_game_server.endpoint;
@@ -2784,12 +2749,7 @@ static NBN_Connection *UDP_FindOrCreateClientConnectionByAddress(NBN_IPAddress a
 
     LogInfo("New UDP connection (id: %llu, addr: %d, port: %d)", conn->handle.id, address.host, address.port);
 
-    if (NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_CONNECTED, conn) < 0) {
-        LogError("Failed to raise game server event");
-
-        return NULL;
-    }
-
+    ServerDriver_OnClientConnected(conn);
     return conn;
 }
 
@@ -2874,11 +2834,7 @@ int UDP_Server_RecvPackets(NBN_GameServer *server) {
 
         packet.sender = UDP_FindOrCreateClientConnectionByAddress(ip_address);
 
-        if (NBN_Driver_RaiseEvent(NBN_DRIVER_SERV_CLIENT_PACKET_RECEIVED, &packet) < 0) {
-            LogError("Failed to raise game server event");
-
-            return NBN_ERROR;
-        }
+        ServerDriver_OnClientPacketReceived(&packet);
     }
 
     return 0;
@@ -2953,7 +2909,7 @@ int UDP_Client_RecvPackets(NBN_GameClient *client) {
 
         packet.sender = client->server_connection;
 
-        NBN_Driver_RaiseEvent(NBN_DRIVER_CLI_PACKET_RECEIVED, &packet);
+        ClientDriver_OnPacketReceived(&packet);
     }
 
     return 0;
