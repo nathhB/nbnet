@@ -190,24 +190,6 @@ void Soak_Stop(void) {
 
 SoakOptions Soak_GetOptions(void) { return soak_options; }
 
-void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *conn, NBN_Message *msg) {
-    // FIXME:
-    /*if (msg->header.type == NBN_MESSAGE_CHUNK_TYPE)
-    {
-        NBN_MessageChunk *chunk = (NBN_MessageChunk *)msg->data;
-
-        Soak_LogDebug("Soak message chunk added to recv queue (chunk id: %d, chunk total: %d)",
-                chunk->id, chunk->total);
-    }
-    else
-    {
-        SoakMessage *soak_message = (SoakMessage *)msg->data;
-
-        Soak_LogDebug("Soak message added to recv queue (conn id: %d, msg id: %d, soak msg id: %d)",
-                conn->id, msg->header.id, soak_message->id);
-    }*/
-}
-
 unsigned int Soak_GetCreatedOutgoingSoakMessageCount(void) { return created_outgoing_soak_message_count; }
 
 unsigned int Soak_GetDestroyedOutgoingSoakMessageCount(void) { return destroyed_outgoing_soak_message_count; }

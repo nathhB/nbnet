@@ -71,7 +71,6 @@ int Soak_ReadCommandLine(int, char *[]);
 int Soak_MainLoop(int (*Tick)(void *), void *data);
 void Soak_Stop(void);
 SoakOptions Soak_GetOptions(void);
-void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *, NBN_Message *);
 unsigned int Soak_GetCreatedOutgoingSoakMessageCount(void);
 unsigned int Soak_GetDestroyedOutgoingSoakMessageCount(void);
 unsigned int Soak_GetCreatedIncomingSoakMessageCount(void);

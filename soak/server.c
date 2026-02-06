@@ -23,6 +23,7 @@
 */
 
 #include <signal.h>
+#include <stdint.h>
 #include <string.h>
 #include <assert.h>
 #include "soak.h"
@@ -294,6 +295,10 @@ int main(int argc, char *argv[]) {
     SoakOptions options = Soak_GetOptions();
 
     NBN_GameServer_Init(SOAK_PROTOCOL_NAME, SOAK_PORT);
+
+    for (uint8_t c = 0; c < NBN_CHANNEL_COUNT; c++) {
+        NBN_GameServer_SetChannelMode(c, NBN_CHANNEL_RELIABLE);
+    }
 
     if (NBN_GameServer_Start()) {
         LogError("Failed to start game server");

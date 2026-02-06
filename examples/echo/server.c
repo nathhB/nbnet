@@ -27,7 +27,7 @@
 
 #include "shared.h"
 
-static NBN_Connection *connection = NULL;
+static NBN_ConnectionHandle *connection = NULL;
 static NBN_Connection_ID conn_id;
 
 // Echo the received message
@@ -39,7 +39,7 @@ static int EchoReceivedMessage(void) {
     assert(msg_info.type == ECHO_MESSAGE_TYPE);
 
     // read message data
-    NBN_Reader *reader = NBN_GameServer_GetMessageReader();
+    NBN_Reader *reader = NBN_GameServer_ReadMessage();
     unsigned int length;
     int res;
 
@@ -131,7 +131,7 @@ int main(int argc, const char **argv) {
         NBN_DisconnectionInfo disconnect_info;
 
         // Poll for server events
-        while ((ev = NBN_GameServer_Poll()) != NBN_NO_EVENT) {
+        while ((ev = NBN_GameServer_Poll()) != NBN_SERVER_NO_EVENT) {
             if (ev < 0) {
                 Log(LOG_ERROR, "Something went wrong");
 
@@ -142,7 +142,7 @@ int main(int argc, const char **argv) {
 
             switch (ev) {
             // New connection request...
-            case NBN_NEW_CONNECTION:
+            case NBN_SERVER_NEW_CONNECTION:
                 // Echo server work with one single client at a time
                 if (connection) {
                     NBN_GameServer_RejectIncomingConnectionWithCode(ECHO_SERVER_BUSY_CODE);
@@ -155,7 +155,7 @@ int main(int argc, const char **argv) {
                 break;
 
                 // The client has disconnected
-            case NBN_CLIENT_DISCONNECTED:
+            case NBN_SERVER_DISCONNECTION:
                 disconnect_info = NBN_GameServer_GetDisconnectionInfo();
 
                 assert(disconnect_info.conn_id == conn_id);
@@ -163,7 +163,7 @@ int main(int argc, const char **argv) {
                 break;
 
                 // A message has been received from the client
-            case NBN_CLIENT_MESSAGE_RECEIVED:
+            case NBN_SERVER_MESSAGE_RECEIVED:
                 if (EchoReceivedMessage() < 0) {
                     Log(LOG_ERROR, "Failed to echo received message");
 

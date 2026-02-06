@@ -288,6 +288,10 @@ int main(int argc, char *argv[]) {
 
     NBN_GameClient_Init(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT);
 
+    for (uint8_t c = 0; c < NBN_CHANNEL_COUNT; c++) {
+        NBN_GameClient_SetChannelMode(c, NBN_CHANNEL_RELIABLE);
+    }
+
     if (NBN_GameClient_Start() < 0) {
         LogError("Failed to start game client. Exit");
 
@@ -324,9 +328,6 @@ int main(int argc, char *argv[]) {
     }
 
     channels[NBN_CHANNEL_COUNT - 1].message_count += leftover_message_count;
-
-    NBN_GameClient_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE,
-                                          (void *)Soak_Debug_PrintAddedToRecvQueue);
 
     int ret = Soak_MainLoop(Tick, channels);
 

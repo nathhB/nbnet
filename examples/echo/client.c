@@ -59,7 +59,7 @@ void OnMessageReceived(void) {
 
     assert(msg_info.type == ECHO_MESSAGE_TYPE);
 
-    NBN_Reader *reader = NBN_GameClient_GetMessageReader();
+    NBN_Reader *reader = NBN_GameClient_ReadMessage();
     unsigned int length;
     int res;
 
@@ -168,7 +168,7 @@ int main(int argc, char *argv[]) {
         int ev;
 
         // Poll for client events
-        while ((ev = NBN_GameClient_Poll()) != NBN_NO_EVENT) {
+        while ((ev = NBN_GameClient_Poll()) != NBN_CLIENT_NO_EVENT) {
             if (ev < 0) {
                 Log(LOG_ERROR, "An error occured while polling client events. Exit");
 
@@ -179,17 +179,17 @@ int main(int argc, char *argv[]) {
 
             switch (ev) {
             // Client is connected to the server
-            case NBN_CONNECTED:
+            case NBN_CLIENT_CONNECTED:
                 OnConnected();
                 break;
 
                 // Client has disconnected from the server
-            case NBN_DISCONNECTED:
+            case NBN_CLIENT_DISCONNECTED:
                 OnDisconnected();
                 break;
 
                 // A message has been received from the server
-            case NBN_MESSAGE_RECEIVED:
+            case NBN_CLIENT_MESSAGE_RECEIVED:
                 OnMessageReceived();
                 break;
             }
