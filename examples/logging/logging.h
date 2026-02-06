@@ -14,43 +14,40 @@
    claim that you wrote the original software. If you use this software
    in a product, an acknowledgment in the product documentation would be
    appreciated but is not required.
+
    2. Altered source versions must be plainly marked as such, and must not be
    misrepresented as being the original software.
+
    3. This notice may not be removed or altered from any source distribution.
 
 */
 
-#include <assert.h>
-#include <stdarg.h>
-#include <stdint.h>
+#ifndef SOAK_LOGGING_H
+#define SOAK_LOGGING_H
+
+/* I did not write this library: https://github.com/rxi/log.c */
+
+/**
+ * Copyright (c) 2017 rxi
+ *
+ * This library is free software; you can redistribute it and/or modify it
+ * under the terms of the MIT license. See `log.c` for details.
+ */
+
 #include <stdio.h>
-#include <stdlib.h>
-
-// Sleep function
-#if defined(__EMSCRIPTEN__)
-#include <emscripten/emscripten.h>
-#elif defined(_WIN32) || defined(_WIN64)
-#include <synchapi.h>
-#include <windows.h>
-#include <winsock2.h>
-#else
+#include <stdarg.h>
 #include <time.h>
-#endif
+#include "../../nbnet.h"
 
-#include "shared.h"
-#include "logging.h"
+#define LOG_VERSION "0.1.0"
 
-// Sleep for a given amount of seconds
-// Used to limit client and server tick rate
-void EchoSleep(double sec) {
-#if defined(__EMSCRIPTEN__)
-    emscripten_sleep(sec * 1000);
-#elif defined(_WIN32) || defined(_WIN64)
-    Sleep(sec * 1000);
-#else /* UNIX / OSX */
-    long nanos = sec * 1e9;
-    struct timespec t = {.tv_sec = nanos / 999999999, .tv_nsec = nanos % 999999999};
+#define LogInfo(msg, ...) Log(NBN_LOG_INFO, __FILE__, __LINE__, msg, ##__VA_ARGS__)
+#define LogWarning(msg, ...) Log(NBN_LOG_WARNING, __FILE__, __LINE__, msg, ##__VA_ARGS__)
+#define LogError(msg, ...) Log(NBN_LOG_ERROR, __FILE__, __LINE__, msg, ##__VA_ARGS__)
+#define LogDebug(msg, ...) Log(NBN_LOG_DEBUG, __FILE__, __LINE__, msg, ##__VA_ARGS__)
 
-    nanosleep(&t, &t);
-#endif
-}
+void InitLogging(void);
+void Log(NBN_LogLevel level, const char *file, int line, const char *fmt, ...);
+void SetLogLevel(NBN_LogLevel level);
+
+#endif /* SOAK_LOGGING_H */

@@ -29,19 +29,20 @@
 #define NBNET_IMPL
 
 #include "shared.h"
+#include "logging.h"
 
 static bool running = true;
 static bool connected = false;
 static bool disconnected = false;
 
 void OnConnected(void) {
-    Log(LOG_INFO, "Connected");
+    LogInfo("Connected");
 
     connected = true; // Start sending messages
 }
 
 void OnDisconnected(void) {
-    Log(LOG_INFO, "Disconnected");
+    LogInfo("Disconnected");
 
     // Stop the main loop
     disconnected = true;
@@ -49,7 +50,7 @@ void OnDisconnected(void) {
 
     // Retrieve the server code used when closing our client connection
     if (NBN_GameClient_GetServerCloseCode() == ECHO_SERVER_BUSY_CODE) {
-        Log(LOG_INFO, "Another client is already connected");
+        LogInfo("Another client is already connected");
     }
 }
 
@@ -71,11 +72,11 @@ void OnMessageReceived(void) {
     assert(res == 0);
     msg_str[length] = 0;
 
-    Log(LOG_INFO, "Received echo: %s (length: %d, channel: %d)", msg_str, msg_info.length, msg_info.channel_id);
+    LogInfo("Received echo: %s (length: %d, channel: %d)", msg_str, msg_info.length, msg_info.channel_id);
 }
 
 int SendEcho(const char *msg) {
-    NBN_Writer *writer = NBN_GameClient_CreateMessage(ECHO_MESSAGE_TYPE, 0);
+    NBN_Writer *writer = NBN_GameClient_CreateReliableMessage(ECHO_MESSAGE_TYPE);
     unsigned int length = strlen(msg);
 
     NBN_Writer_WriteUInt32(writer, length);
@@ -96,12 +97,15 @@ int main(int argc, char *argv[]) {
 #endif
     }
 
+    InitLogging();
+    SetLogLevel(NBN_LOG_DEBUG);
+
     const char *msg = argv[1];
     // reserve 4 bytes to write the message length in the message (see the SendEcho function)
     unsigned int msg_max_len = ECHO_MESSAGE_MAX_LENGTH - 4;
 
     if (strlen(msg) > msg_max_len) {
-        Log(LOG_ERROR, "Message length cannot exceed %d. Exit", msg_max_len);
+        LogError("Message length cannot exceed %d. Exit", msg_max_len);
 
 // Error, quit the client application
 #ifdef __EMSCRIPTEN__
@@ -151,7 +155,7 @@ int main(int argc, char *argv[]) {
     NBN_GameClient_Init(ECHO_PROTOCOL_NAME, "127.0.0.1", ECHO_EXAMPLE_PORT);
 
     if (NBN_GameClient_Start() < 0) {
-        Log(LOG_ERROR, "Failed to start client");
+        LogError("Failed to start client");
 
 // Error, quit the client application
 #ifdef __EMSCRIPTEN__
@@ -170,7 +174,7 @@ int main(int argc, char *argv[]) {
         // Poll for client events
         while ((ev = NBN_GameClient_Poll()) != NBN_CLIENT_NO_EVENT) {
             if (ev < 0) {
-                Log(LOG_ERROR, "An error occured while polling client events. Exit");
+                LogError("An error occured while polling client events. Exit");
 
                 // Stop main loop
                 running = false;
@@ -200,7 +204,7 @@ int main(int argc, char *argv[]) {
 
         if (connected) {
             if (SendEcho(msg) < 0) {
-                Log(LOG_ERROR, "Failed to send message. Exit");
+                LogError("Failed to send message. Exit");
 
                 // Stop main loop
                 running = false;
@@ -210,7 +214,7 @@ int main(int argc, char *argv[]) {
 
         // Pack all enqueued messages as packets and send them
         if (NBN_GameClient_Flush() < 0) {
-            Log(LOG_ERROR, "Failed to send packets. Exit");
+            LogError("Failed to send packets. Exit");
 
             // Stop main loop
             running = false;
