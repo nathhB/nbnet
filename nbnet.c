@@ -23,9 +23,9 @@
 */
 
 // TODO: make functions that are not part of the public API static
+// TODO: reintroduce webrtc drivers
 
 #include <stdint.h>
-#include "examples/echo/shared.h"
 #include "nbnet.h"
 
 #define STB_DS_IMPLEMENTATION
@@ -2753,35 +2753,31 @@ static NBN_Connection *UDP_FindOrCreateClientConnectionByAddress(NBN_IPAddress a
     return conn;
 }
 
-static int UDP_ParseIpAddress(const char *host, uint16_t port, NBN_IPAddress *address) {
-    // TODO: need to malloc here?
-    size_t host_len = strlen(host);
-    char *dup_host = (char *)malloc(host_len + 1);
-    memcpy(dup_host, host, host_len + 1);
+#define MAX_IP_ADDR_LEN 15
+
+static void UDP_ParseIpAddress(const char *host, uint16_t port, NBN_IPAddress *address) {
     uint8_t arr[4];
+    char *dup_host = strndup(host, MAX_IP_ADDR_LEN + 1);
 
-    for (int i = 0; i < 4; i++) {
-        char *s;
+    char *s;
+    int i = 0;
 
-        // TODO: replace strtok with strsep
-        if ((s = strtok(i == 0 ? dup_host : NULL, ".")) == NULL)
-            return NBN_ERROR;
-
+    while ((s = strsep(&dup_host, ".")) != NULL && i < 4) {
         char *end = NULL;
         int v = strtol(s, &end, 10);
 
-        if (end == s || v < 0 || v > 255)
-            return NBN_ERROR;
+        if (*end != '\0' || v < 0 || v > 255) {
+            LogError("Invalid IP address: %s", host);
+            NBN_Abort();
+        }
 
-        arr[i] = (uint8_t)v;
+        arr[i++] = (uint8_t)v;
     }
-
-    address->host = (arr[0] << 24) | (arr[1] << 16) | (arr[2] << 8) | arr[3];
-    address->port = port;
 
     free(dup_host);
 
-    return 0;
+    address->host = (arr[0] << 24) | (arr[1] << 16) | (arr[2] << 8) | arr[3];
+    address->port = port;
 }
 
 static char *UDP_GetLastErrorMessage(void) {
@@ -2863,11 +2859,7 @@ static int UDP_Server_SendPacketTo(NBN_GameServer *server, NBN_Packet *packet, N
 int UDP_Client_Start(NBN_GameClient *client, const char *host, uint16_t port) {
     NBN_IPAddress *ip_address = &client->server_connection->driver_data.udp.ip_address;
 
-    if (UDP_ParseIpAddress(host, port, ip_address) < 0) {
-        LogError("Failed to resolve IP address from %s", host);
-
-        return NBN_ERROR;
-    }
+    UDP_ParseIpAddress(host, port, ip_address);
 
     if (UDP_InitSocket() < 0)
         return NBN_ERROR;
