@@ -321,6 +321,8 @@ typedef struct NBN_DisconnectionInfo {
     void *user_data;           /* Pointer to user-defined data associated with this connection */
 } NBN_DisconnectionInfo;
 
+typedef unsigned int NBN_Client_Iterator;
+
 /**
  * Initialize the game server with minimal configuration.
  *
@@ -351,8 +353,7 @@ NBN_ConnectionHandle *NBN_GameServer_FindConnection(NBN_Connection_ID);
 // TODO: doc
 unsigned int NBN_GameServer_GetClientCount(void);
 
-// TODO: doc
-NBN_ConnectionHandle *NBN_GameServer_GetClientByIndex(unsigned int index);
+NBN_ConnectionHandle *NBN_GameServer_GetNextClient(NBN_Client_Iterator *it);
 
 /**
  * Poll game server events.

@@ -22,8 +22,11 @@
 */
 
 #include <assert.h>
+#include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include "soak.h"
+#include "log.h"
 
 typedef struct {
     uint8_t data[SOAK_MESSAGE_BIG_MAX_LENGTH];
@@ -60,12 +63,12 @@ static int SendSoakMessages(SoakChannel *channel, uint8_t channel_id) {
         // number of messages sent but not yet to be acked
         unsigned int pending_message_count = channel->last_sent_message_id - channel->last_recved_message_id;
 
-        LogInfo("Compute number of soak messages to send (sent: %d, pending: %d, remaining: %d)",
-                channel->sent_message_count, pending_message_count, remaining_message_count);
+        log_info("Compute number of soak messages to send (sent: %d, pending: %d, remaining: %d)",
+                 channel->sent_message_count, pending_message_count, remaining_message_count);
 
         // don't send anything on this tick if we have reached the max number of unacked messages
         if (pending_message_count >= SOAK_CLIENT_MAX_PENDING_MESSAGES) {
-            LogInfo("Max number of pending messages has been reached, not sending anything this tick");
+            log_info("Max number of pending messages has been reached, not sending anything this tick");
 
             return 0;
         }
@@ -74,7 +77,7 @@ static int SendSoakMessages(SoakChannel *channel, uint8_t channel_id) {
         unsigned int send_message_count =
             fmin(SOAK_CLIENT_MAX_PENDING_MESSAGES - pending_message_count, remaining_message_count);
 
-        LogInfo("Will send %d soak messages this tick", send_message_count);
+        log_info("Will send %d soak messages this tick", send_message_count);
 
         for (int i = 0; i < send_message_count; i++) {
             int percent = rand() % 100 + 1;
@@ -102,7 +105,7 @@ static int SendSoakMessages(SoakChannel *channel, uint8_t channel_id) {
             entry->free = false;
             entry->channel_id = channel_id;
 
-            LogInfo("Send soak message (id: %d, data length: %d)", msg_id, data_length);
+            log_info("Send soak message (id: %d, data length: %d)", msg_id, data_length);
 
             // TODO: support big messages
             NBN_Writer *writer = NBN_GameClient_CreateMessage(SOAK_MESSAGE_SMALL, channel->id);
@@ -126,17 +129,17 @@ static int HandleReceivedSoakMessage(uint8_t channel_id, SoakChannel *channels) 
     unsigned int data_length;
     static uint8_t recv_buffer[SOAK_MESSAGE_BIG_MAX_DATA_LENGTH];
 
-    NBN_Reader *reader = NBN_GameClient_GetMessageReader();
+    NBN_Reader *reader = NBN_GameClient_ReadMessage();
 
     if (SoakMessage_Read(reader, &msg_id, recv_buffer, &data_length) < 0) {
-        LogError("Failed to read soak message");
+        log_error("Failed to read soak message");
 
         return -1;
     }
 
     if (msg_id != channel->last_recved_message_id + 1) {
-        LogError("Expected to receive message %d but received message %d (channel_id: %d)",
-                 channel->last_recved_message_id + 1, msg_id, channel_id);
+        log_error("Expected to receive message %d but received message %d (channel_id: %d)",
+                  channel->last_recved_message_id + 1, msg_id, channel_id);
 
         return -1;
     }
@@ -147,15 +150,15 @@ static int HandleReceivedSoakMessage(uint8_t channel_id, SoakChannel *channels) 
     assert(entry->channel_id == channel_id);
 
     if (data_length != entry->length) {
-        LogError("Expected message %d to have length %d but was %d (channel_id: %d)", msg_id, entry->length,
-                 data_length);
+        log_error("Expected message %d to have length %d but was %d (channel_id: %d)", msg_id, entry->length,
+                  data_length);
 
         return -1;
     }
 
     if (memcmp(recv_buffer, entry->data, data_length) != 0) {
-        LogError("Received invalid data for message %d (data length: %d, channel_id: %d)", msg_id, data_length,
-                 channel_id);
+        log_error("Received invalid data for message %d (data length: %d, channel_id: %d)", msg_id, data_length,
+                  channel_id);
 
         return -1;
     }
@@ -166,16 +169,16 @@ static int HandleReceivedSoakMessage(uint8_t channel_id, SoakChannel *channels) 
 
     SoakOptions options = Soak_GetOptions();
 
-    LogInfo("Received soak message (length: %d, %d/%d) on channel %d", data_length, msg_id, channel->message_count,
-            channel_id);
+    log_info("Received soak message (length: %d, %d/%d) on channel %d", data_length, msg_id, channel->message_count,
+             channel_id);
 
     if (channel->last_recved_message_id == channel->message_count) {
-        LogInfo("Received all soak message echoes on channel %d", channel_id);
+        log_info("Received all soak message echoes on channel %d", channel_id);
         done_channel_count++;
     }
 
     if (done_channel_count >= NBN_CHANNEL_COUNT) {
-        LogInfo("Received all soak message echoes on all channels");
+        log_info("Received all soak message echoes on all channels");
         Soak_Stop();
 
         return SOAK_DONE;
@@ -192,7 +195,7 @@ static int HandleReceivedMessage(SoakChannel *channels) {
     if (msg.type == SOAK_MESSAGE_SMALL) {
         ret = HandleReceivedSoakMessage(msg.channel_id, channels);
     } else {
-        LogError("Received unexpected message (type: %d, channel_id: %d)", msg.type, msg.channel_id);
+        log_error("Received unexpected message (type: %d, channel_id: %d)", msg.type, msg.channel_id);
 
         ret = -1;
     }
@@ -205,24 +208,24 @@ static int Tick(void *data) {
 
     int ev;
 
-    while ((ev = NBN_GameClient_Poll()) != NBN_NO_EVENT) {
+    while ((ev = NBN_GameClient_Poll()) != NBN_CLIENT_NO_EVENT) {
         if (ev < 0)
             return -1;
 
         switch (ev) {
-        case NBN_DISCONNECTED:
+        case NBN_CLIENT_DISCONNECTED:
             connected = false;
 
-            LogInfo("Disconnected from server (code: %d)", NBN_GameClient_GetServerCloseCode());
+            log_info("Disconnected from server (code: %d)", NBN_GameClient_GetServerCloseCode());
             Soak_Stop();
             return 0;
 
-        case NBN_CONNECTED:
-            LogInfo("Connected to server");
+        case NBN_CLIENT_CONNECTED:
+            log_info("Connected to server");
             connected = true;
             break;
 
-        case NBN_MESSAGE_RECEIVED:
+        case NBN_CLIENT_MESSAGE_RECEIVED:
             if (HandleReceivedMessage(channels) < 0)
                 return -1;
             break;
@@ -234,14 +237,14 @@ static int Tick(void *data) {
             SoakChannel *channel = &channels[c];
 
             if (SendSoakMessages(channel, channel->id) < 0) {
-                LogError("An error occured while sending messages on channel %d", c);
+                log_error("An error occured while sending messages on channel %d", c);
                 return -1;
             }
         }
     }
 
     if (NBN_GameClient_Flush() < 0) {
-        LogError("Failed to flush game client send queue. Exit");
+        log_error("Failed to flush game client send queue. Exit");
 
         return -1;
     }
@@ -250,8 +253,7 @@ static int Tick(void *data) {
 }
 
 int main(int argc, char *argv[]) {
-    NBN_SetLogFunction(Log);
-    SetLogLevel(NBN_LOG_DEBUG);
+    NBN_SetLogLevel(NBN_LOG_DEBUG);
 
     if (Soak_ReadCommandLine(argc, argv) < 0)
         return -1;
@@ -293,7 +295,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (NBN_GameClient_Start() < 0) {
-        LogError("Failed to start game client. Exit");
+        log_error("Failed to start game client. Exit");
 
 #ifdef __EMSCRIPTEN__
         emscripten_force_exit(1);
@@ -303,7 +305,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (Soak_Init(argc, argv) < 0) {
-        LogError("Failed to initialize soak test");
+        log_error("Failed to initialize soak test");
         return 1;
     }
 

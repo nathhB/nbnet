@@ -12,8 +12,8 @@ endif (CPP_COMPILE)
 
 unset(CPP_COMPILE)
 
-add_executable(client client.c soak.c logging.c cargs.c ../nbnet.c)
-add_executable(server server.c soak.c logging.c cargs.c ../nbnet.c)
+add_executable(client client.c soak.c log.c cargs.c ../nbnet.c)
+add_executable(server server.c soak.c log.c cargs.c ../nbnet.c)
 
 add_compile_options(-Wall -Wextra -Wpedantic -std=c99)
 

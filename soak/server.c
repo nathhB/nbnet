@@ -25,8 +25,10 @@
 #include <signal.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 #include <assert.h>
 #include "soak.h"
+#include "log.h"
 
 typedef struct {
     uint8_t channel_id;
@@ -58,7 +60,7 @@ typedef struct {
 static void HandleNewConnection(void) {
     NBN_GameServer_AcceptIncomingConnection();
 
-    NBN_Connection *conn = NBN_GameServer_GetIncomingConnection();
+    NBN_ConnectionHandle *conn = NBN_GameServer_GetIncomingConnection();
     SoakClient *soak_client = (SoakClient *)malloc(sizeof(SoakClient));
 
     soak_client->error = false;
@@ -82,7 +84,7 @@ static void HandleNewConnection(void) {
 
     conn->user_data = soak_client;
 
-    LogInfo("Client has connected (ID: %llu)", conn->id);
+    log_info("Client has connected (ID: %llu)", conn->id);
 }
 
 static void HandleClientDisconnection(NBN_DisconnectionInfo info) {
@@ -90,18 +92,17 @@ static void HandleClientDisconnection(NBN_DisconnectionInfo info) {
 
     assert(soak_client != NULL);
 
-    LogInfo("Client has disconnected (ID: %d)", info.conn_id);
+    log_info("Client has disconnected (ID: %d)", info.conn_id);
 
     free(soak_client->channels);
     free(soak_client);
 }
 
 static void EchoReceivedSoakMessages(void) {
-    for (unsigned int i = 0; i < NBN_GameServer_GetClientCount(); i++) {
-        NBN_Connection *conn = NBN_GameServer_GetClientByIndex(i);
+    NBN_Client_Iterator it = 0;
+    NBN_ConnectionHandle *conn;
 
-        if (!conn->is_accepted)
-            continue;
+    while ((conn = NBN_GameServer_GetNextClient(&it))) {
 
         SoakClient *soak_client = (SoakClient *)conn->user_data;
 
@@ -119,14 +120,14 @@ static void EchoReceivedSoakMessages(void) {
 
                 SoakMessage_Write(writer, msg_entry->msg_id, msg_entry->data, msg_entry->length);
 
-                LogInfo("Send soak message %d's echo (length: %d) to client %llu", msg_entry->msg_id, msg_entry->length,
-                        conn->id);
+                log_info("Send soak message %d's echo (length: %d) to client %llu", msg_entry->msg_id,
+                         msg_entry->length, conn->id);
 
                 if (NBN_GameServer_EnqueueMessageFor(conn) < 0) {
-                    LogError("Failed to send soak message to client %llu, closing client", conn->id);
+                    log_error("Failed to send soak message to client %llu, closing client", conn->id);
 
                     if (NBN_GameServer_CloseClient(conn) < 0) {
-                        LogError("Failed to close client %llu", conn->id);
+                        log_error("Failed to close client %llu", conn->id);
                         abort();
                     }
 
@@ -143,7 +144,7 @@ static void EchoReceivedSoakMessages(void) {
     }
 }
 
-static int HandleReceivedSoakMessage(NBN_Reader *reader, NBN_Connection *sender, uint8_t channel_id) {
+static int HandleReceivedSoakMessage(NBN_Reader *reader, NBN_ConnectionHandle *sender, uint8_t channel_id) {
     SoakClient *soak_client = (SoakClient *)sender->user_data;
 
     assert(soak_client != NULL);
@@ -157,22 +158,22 @@ static int HandleReceivedSoakMessage(NBN_Reader *reader, NBN_Connection *sender,
     static uint8_t recv_buffer[SOAK_MESSAGE_BIG_MAX_DATA_LENGTH];
 
     if (SoakMessage_Read(reader, &msg_id, recv_buffer, &data_length) < 0) {
-        LogError("Failed to read soak message");
+        log_error("Failed to read soak message");
 
         return -1;
     }
 
     if (msg_id != channel->last_recved_message_id + 1) {
-        LogError("Expected to receive message %d but received message %d (from client: %d)",
-                 channel->last_recved_message_id + 1, msg_id, sender);
+        log_error("Expected to receive message %d but received message %d (from client: %d)",
+                  channel->last_recved_message_id + 1, msg_id, sender);
 
         soak_client->error = true;
 
         return -1;
     }
 
-    LogInfo("Received soak message %d (length: %d) from client %llu on channel %d", msg_id, data_length, sender->id,
-            channel_id);
+    log_info("Received soak message %d (length: %d) from client %llu on channel %d", msg_id, data_length, sender->id,
+             channel_id);
 
     channel->recved_messages_count++;
     channel->last_recved_message_id = msg_id;
@@ -182,7 +183,7 @@ static int HandleReceivedSoakMessage(NBN_Reader *reader, NBN_Connection *sender,
     assert(channel->echo_queue.count < SOAK_CLIENT_MAX_PENDING_MESSAGES);
     assert(msg_entry->length == 0);
 
-    LogInfo("Enqueue soak message %d's echo for client %llu on channel %d", msg_id, sender->id, channel_id);
+    log_info("Enqueue soak message %d's echo for client %llu on channel %d", msg_id, sender->id, channel_id);
 
     memcpy(msg_entry->data, recv_buffer, data_length);
     msg_entry->msg_id = msg_id;
@@ -197,14 +198,14 @@ static int HandleReceivedSoakMessage(NBN_Reader *reader, NBN_Connection *sender,
 
 static void HandleReceivedMessage(void) {
     NBN_MessageInfo msg_info = NBN_GameServer_GetMessageInfo();
-    NBN_Reader *reader = NBN_GameServer_GetMessageReader();
+    NBN_Reader *reader = NBN_GameServer_ReadMessage();
     SoakClient *soak_client = (SoakClient *)msg_info.sender->user_data;
 
     switch (msg_info.type) {
     case SOAK_MESSAGE_SMALL:
         if (HandleReceivedSoakMessage(reader, msg_info.sender, msg_info.channel_id) < 0) {
             if (NBN_GameServer_CloseClient(msg_info.sender) < 0) {
-                LogError("Failed to close client %llu", msg_info.sender->id);
+                log_error("Failed to close client %llu", msg_info.sender->id);
                 abort();
             }
 
@@ -215,10 +216,10 @@ static void HandleReceivedMessage(void) {
         // TODO: support big messages
 
     default:
-        LogError("Received unexpected message (type: %d, channel_id: %d)", msg_info.type, msg_info.channel_id);
+        log_error("Received unexpected message (type: %d, channel_id: %d)", msg_info.type, msg_info.channel_id);
 
         if (NBN_GameServer_CloseClient(msg_info.sender) < 0) {
-            LogError("Failed to close client %llu", msg_info.sender->id);
+            log_error("Failed to close client %llu", msg_info.sender->id);
             abort();
         }
 
@@ -232,20 +233,20 @@ static int Tick(void *data) {
 
     int ev;
 
-    while ((ev = NBN_GameServer_Poll()) != NBN_NO_EVENT) {
+    while ((ev = NBN_GameServer_Poll()) != NBN_SERVER_NO_EVENT) {
         if (ev < 0)
             return -1;
 
         switch (ev) {
-        case NBN_NEW_CONNECTION:
+        case NBN_SERVER_NEW_CONNECTION:
             HandleNewConnection();
             break;
 
-        case NBN_CLIENT_DISCONNECTED:
+        case NBN_SERVER_DISCONNECTION:
             HandleClientDisconnection(NBN_GameServer_GetDisconnectionInfo());
             break;
 
-        case NBN_CLIENT_MESSAGE_RECEIVED:
+        case NBN_SERVER_MESSAGE_RECEIVED:
             HandleReceivedMessage();
             break;
         }
@@ -254,7 +255,7 @@ static int Tick(void *data) {
     EchoReceivedSoakMessages();
 
     if (NBN_GameServer_Flush() < 0) {
-        LogError("Failed to flush game server send queue. Exit");
+        log_error("Failed to flush game server send queue. Exit");
 
         return -1;
     }
@@ -267,8 +268,7 @@ static void SigintHandler(int dummy) { Soak_Stop(); }
 int main(int argc, char *argv[]) {
     signal(SIGINT, SigintHandler);
 
-    NBN_SetLogFunction(Log);
-    SetLogLevel(NBN_LOG_DEBUG);
+    NBN_SetLogLevel(NBN_LOG_DEBUG);
 
     if (Soak_ReadCommandLine(argc, argv) < 0)
         return -1;
@@ -301,19 +301,16 @@ int main(int argc, char *argv[]) {
     }
 
     if (NBN_GameServer_Start()) {
-        LogError("Failed to start game server");
+        log_error("Failed to start game server");
 
         return 1;
     }
 
     if (Soak_Init(argc, argv) < 0) {
-        LogError("Failed to initialize soak test");
+        log_error("Failed to initialize soak test");
 
         return 1;
     }
-
-    NBN_GameServer_Debug_RegisterCallback(NBN_DEBUG_CB_MSG_ADDED_TO_RECV_QUEUE,
-                                          (void *)Soak_Debug_PrintAddedToRecvQueue);
 
     int ret = Soak_MainLoop(Tick, NULL);
 

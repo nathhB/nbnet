@@ -34,7 +34,6 @@
 
 #include <limits.h>
 #include <stdbool.h>
-#include "logging.h"
 #include "../nbnet.h"
 
 #define SOAK_PROTOCOL_NAME "nbnet_soak"

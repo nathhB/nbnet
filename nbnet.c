@@ -2152,8 +2152,18 @@ NBN_ConnectionHandle *NBN_GameServer_FindConnection(NBN_Connection_ID id) {
 
 unsigned int NBN_GameServer_GetClientCount(void) { return hmlen(nbn_game_server.clients); }
 
-NBN_ConnectionHandle *NBN_GameServer_GetClientByIndex(unsigned int index) {
-    return (NBN_ConnectionHandle *)nbn_game_server.clients[index].value;
+NBN_ConnectionHandle *NBN_GameServer_GetNextClient(NBN_Client_Iterator *it) {
+    for (; *it < hmlen(nbn_game_server.clients);) {
+        NBN_Connection *conn = (NBN_Connection *)nbn_game_server.clients[*it].value;
+
+        (*it)++;
+
+        if (conn->is_accepted) {
+            return (NBN_ConnectionHandle *)conn;
+        }
+    }
+
+    return NULL;
 }
 
 NBN_Server_Event NBN_GameServer_Poll(void) {
