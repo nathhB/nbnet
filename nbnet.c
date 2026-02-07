@@ -302,7 +302,6 @@ struct NBN_Connection {
     NBN_Driver *driver;                      /* Network driver used for that connection */
     NBN_Channel channels[NBN_CHANNEL_COUNT]; /* Message channels (sending & receiving) */
     NBN_ConnectionStats stats;
-    void *user_data; /* Pointer to user-defined data */
 
     /* Driver-related data attached to the connection */
     union {
@@ -563,7 +562,7 @@ void NBN_Writer_WriteBytes(NBN_Writer *writer, uint8_t *bytes, unsigned int leng
 void NBN_Writer_WriteString(NBN_Writer *writer, const char *str, unsigned int max_len) {
     unsigned int len = strnlen(str, max_len);
 
-    NBN_Writer_WriteUInt32(writer, max_len);
+    NBN_Writer_WriteUInt32(writer, len);
     NBN_Writer_WriteBytes(writer, (uint8_t *)str, len);
 }
 
@@ -2389,13 +2388,13 @@ NBN_Reader *NBN_GameServer_ReadConnectionRequestData(void) {
 }
 
 NBN_DisconnectionInfo NBN_GameServer_GetDisconnectionInfo(void) {
-    NBN_Assert(nbn_game_server.last_event.type == NBN_CLIENT_DISCONNECTED);
+    NBN_Assert(nbn_game_server.last_event.type == NBN_SERVER_DISCONNECTION);
 
     return nbn_game_server.last_event.data.disconnection;
 }
 
 NBN_MessageInfo NBN_GameServer_GetMessageInfo(void) {
-    NBN_Assert(nbn_game_server.last_event.type == NBN_CLIENT_MESSAGE_RECEIVED);
+    NBN_Assert(nbn_game_server.last_event.type == NBN_SERVER_MESSAGE_RECEIVED);
 
     return nbn_game_server.last_event.data.message_info;
 }
@@ -2437,7 +2436,7 @@ static int GameServer_CloseClientWithCode(NBN_Connection *client, int code, bool
             NBN_Event e;
 
             e.type = NBN_CLIENT_DISCONNECTED;
-            e.data.disconnection = (NBN_DisconnectionInfo){client->handle.id, client->user_data};
+            e.data.disconnection = (NBN_DisconnectionInfo){client->handle.id, client->handle.user_data};
 
             if (!NBN_EventQueue_Enqueue(&nbn_game_server.endpoint.event_queue, e))
                 return NBN_ERROR;
@@ -2606,7 +2605,8 @@ static bool GameServer_HandleMessageReceivedEvent(NBN_Server_Event *ev) {
     }
 
     if (message_info.type == NBN_DISCONNECTION_MESSAGE_TYPE) {
-        LogInfo("Received a disconnection request from client %d", sender->handle.id);
+        LogInfo("Received a disconnection request from client %d (user_data: %p)", sender->handle.id,
+                sender->handle.user_data);
 
         if (GameServer_CloseClientWithCode(sender, -1, true) < 0) {
             *ev = NBN_ERROR;
@@ -2616,7 +2616,7 @@ static bool GameServer_HandleMessageReceivedEvent(NBN_Server_Event *ev) {
         sender->is_stale = true;
 
         last_event->type = NBN_SERVER_DISCONNECTION;
-        last_event->data.disconnection = (NBN_DisconnectionInfo){sender->handle.id, sender->user_data};
+        last_event->data.disconnection = (NBN_DisconnectionInfo){sender->handle.id, sender->handle.user_data};
 
         GameServer_RemoveClosedClientConnections();
 

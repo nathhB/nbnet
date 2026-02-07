@@ -318,7 +318,7 @@ typedef struct NBN_GameServerStats {
 
 typedef struct NBN_DisconnectionInfo {
     NBN_Connection_ID conn_id; /* ID if the disconnected connection */
-    void *user_data;           /* User-defined data associated with this connection */
+    void *user_data;           /* Pointer to user-defined data associated with this connection */
 } NBN_DisconnectionInfo;
 
 /**
