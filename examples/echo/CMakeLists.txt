@@ -23,8 +23,8 @@ if(CMAKE_COMPILER_IS_GNUCXX)
     add_compile_options(-Wextra -Wpedantic)
 endif (CMAKE_COMPILER_IS_GNUCXX)
 
-add_executable(echo_client client.c shared.c ../logging/logging.c ../../nbnet.c)
-add_executable(echo_server server.c shared.c ../logging/logging.c ../../nbnet.c)
+add_executable(echo_client client.c shared.c ../logging/log.c ../../nbnet.c)
+add_executable(echo_server server.c shared.c ../logging/log.c ../../nbnet.c)
 
 target_include_directories(echo_server PUBLIC ../logging)
 target_include_directories(echo_client PUBLIC ../logging)

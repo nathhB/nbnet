@@ -76,9 +76,7 @@
 /* ========================================================================== */
 
 typedef enum NBN_LogLevel { NBN_LOG_ERROR, NBN_LOG_INFO, NBN_LOG_WARNING, NBN_LOG_DEBUG } NBN_LogLevel;
-typedef void (*NBN_LogFunc)(NBN_LogLevel level, const char *filename, int line, const char *msg, ...);
 
-void NBN_SetLogFunction(NBN_LogFunc);
 void NBN_SetLogLevel(NBN_LogLevel);
 
 /**
@@ -522,22 +520,38 @@ typedef struct NBN_PacketSimulator {
 } NBN_PacketSimulator;
 
 #define NBN_GameClient_SetPing(v)                                                                                      \
-    { nbn_game_client.endpoint.packet_simulator.ping = v; }
+    {                                                                                                                  \
+        nbn_game_client.endpoint.packet_simulator.ping = v;                                                            \
+    }
 #define NBN_GameClient_SetJitter(v)                                                                                    \
-    { nbn_game_client.endpoint.packet_simulator.jitter = v; }
+    {                                                                                                                  \
+        nbn_game_client.endpoint.packet_simulator.jitter = v;                                                          \
+    }
 #define NBN_GameClient_SetPacketLoss(v)                                                                                \
-    { nbn_game_client.endpoint.packet_simulator.packet_loss_ratio = v; }
+    {                                                                                                                  \
+        nbn_game_client.endpoint.packet_simulator.packet_loss_ratio = v;                                               \
+    }
 #define NBN_GameClient_SetPacketDuplication(v)                                                                         \
-    { nbn_game_client.endpoint.packet_simulator.packet_duplication_ratio = v; }
+    {                                                                                                                  \
+        nbn_game_client.endpoint.packet_simulator.packet_duplication_ratio = v;                                        \
+    }
 
 #define NBN_GameServer_SetPing(v)                                                                                      \
-    { nbn_game_server.endpoint.packet_simulator.ping = v; }
+    {                                                                                                                  \
+        nbn_game_server.endpoint.packet_simulator.ping = v;                                                            \
+    }
 #define NBN_GameServer_SetJitter(v)                                                                                    \
-    { nbn_game_server.endpoint.packet_simulator.jitter = v; }
+    {                                                                                                                  \
+        nbn_game_server.endpoint.packet_simulator.jitter = v;                                                          \
+    }
 #define NBN_GameServer_SetPacketLoss(v)                                                                                \
-    { nbn_game_server.endpoint.packet_simulator.packet_loss_ratio = v; }
+    {                                                                                                                  \
+        nbn_game_server.endpoint.packet_simulator.packet_loss_ratio = v;                                               \
+    }
 #define NBN_GameServer_SetPacketDuplication(v)                                                                         \
-    { nbn_game_server.endpoint.packet_simulator.packet_duplication_ratio = v; }
+    {                                                                                                                  \
+        nbn_game_server.endpoint.packet_simulator.packet_duplication_ratio = v;                                        \
+    }
 
 #else
 

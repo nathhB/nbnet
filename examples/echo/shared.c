@@ -38,7 +38,6 @@
 #endif
 
 #include "shared.h"
-#include "logging.h"
 
 // Sleep for a given amount of seconds
 // Used to limit client and server tick rate

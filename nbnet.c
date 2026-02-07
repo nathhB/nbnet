@@ -83,29 +83,6 @@ typedef struct NBN_Driver NBN_Driver;
 
 typedef enum NBN_Driver_ID NBN_Driver_ID;
 
-static NBN_LogFunc nbn_log_func = NULL;
-
-#ifdef NBN_DEBUG
-static NBN_LogLevel nbn_log_level = NBN_LOG_DEBUG;
-#else
-static NBN_LogLevel nbn_log_level = NBN_LOG_INFO;
-#endif // NBN_DEBUG
-
-#define Log(level, filename, line, msg, ...)                                                                           \
-    do {                                                                                                               \
-        if (nbn_log_func != NULL && nbn_log_level >= level)                                                            \
-            nbn_log_func(level, filename, line, msg, ##__VA_ARGS__);                                                   \
-    } while (0);
-
-#define LogInfo(msg, ...) Log(NBN_LOG_INFO, __FILE__, __LINE__, msg, ##__VA_ARGS__)
-#define LogWarning(msg, ...) Log(NBN_LOG_WARNING, __FILE__, __LINE__, msg, ##__VA_ARGS__)
-#define LogError(msg, ...) Log(NBN_LOG_ERROR, __FILE__, __LINE__, msg, ##__VA_ARGS__)
-#define LogDebug(msg, ...) Log(NBN_LOG_DEBUG, __FILE__, __LINE__, msg, ##__VA_ARGS__)
-
-void NBN_SetLogFunction(NBN_LogFunc func) { nbn_log_func = func; }
-
-void NBN_SetLogLevel(NBN_LogLevel level) { nbn_log_level = level; }
-
 #define NBN_Abort abort
 #define NBN_Assert(cond) assert(cond)
 
@@ -163,6 +140,59 @@ void NBN_SetLogLevel(NBN_LogLevel level) { nbn_log_level = level; }
 
 #define NBN_RESERVED_UNRELIABLE_CHANNEL_ID 0
 #define NBN_RESERVED_RELIABLE_CHANNEL_ID 1
+
+static int log_level = NBN_LOG_INFO;
+
+void NBN_SetLogLevel(NBN_LogLevel level) { log_level = level; }
+
+#ifdef NBN_LOG_CUSTOM_FUNCTION
+
+extern void Log(NBN_LogLevel level, const char *filename, int line, const char *msg, ...);
+
+#else
+
+/**
+ * Default logging function
+ */
+
+/**
+ * Copyright (c) 2017 rxi
+ *
+ * This library is free software; you can redistribute it and/or modify it
+ * under the terms of the MIT license. See `log.c` for details.
+ */
+
+#include <stdio.h>
+#include <stdarg.h>
+
+static const char *level_names[] = {"ERROR", "INFO", "WARNING", "DEBUG"};
+
+static void Log(NBN_LogLevel level, const char *filename, int line, const char *msg, ...) {
+    if (log_level < level) {
+        return;
+    }
+
+    time_t t = time(NULL);
+    struct tm *lt = localtime(&t);
+    FILE *fp = level == NBN_LOG_ERROR ? stderr : stdout;
+
+    va_list args;
+    char buf[32];
+    buf[strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", lt)] = '\0';
+    fprintf(fp, "%s %-5s %s:%d: ", buf, level_names[level], filename, line);
+    va_start(args, msg);
+    vfprintf(fp, msg, args);
+    va_end(args);
+    fprintf(fp, "\n");
+    fflush(fp);
+}
+
+#endif // NBN_CUSTOM_LOG_FUNCTION
+
+#define LogInfo(msg, ...) Log(NBN_LOG_INFO, __FILE__, __LINE__, msg, ##__VA_ARGS__)
+#define LogWarning(msg, ...) Log(NBN_LOG_WARNING, __FILE__, __LINE__, msg, ##__VA_ARGS__)
+#define LogError(msg, ...) Log(NBN_LOG_ERROR, __FILE__, __LINE__, msg, ##__VA_ARGS__)
+#define LogDebug(msg, ...) Log(NBN_LOG_DEBUG, __FILE__, __LINE__, msg, ##__VA_ARGS__)
 
 typedef enum NBN_PacketResult {
     NBN_PACKET_WRITE_ERROR = -1,

@@ -22,10 +22,9 @@
 
 #include <stdbool.h>
 #include <stdio.h>
-#include <string.h>
 #include <assert.h>
 #include "shared.h"
-#include "logging.h"
+#include "log.h"
 
 static NBN_ConnectionHandle *connection = NULL;
 static NBN_Connection_ID conn_id;
@@ -51,7 +50,8 @@ static int EchoReceivedMessage(void) {
     assert(res == 0);
     msg_str[length] = 0;
 
-    LogInfo("Received message: %s, send echo (length: %d, channel: %d)", msg_str, msg_info.length, msg_info.channel_id);
+    log_info("Received message: %s, send echo (length: %d, channel: %d)", msg_str, msg_info.length,
+             msg_info.channel_id);
 
     // create and send an echo of the received message
     NBN_Writer *writer = NBN_GameServer_CreateReliableMessage(ECHO_MESSAGE_TYPE);
@@ -65,8 +65,7 @@ static int EchoReceivedMessage(void) {
 static bool error = false;
 
 int main(int argc, const char **argv) {
-    InitLogging();
-    SetLogLevel(NBN_LOG_DEBUG);
+    NBN_SetLogLevel(NBN_LOG_INFO);
 
 #ifdef __EMSCRIPTEN__
 
@@ -115,7 +114,7 @@ int main(int argc, const char **argv) {
     NBN_GameServer_Init(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT);
 
     if (NBN_GameServer_Start() < 0) {
-        LogError("Failed to start the server");
+        log_error("Failed to start the server");
 
         // Error, quit the server application
 #ifdef __EMSCRIPTEN__
@@ -135,7 +134,7 @@ int main(int argc, const char **argv) {
         // Poll for server events
         while ((ev = NBN_GameServer_Poll()) != NBN_SERVER_NO_EVENT) {
             if (ev < 0) {
-                LogError("Something went wrong");
+                log_error("Something went wrong");
 
                 // Error, quit the server application
                 error = true;
@@ -167,7 +166,7 @@ int main(int argc, const char **argv) {
                 // A message has been received from the client
             case NBN_SERVER_MESSAGE_RECEIVED:
                 if (EchoReceivedMessage() < 0) {
-                    LogError("Failed to echo received message");
+                    log_error("Failed to echo received message");
 
                     // Error, quit the server application
                     error = true;
@@ -182,7 +181,7 @@ int main(int argc, const char **argv) {
 
         // Pack all enqueued messages as packets and send them
         if (NBN_GameServer_Flush() < 0) {
-            LogError("Failed to send packets");
+            log_error("Failed to send packets");
 
             // Error, quit the server application
             error = true;
