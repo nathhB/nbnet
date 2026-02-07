@@ -95,12 +95,6 @@ typedef struct tagMSG *LPMSG;
 
 #include "../../nbnet.h"
 
-#ifdef __EMSCRIPTEN__
-#include "../../net_drivers/webrtc.h"
-#else
-#include "../../net_drivers/udp.h"
-#endif // __EMSCRIPTEN__
-
 #define TICK_RATE 60 // Simulation tick rate
 
 // Window size, used to display window but also to cap the serialized position values within messages
@@ -138,6 +132,7 @@ typedef struct {
     int y;
     float val;
     ClientColor color;
+    char name[CLIENT_NAME_MAX_LEN];
 } ClientState;
 
 // Represents the state of all clients

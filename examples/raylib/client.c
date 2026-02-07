@@ -21,6 +21,9 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
@@ -60,8 +63,9 @@ Color client_colors_to_raylib_colors[] = {
 };
 
 static void WriteConnectionRequestData(const char *name) {
-    NBN_Writer *writer = NBN_GameClient_GetConnectionRequestDataWriter();
+    NBN_Writer *writer = NBN_GameClient_WriteConnectionRequestData();
 
+    // send the name of the client as the connection request data
     NBN_Writer_WriteString(writer, name, CLIENT_NAME_MAX_LEN);
 }
 
@@ -80,7 +84,7 @@ static int HandleConnection(void) {
     TraceLog(LOG_INFO, "Connected, reading connection data...");
 
     uint32_t x, y, client_id;
-    NBN_Reader *reader = NBN_GameClient_GetServerDataReader();
+    NBN_Reader *reader = NBN_GameClient_ReadServerData();
 
     if (NBN_Reader_ReadUInt32(reader, &x) < 0) {
         return -1;
@@ -216,9 +220,12 @@ static void HandleGameStateMessage(void) {
     static GameState recv_game_state;
 
     // Read the game state from the received GAME_STATE_MESSAGE message
-    NBN_Reader *reader = NBN_GameClient_GetMessageReader();
+    NBN_Reader *reader = NBN_GameClient_ReadMessage();
 
-    GameStateMessage_Read(reader, &recv_game_state);
+    if (GameStateMessage_Read(reader, &recv_game_state) < 0) {
+        TraceLog(LOG_ERROR, "Failed to read game state");
+        abort();
+    }
 
     // Loop over the received client states and update the clients
     for (unsigned int i = 0; i < recv_game_state.client_count; i++) {
@@ -257,7 +264,7 @@ static void HandleReceivedMessage(void) {
 
 static void HandleGameClientEvent(int ev) {
     switch (ev) {
-    case NBN_CONNECTED:
+    case NBN_CLIENT_CONNECTED:
         // We are connected to the server
         if (HandleConnection() < 0) {
             TraceLog(LOG_ERROR, "Failed to handle connection");
@@ -265,12 +272,12 @@ static void HandleGameClientEvent(int ev) {
         }
         break;
 
-    case NBN_DISCONNECTED:
+    case NBN_CLIENT_DISCONNECTED:
         // The server has closed our connection
         HandleDisconnection();
         break;
 
-    case NBN_MESSAGE_RECEIVED:
+    case NBN_CLIENT_MESSAGE_RECEIVED:
         // We received a message from the server
         HandleReceivedMessage();
         break;
@@ -315,14 +322,14 @@ static int Update(void) {
 
     // Movement code
     if (IsKeyDown(KEY_UP))
-        local_client_state.y = MAX(0, local_client_state.y - 5);
+        local_client_state.y = (int)fmax(0, local_client_state.y - 5);
     else if (IsKeyDown(KEY_DOWN))
-        local_client_state.y = MIN(GAME_HEIGHT - 50, local_client_state.y + 5);
+        local_client_state.y = (int)fmin(GAME_HEIGHT - 50, local_client_state.y + 5);
 
     if (IsKeyDown(KEY_LEFT))
-        local_client_state.x = MAX(0, local_client_state.x - 5);
+        local_client_state.x = (int)fmax(0, local_client_state.x - 5);
     else if (IsKeyDown(KEY_RIGHT))
-        local_client_state.x = MIN(GAME_WIDTH - 50, local_client_state.x + 5);
+        local_client_state.x = (int)fmin(GAME_WIDTH - 50, local_client_state.x + 5);
 
     // Color switching
     if (IsKeyDown(KEY_SPACE) && !color_key_pressed) {
@@ -343,10 +350,10 @@ static int Update(void) {
 
     // Increasing/Decreasing floating point value
     if (IsKeyDown(KEY_K))
-        local_client_state.val = MIN(MAX_FLOAT_VAL, local_client_state.val + 0.005);
+        local_client_state.val = fmin(MAX_FLOAT_VAL, local_client_state.val + 0.005);
 
     if (IsKeyDown(KEY_J))
-        local_client_state.val = MAX(MIN_FLOAT_VAL, local_client_state.val - 0.005);
+        local_client_state.val = fmax(MIN_FLOAT_VAL, local_client_state.val - 0.005);
 
     // Send the latest local client state to the server
     if (SendStateUpdate() < 0) {
@@ -360,11 +367,13 @@ static int Update(void) {
 
 void DrawClient(ClientState *state, bool is_local) {
     Color color = client_colors_to_raylib_colors[state->color];
-    const char *text = TextFormat("%.3f", state->val);
+    const char *val_text = TextFormat("%.3f", state->val);
     int font_size = 20;
-    int text_width = MeasureText(text, font_size);
+    int name_text_width = MeasureText(state->name, font_size);
+    int val_text_width = MeasureText(val_text, font_size);
 
-    DrawText(text, (state->x + 25) - text_width / 2, state->y - 20, font_size, color);
+    DrawText(state->name, (state->x + 25) - name_text_width / 2, state->y - 20, font_size, color);
+    DrawText(val_text, (state->x + 25) - val_text_width / 2, state->y + 70, font_size, color);
     DrawRectangle(state->x, state->y, 50, 50, color);
 
     if (is_local)
@@ -431,7 +440,7 @@ void UpdateAndDraw(void) {
     while (acc >= tick_dt) {
         int ev;
 
-        while ((ev = NBN_GameClient_Poll()) != NBN_NO_EVENT) {
+        while ((ev = NBN_GameClient_Poll()) != NBN_CLIENT_NO_EVENT) {
             if (ev < 0) {
                 TraceLog(LOG_WARNING, "An occured while polling network events. Exit");
 
@@ -470,10 +479,16 @@ int main(int argc, char *argv[]) {
 
         return 1;
     }
-#else
-    (void)argc;
-    (void)argv;
 #endif
+
+    if (argc < 2) {
+        printf("Usage: raylib_client NAME\n");
+        return 1;
+    }
+
+    const char *name = argv[1];
+
+    memcpy(local_client_state.name, name, sizeof(local_client_state.name));
 
     SetTraceLogLevel(LOG_TRACE);
     InitWindow(GAME_WIDTH, GAME_HEIGHT, "raylib client");
@@ -483,16 +498,11 @@ int main(int argc, char *argv[]) {
     SetTargetFPS(TARGET_FPS);
 #endif
 
-#ifdef __EMSCRIPTEN__
-    NBN_WebRTC_Register(); // Register the WebRTC driver
-#else
-#endif // __EMSCRIPTEN__
-
     // Initialize the client with a protocol name, the server host and the server port
     // protocol name has to be the same as the one used by the server
     NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT);
 
-    // WriteConnectionRequestData("FOO");
+    WriteConnectionRequestData(name);
 
     // Start the client with the configuration
     if (NBN_GameClient_Start() < 0) {

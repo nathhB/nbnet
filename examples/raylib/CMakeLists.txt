@@ -4,10 +4,10 @@ project(raylib_example C)
 
 set(raylib_DIR cmake)
 
-set(CLIENT_SOURCES client.c shared.c)
-set(SERVER_SOURCES server.c shared.c)
+set(CLIENT_SOURCES client.c shared.c ../../nbnet.c)
+set(SERVER_SOURCES server.c shared.c ../../nbnet.c)
 
-add_compile_options(-Wall -Wextra -Wpedantic -Wno-unknown-pragmas -std=c99)
+add_compile_options(-Wall -Wextra -std=c99 -Wno-gnu-zero-variadic-macro-arguments)
 
 add_executable(raylib_client ${CLIENT_SOURCES})
 add_executable(raylib_server ${SERVER_SOURCES})
@@ -31,8 +31,20 @@ target_compile_definitions(raylib_client PUBLIC NBN_DEBUG)
 target_compile_definitions(raylib_server PUBLIC NBN_DEBUG)
 target_compile_definitions(raylib_server PUBLIC NBN_RAYLIB_SERVER)
 
+if (UDP)
+  # can't compile UDP driver with emscripten
+  if (EMSCRIPTEN)
+    message(SEND_ERROR "Can't compile UDP driver with emscripten")
+  endif (EMSCRIPTEN)
+
+  message("Compiling with UDP driver")
+
+  target_compile_definitions(raylib_server PUBLIC NBN_UDP)
+  target_compile_definitions(raylib_client PUBLIC NBN_UDP)
+endif (UDP)
+
 # compile with C WebRTC driver
-if (WEBRTC_C_DRIVER)
+if (WEBRTC_NATIVE)
   # can't compile WebRTC native driver with emscripten
   if (EMSCRIPTEN)
     message(SEND_ERROR "Can't compile WebRTC native driver with emscripten")
@@ -51,9 +63,9 @@ if (WEBRTC_C_DRIVER)
     target_compile_definitions(raylib_server PUBLIC NBN_HTTPS_KEY_PEM="localhost.key")
     target_compile_definitions(raylib_server PUBLIC NBN_HTTPS_CERT_PEM="localhost.crt")
   endif (USE_HTTPS)
-endif (WEBRTC_C_DRIVER)
+endif (WEBRTC_NATIVE)
 
-unset(WEBRTC_C_DRIVER)
+unset(WEBRTC_NATIVE)
 
 # Use HTTPS (for WebRTC drivers)
 if (USE_HTTPS)
