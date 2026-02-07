@@ -1724,7 +1724,10 @@ int NBN_GameClient_Start(void) {
     driver_count++;
 #endif // NBN_UDP
 
-    if (driver_count != 1) {
+    if (driver_count < 1) {
+        LogError("At least one network driver has to be activated");
+        NBN_Abort();
+    } else if (driver_count > 1) {
         LogError("Only one network driver can be activated for the client");
         NBN_Abort();
     }

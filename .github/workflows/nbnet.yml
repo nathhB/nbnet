@@ -52,9 +52,6 @@ jobs:
           cd tests
           cmake -G "NMake Makefiles" .
           nmake
-      # FIXME: string_tests hangs forever
-      # - name: Run tests
-      # run: ctest
 
   soak-test-linux-c:
     runs-on: ubuntu-latest
@@ -67,7 +64,7 @@ jobs:
           cd soak
           mkdir build
           cd build
-          cmake -DCMAKE_BUILD_TYPE=Debug ..
+          cmake -DCMAKE_BUILD_TYPE=Debug -DUDP=ON ..
           make
       - name: Run soak test
         run: timeout 240 ./bin/github-actions/run_soak.sh
@@ -83,7 +80,7 @@ jobs:
           cd soak
           mkdir build
           cd build
-          cmake -DCMAKE_BUILD_TYPE=Debug -DCPP_COMPILE=ON ..
+          cmake -DCMAKE_BUILD_TYPE=Debug -DUDP=ON -DCPP_COMPILE=ON ..
           make
       - name: Run soak test
         run: timeout 240 ./bin/github-actions/run_soak.sh
@@ -123,7 +120,7 @@ jobs:
           cd soak
           mkdir build
           cd build
-          cmake -DCMAKE_BUILD_TYPE=Debug ..
+          cmake -DCMAKE_BUILD_TYPE=Debug -DUDP=ON ..
           make
       - name: Run soak test
         run: gtimeout 240 ./bin/github-actions/run_soak.sh
@@ -139,7 +136,7 @@ jobs:
           cd soak
           mkdir build
           cd build
-          cmake -DCMAKE_BUILD_TYPE=Debug -DCPP_COMPILE=ON ..
+          cmake -DCMAKE_BUILD_TYPE=Debug -DUDP=ON -DCPP_COMPILE=ON ..
           make
       - name: Run soak test
         run: gtimeout 240 ./bin/github-actions/run_soak.sh
