@@ -213,7 +213,7 @@ jobs:
           cd ..
           WEBRTC_NATIVE=1 timeout 240 ./bin/github-actions/run_soak.sh
 
-  compile-examples-linux-c:
+  compile-examples-udp-linux-c:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -222,10 +222,10 @@ jobs:
       - name: Compile examples
         run: |
           cd examples
-          cmake .
+          cmake -DEXAMPLES_UDP=ON .
           make
 
-  compile-examples-linux-cpp:
+  compile-examples-udp-linux-cpp:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -234,10 +234,10 @@ jobs:
       - name: Compile examples
         run: |
           cd examples
-          cmake -DCPP_COMPILE=ON .
+          cmake -DEXAMPLES_UDP=ON -DCPP_COMPILE=ON .
           make
 
-  compile-examples-osx-c:
+  compile-examples-udp-osx-c:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -246,10 +246,10 @@ jobs:
       - name: Compile examples
         run: |
           cd examples
-          cmake .
+          cmake -DEXAMPLES_UDP=ON .
           make
 
-  compile-examples-osx-cpp:
+  compile-examples-udp-osx-cpp:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -258,10 +258,10 @@ jobs:
       - name: Compile examples
         run: |
           cd examples
-          cmake -DCPP_COMPILE=ON .
+          cmake -DEXAMPLES_UDP=ON -DCPP_COMPILE=ON .
           make
 
-  compile-examples-windows-c:
+  compile-examples-udp-windows-c:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
@@ -269,10 +269,10 @@ jobs:
       - name: Compile examples
         run: |
           cd examples
-          cmake -G "NMake Makefiles" .
+          cmake -G "NMake Makefiles" -DEXAMPLES_UDP=ON .
           nmake
 
-  compile-examples-windows-cpp:
+  compile-examples-udp-windows-cpp:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
@@ -280,5 +280,5 @@ jobs:
       - name: Compile examples
         run: |
           cd examples
-          cmake -G "NMake Makefiles" -DCPP_COMPILE=ON .
+          cmake -G "NMake Makefiles" -DEXAMPLES_UDP=ON -DCPP_COMPILE=ON .
           nmake
