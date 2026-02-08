@@ -1778,7 +1778,7 @@ void NBN_GameClient_SetChannelMode(uint8_t channel_id, NBN_ChannelMode mode) {
         NBN_Abort();
     }
 
-    nbn_game_client.endpoint.channel_modes[channel_id] = mode;
+    nbn_game_client.config.channel_modes[channel_id] = mode;
 }
 
 NBN_Writer *NBN_GameClient_WriteConnectionRequestData(void) {
@@ -2195,7 +2195,7 @@ void NBN_GameServer_SetChannelMode(uint8_t channel_id, NBN_ChannelMode mode) {
         NBN_Abort();
     }
 
-    nbn_game_server.endpoint.channel_modes[channel_id] = mode;
+    nbn_game_server.config.channel_modes[channel_id] = mode;
 }
 
 static int StartServerDrivers(uint16_t port) {
