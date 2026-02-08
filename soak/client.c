@@ -28,6 +28,10 @@
 #include "soak.h"
 #include "log.h"
 
+#ifdef __EMSCRIPTEN__
+#include "emscripten.h"
+#endif
+
 typedef struct {
     uint8_t data[SOAK_MESSAGE_BIG_MAX_LENGTH];
     uint8_t channel_id;
@@ -260,10 +264,6 @@ int main(int argc, char *argv[]) {
 
     SoakOptions options = Soak_GetOptions();
 
-#ifdef __EMSCRIPTEN__
-    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false}); // Register the JS WebRTC driver
-#else
-
 #ifdef WEBRTC_NATIVE
 
     if (options.webrtc) {
@@ -282,11 +282,7 @@ int main(int argc, char *argv[]) {
         NBN_UDP_Register();
     }
 
-#else
-
 #endif // WEBRTC_NATIVE
-
-#endif // __EMSCRIPTEN__
 
     NBN_GameClient_Init(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT);
 

@@ -23,7 +23,8 @@
 */
 
 // TODO: make functions that are not part of the public API static
-// TODO: reintroduce webrtc drivers
+// TODO: reintroduce webrtc native driver
+// TODO: remove pragmas
 
 #include <stdint.h>
 #include "nbnet.h"
@@ -55,12 +56,6 @@
 #else
 
 #define NBN_PLATFORM_UNIX
-
-#endif
-
-#ifdef __EMSCRIPTEN__
-
-#include <emscripten.h>
 
 #endif
 
@@ -288,6 +283,8 @@ typedef struct NBN_IPAddress {
     uint16_t port;
 } NBN_IPAddress;
 
+typedef uint32_t NBN_WebRTC_Peer_ID;
+
 struct NBN_Connection {
     NBN_ConnectionHandle handle;
     double last_recv_packet_time;  /* Used to detect stale connections */
@@ -308,6 +305,8 @@ struct NBN_Connection {
         struct {
             NBN_IPAddress ip_address;
         } udp;
+
+        NBN_WebRTC_Peer_ID peer_id;
     } driver_data;
 
     /*
@@ -438,7 +437,7 @@ typedef struct NBN_Driver_Implementation {
     NBN_Driver_Func_ServerCleanupConnection serv_cleanup_connection;
 } NBN_Driver_Implementation;
 
-enum NBN_Driver_ID { NBN_DRIVER_UDP = 0x01 };
+enum NBN_Driver_ID { NBN_DRIVER_UDP = 0x01, NBN_DRIVER_WEBRTC_EMSCRIPTEN };
 
 struct NBN_Driver {
     int id;
@@ -513,6 +512,47 @@ static NBN_Driver nbn_udp_driver = {.name = "UDP",
 static SOCKET nbn_udp_sock;
 
 #endif // NBN_UDP
+
+#ifdef __EMSCRIPTEN__
+
+#ifdef NBN_UDP
+#error "Cannot compile UDP driver with emscripten"
+#endif
+
+// TODO: add a check for webrtc native as well
+
+#include <emscripten.h>
+
+static int WebRTC_Client_Start(NBN_GameClient *client, const char *host, uint16_t port);
+static void WebRTC_Client_Stop(NBN_GameClient *client);
+static int WebRTC_Client_RecvPackets(NBN_GameClient *client);
+static int WebRTC_Client_SendPacket(NBN_GameClient *client, NBN_Packet *packet);
+
+static int WebRTC_Server_Start(NBN_GameServer *server, uint16_t port);
+static void WebRTC_Server_Stop(NBN_GameServer *server);
+static int WebRTC_Server_RecvPackets(NBN_GameServer *server);
+static int WebRTC_Server_SendPacketTo(NBN_GameServer *server, NBN_Packet *packet, NBN_Connection *connection);
+static void WebRTC_Server_CleanupConnection(NBN_GameServer *server, NBN_Connection *connection);
+
+static NBN_Driver nbn_webrtc_em_driver = {.name = "WebRTC_EMSCRIPTEN",
+                                          .impl = {// Client implementation
+                                                   .cli_start = WebRTC_Client_Start,
+                                                   .cli_stop = WebRTC_Client_Stop,
+                                                   .cli_recv_packets = WebRTC_Client_RecvPackets,
+                                                   .cli_send_packet = WebRTC_Client_SendPacket,
+
+                                                   // Server implementation
+                                                   .serv_start = WebRTC_Server_Start,
+                                                   .serv_stop = WebRTC_Server_Stop,
+                                                   .serv_recv_packets = WebRTC_Server_RecvPackets,
+                                                   .serv_send_packet_to = WebRTC_Server_SendPacketTo,
+                                                   .serv_cleanup_connection = WebRTC_Server_CleanupConnection}};
+
+static NBN_WebRTC_Config nbn_wrtc_cfg = {.enable_tls = false, .cert_path = NULL, .key_path = NULL};
+
+void NBN_WebRTC_SetConfig(NBN_WebRTC_Config config);
+
+#endif // __EMSCRIPTEN__
 
 #pragma region Serialization
 
@@ -1566,6 +1606,12 @@ static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *endpoint, NBN_Con
         connection->driver = &nbn_udp_driver;
         break;
 #endif // NBN_UDP
+
+#ifdef __EMSCRIPTEN__
+    case NBN_DRIVER_WEBRTC_EMSCRIPTEN:
+        connection->driver = &nbn_webrtc_em_driver;
+        break;
+#endif
     default:
         LogError("Unsupported driver: %d", driver_id);
         NBN_Abort();
@@ -1702,15 +1748,7 @@ NBN_Writer *NBN_GameClient_WriteConnectionRequestData(void) {
     return &nbn_game_client.client_data_writer;
 }
 
-int NBN_GameClient_Start(void) {
-    NBN_GameClient_Config config = nbn_game_client.config;
-    const char *protocol_name = config.protocol_name;
-    const char *host = config.host;
-    uint16_t port = config.port;
-    uint32_t protocol_id = Endpoint_BuildProtocolId(protocol_name);
-
-    Endpoint_Init(&nbn_game_client.endpoint, protocol_id, false, config.channel_modes);
-
+static int StartClientDrivers(const char *host, uint16_t port) {
     int driver_count = 0;
 
 #ifdef NBN_UDP
@@ -1723,6 +1761,31 @@ int NBN_GameClient_Start(void) {
 
     driver_count++;
 #endif // NBN_UDP
+
+#ifdef __EMSCRIPTEN__
+    nbn_game_client.server_connection = CreateServerConnection(NBN_DRIVER_WEBRTC_EMSCRIPTEN);
+
+    if (nbn_webrtc_em_driver.impl.cli_start(&nbn_game_client, host, port) < 0) {
+        LogError("Failed to start driver %s", nbn_webrtc_em_driver.name);
+        return NBN_ERROR;
+    }
+
+    driver_count++;
+#endif // __EMSCRIPTEN__
+
+    return driver_count;
+}
+
+int NBN_GameClient_Start(void) {
+    NBN_GameClient_Config config = nbn_game_client.config;
+    const char *protocol_name = config.protocol_name;
+    const char *host = config.host;
+    uint16_t port = config.port;
+    uint32_t protocol_id = Endpoint_BuildProtocolId(protocol_name);
+
+    Endpoint_Init(&nbn_game_client.endpoint, protocol_id, false, config.channel_modes);
+
+    int driver_count = StartClientDrivers(host, port);
 
     if (driver_count < 1) {
         LogError("At least one network driver has to be activated");
@@ -1791,6 +1854,10 @@ void NBN_GameClient_Stop(void) {
     nbn_udp_driver.impl.cli_stop(&nbn_game_client);
 #endif // NBN_UDP
 
+#ifdef __EMSCRIPTEN__
+    nbn_webrtc_em_driver.impl.cli_stop(&nbn_game_client);
+#endif // __EMSCRIPTEN__
+
     nbn_game_client.is_connected = false;
     nbn_game_client.closed_code = -1;
     nbn_game_client.endpoint.server_initial_data_len = 0;
@@ -1807,6 +1874,24 @@ NBN_Reader *NBN_GameClient_ReadServerData(void) {
                     endpoint->server_initial_data_len);
 
     return &nbn_game_client.server_data_reader;
+}
+
+static int ReadPacketsFromClientDrivers(void) {
+#ifdef NBN_UDP
+    if (nbn_udp_driver.impl.cli_recv_packets(&nbn_game_client) < 0) {
+        LogError("Failed to read packets from driver %s", nbn_udp_driver.name);
+        return NBN_ERROR;
+    }
+#endif // NBN_UDP
+
+#ifdef __EMSCRIPTEN__
+    if (nbn_webrtc_em_driver.impl.cli_recv_packets(&nbn_game_client) < 0) {
+        LogError("Failed to read packets from driver %s", nbn_webrtc_em_driver.name);
+        return NBN_ERROR;
+    }
+#endif // __EMSCRIPTEN__
+
+    return 0;
 }
 
 NBN_Client_Event NBN_GameClient_Poll(void) {
@@ -1832,12 +1917,9 @@ NBN_Client_Event NBN_GameClient_Poll(void) {
             if (!NBN_EventQueue_Enqueue(&endpoint->event_queue, e))
                 return NBN_ERROR;
         } else {
-#ifdef NBN_UDP
-            if (nbn_udp_driver.impl.cli_recv_packets(&nbn_game_client) < 0) {
-                LogError("Failed to read packets from driver %s", nbn_udp_driver.name);
+            if (ReadPacketsFromClientDrivers() < 0) {
                 return NBN_ERROR;
             }
-#endif // NBN_UDP
 
             NBN_Connection *server_conn = nbn_game_client.server_connection;
 
@@ -2076,16 +2158,7 @@ void NBN_GameServer_SetChannelMode(uint8_t channel_id, NBN_ChannelMode mode) {
     nbn_game_server.endpoint.channel_modes[channel_id] = mode;
 }
 
-int NBN_GameServer_Start(void) {
-    NBN_GameServer_Config config = nbn_game_server.config;
-    const char *protocol_name = config.protocol_name;
-    uint16_t port = config.port;
-    uint32_t protocol_id = Endpoint_BuildProtocolId(protocol_name);
-
-    Endpoint_Init(&nbn_game_server.endpoint, protocol_id, true, config.channel_modes);
-
-    nbn_game_server.closed_clients_head = NULL;
-
+static int StartServerDrivers(uint16_t port) {
     int driver_count = 0;
 
 #ifdef NBN_UDP
@@ -2096,6 +2169,30 @@ int NBN_GameServer_Start(void) {
 
     driver_count++;
 #endif // NBN_UDP
+
+#ifdef __EMSCRIPTEN__
+    if (nbn_webrtc_em_driver.impl.serv_start(&nbn_game_server, port) < 0) {
+        LogError("Failed to start driver %s", nbn_webrtc_em_driver.name);
+        return NBN_ERROR;
+    }
+
+    driver_count++;
+#endif // __EMSCRIPTEN__
+
+    return driver_count;
+}
+
+int NBN_GameServer_Start(void) {
+    NBN_GameServer_Config config = nbn_game_server.config;
+    const char *protocol_name = config.protocol_name;
+    uint16_t port = config.port;
+    uint32_t protocol_id = Endpoint_BuildProtocolId(protocol_name);
+
+    Endpoint_Init(&nbn_game_server.endpoint, protocol_id, true, config.channel_modes);
+
+    nbn_game_server.closed_clients_head = NULL;
+
+    int driver_count = StartServerDrivers(port);
 
     if (driver_count < 1) {
         LogError("At least one network driver has to be activated");
@@ -2124,6 +2221,10 @@ void NBN_GameServer_Stop(void) {
 #ifdef NBN_UDP
     nbn_udp_driver.impl.serv_stop(&nbn_game_server);
 #endif // NBN_UDP
+
+#ifdef __EMSCRIPTEN__
+    nbn_webrtc_em_driver.impl.serv_stop(&nbn_game_server);
+#endif // __EMSCRIPTEN__
 
     // Free closed clients list
     NBN_ConnectionListNode *current = nbn_game_server.closed_clients_head;
@@ -2169,6 +2270,20 @@ NBN_ConnectionHandle *NBN_GameServer_GetNextClient(NBN_Client_Iterator *it) {
     return NULL;
 }
 
+static void ReadPacketsFromServerDrivers(void) {
+#ifdef NBN_UDP
+    if (nbn_udp_driver.impl.serv_recv_packets(&nbn_game_server) < 0) {
+        LogError("Failed to read packets from driver %s", nbn_udp_driver.name);
+    }
+#endif // NBN_UDP
+
+#ifdef __EMSCRIPTEN__
+    if (nbn_webrtc_em_driver.impl.serv_recv_packets(&nbn_game_server) < 0) {
+        LogError("Failed to read packets from driver %s", nbn_webrtc_em_driver.name);
+    }
+#endif // __EMSCRIPTEN__
+}
+
 NBN_Server_Event NBN_GameServer_Poll(void) {
     Endpoint_UpdateTime(&nbn_game_server.endpoint);
 
@@ -2178,12 +2293,7 @@ NBN_Server_Event NBN_GameServer_Poll(void) {
         if (GameServer_CloseStaleClientConnections() < 0)
             return NBN_ERROR;
 
-#ifdef NBN_UDP
-        if (nbn_udp_driver.impl.serv_recv_packets(&nbn_game_server) < 0) {
-            LogError("Failed to read packets from driver %s", nbn_udp_driver.name);
-            return NBN_ERROR;
-        }
-#endif // NBN_UDP
+        ReadPacketsFromServerDrivers();
 
         nbn_game_server.stats.download_bandwidth = 0;
 
@@ -2715,9 +2825,11 @@ static int ServerDriver_OnClientPacketReceived(NBN_Packet *packet) {
 
 #pragma endregion /* Game server driver */
 
-#ifdef NBN_UDP
+/**
+ * ======================= DRIVER IMPLEMENTATIONS ======================= *
+ */
 
-#pragma region UDP driver
+#ifdef NBN_UDP
 
 #ifdef NBN_PLATFORM_WINDOWS
 
@@ -2862,7 +2974,7 @@ int UDP_Server_Start(NBN_GameServer *server, uint16_t port) {
 void UDP_Server_Stop(NBN_GameServer *server) { UDP_DeinitSocket(); }
 
 int UDP_Server_RecvPackets(NBN_GameServer *server) {
-    NBN_Packet packet = {0};
+    static NBN_Packet packet = {0};
     SOCKADDR_IN src_addr;
     socklen_t src_addr_len = sizeof(src_addr);
 
@@ -2984,9 +3096,123 @@ static int UDP_Client_SendPacket(NBN_GameClient *client, NBN_Packet *packet) {
     return 0;
 }
 
-#pragma enregion /* UDP driver */
-
 #endif // NBN_UDP
+
+#ifdef __EMSCRIPTEN__
+
+/**
+ * JS API
+ *
+ * See net_drivers/webrtc/js for the implementation of these functions.
+ */
+
+extern void __js_game_server_init(uint32_t, bool, const char *, const char *);
+extern int __js_game_server_start(uint16_t);
+extern int __js_game_server_dequeue_packet(uint32_t *, uint8_t *);
+extern int __js_game_server_send_packet_to(uint8_t *, unsigned int, uint32_t);
+extern void __js_game_server_close_client_peer(unsigned int);
+extern void __js_game_server_stop(void);
+
+extern void __js_game_client_init(uint32_t, bool);
+extern int __js_game_client_start(const char *, uint16_t);
+extern int __js_game_client_dequeue_packet(uint8_t *);
+extern int __js_game_client_send_packet(uint8_t *, unsigned int);
+extern void __js_game_client_close(void);
+
+void NBN_WebRTC_SetConfig(NBN_WebRTC_Config config) { nbn_wrtc_cfg = config; }
+
+static int WebRTC_Server_Start(NBN_GameServer *server, uint16_t port) {
+    __js_game_server_init(server->endpoint.protocol_id, nbn_wrtc_cfg.enable_tls, nbn_wrtc_cfg.key_path,
+                          nbn_wrtc_cfg.cert_path);
+
+    if (__js_game_server_start(port) < 0)
+        return -1;
+
+    return 0;
+}
+
+static void WebRTC_Server_Stop(NBN_GameServer *server) { __js_game_server_stop(); }
+
+static int WebRTC_Server_RecvPackets(NBN_GameServer *server) {
+    static NBN_Packet packet = {0};
+    uint32_t peer_id;
+    unsigned int len;
+
+    while ((len = __js_game_server_dequeue_packet(&peer_id, packet.buffer)) > 0) {
+        NBN_Connection_ID conn_id = NBN_BuildConnectionHash(peer_id, NBN_DRIVER_WEBRTC_EMSCRIPTEN);
+        NBN_ConnectionHandle *handle = NBN_GameServer_FindConnection(conn_id);
+        NBN_Connection *conn = NULL;
+
+        if (handle == NULL) {
+            LogInfo("Peer %d has connected", peer_id);
+
+            conn = CreateClientConnection(NBN_DRIVER_WEBRTC_EMSCRIPTEN, conn_id);
+            conn->driver_data.peer_id = peer_id;
+
+            ServerDriver_OnClientConnected(conn);
+        } else {
+            conn = HANDLE_TO_CONN(handle);
+        }
+
+        if (NBN_Packet_InitRead(&packet, server->endpoint.protocol_id, len) < 0)
+            continue;
+
+        packet.sender = conn;
+
+        ServerDriver_OnClientPacketReceived(&packet);
+    }
+
+    return 0;
+}
+
+static void WebRTC_Server_CleanupConnection(NBN_GameServer *server, NBN_Connection *conn) {
+    assert(conn != NULL);
+
+    __js_game_server_close_client_peer(conn->driver_data.peer_id);
+}
+
+static int WebRTC_Server_SendPacketTo(NBN_GameServer *server, NBN_Packet *packet, NBN_Connection *conn) {
+    return __js_game_server_send_packet_to(packet->buffer, packet->size, conn->driver_data.peer_id);
+}
+
+static int WebRTC_Client_Start(NBN_GameClient *client, const char *host, uint16_t port) {
+    __js_game_client_init(client->endpoint.protocol_id, nbn_wrtc_cfg.enable_tls);
+
+    int res;
+
+    if ((res = __js_game_client_start(host, port)) < 0)
+        return NBN_ERROR;
+
+    return 0;
+}
+
+static void WebRTC_Client_Stop(NBN_GameClient *client) { __js_game_client_close(); }
+
+static int WebRTC_Client_RecvPackets(NBN_GameClient *client) {
+    static NBN_Packet packet = {0};
+    unsigned int len;
+
+    while ((len = __js_game_client_dequeue_packet(packet.buffer)) > 0) {
+        if (NBN_Packet_InitRead(&packet, client->endpoint.protocol_id, len) < 0)
+            continue;
+
+        packet.sender = client->server_connection;
+
+        ClientDriver_OnPacketReceived(&packet);
+    }
+
+    return 0;
+}
+
+static int WebRTC_Client_SendPacket(NBN_GameClient *client, NBN_Packet *packet) {
+    return __js_game_client_send_packet(packet->buffer, packet->size);
+}
+
+#endif // __EMSCRIPTEN__
+
+/**
+ * ====================================================================== *
+ */
 
 #pragma region Packet simulator
 

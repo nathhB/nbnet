@@ -85,7 +85,6 @@ typedef struct NBN_WebRTC_Server {
         int key;
         NBN_WebRTC_Peer *value;
     } *peers;
-    uint32_t protocol_id;
 } NBN_WebRTC_Server;
 
 static NBN_WebRTC_Server nbn_wrtc_serv = {NULL, 0};

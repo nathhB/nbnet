@@ -130,7 +130,6 @@ int NBN_Reader_ReadString(NBN_Reader *reader, char *str, unsigned int max_len);
 typedef uint64_t NBN_Connection_ID;
 
 typedef struct NBN_ConnectionHandle {
-    // TODO: use 32 bits ID and 64 bits hash for the hashtable
     NBN_Connection_ID id;
     void *user_data;
 } NBN_ConnectionHandle;
@@ -477,6 +476,24 @@ NBN_MessageInfo NBN_GameServer_GetMessageInfo(void);
  * @return A structure containing network related stats about the game server
  */
 NBN_GameServerStats NBN_GameServer_GetStats(void);
+
+#ifdef __EMSCRIPTEN__
+
+/**
+ * - EMSCRIPTEN WEBRTC DRIVER SPECIFIC API -
+ */
+
+typedef struct NBN_WebRTC_Config {
+    bool enable_tls;
+    const char *cert_path;
+    const char *key_path;
+} NBN_WebRTC_Config;
+
+void NBN_WebRTC_SetConfig(NBN_WebRTC_Config config);
+
+/* ========================================================================== */
+
+#endif // __EMSCRIPTEN__
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
 

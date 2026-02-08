@@ -30,6 +30,10 @@
 #include "soak.h"
 #include "log.h"
 
+#ifdef __EMSCRIPTEN__
+#include "emscripten.h"
+#endif
+
 typedef struct {
     uint8_t channel_id;
     unsigned int msg_id;
@@ -272,11 +276,6 @@ int main(int argc, char *argv[]) {
 
     if (Soak_ReadCommandLine(argc, argv) < 0)
         return -1;
-
-#ifdef __EMSCRIPTEN__
-    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false}); // Register JS WebRTC driver
-#else
-#endif // __EMSCRIPTEN__
 
 #ifdef WEBRTC_NATIVE
     // Register native WebRTC driver
