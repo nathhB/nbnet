@@ -1663,7 +1663,7 @@ static int ServerDriver_OnClientPacketReceived(NBN_Packet *);
 
 static int GameClient_ProcessReceivedMessage(NBN_Message *, NBN_Connection *);
 static NBN_Client_Event GameClient_HandleEvent(void);
-static int GameClient_HandleMessageReceivedEvent(void);
+static NBN_Client_Event GameClient_HandleMessageReceivedEvent(void);
 static NBN_Connection *CreateServerConnection(NBN_Driver_ID driver_id);
 
 static void InitChannelModes(NBN_ChannelMode channel_modes[NBN_CHANNEL_COUNT]) {
@@ -2144,7 +2144,7 @@ void NBN_GameServer_Stop(void) {
 
 static NBN_Connection_ID NBN_BuildConnectionHash(NBN_Connection_ID id, NBN_Driver_ID driver_id) {
     NBN_Assert(id <= UINT64_MAX - 0xFF);
-    uint8_t driver_byte = NBN_DRIVER_UDP;
+    uint8_t driver_byte = driver_id;
 
     return ((NBN_Connection_ID)driver_byte << 56) | id;
 }
