@@ -17,8 +17,15 @@ add_executable(server server.c soak.c log.c cargs.c ../nbnet.c)
 
 add_compile_options(-Wall -Wextra -Wpedantic -std=c99)
 
-target_compile_definitions(client PUBLIC NBN_DEBUG SOAK_CLIENT)
-target_compile_definitions(server PUBLIC NBN_DEBUG SOAK_SERVER)
+if (CMAKE_BUILD_TYPE MATCHES "Debug")
+    message("Compiling in Debug mode with packet simulator enabled")
+
+    target_compile_definitions(client PUBLIC NBN_DEBUG NBN_USE_PACKET_SIMULATOR)
+    target_compile_definitions(server PUBLIC NBN_DEBUG NBN_USE_PACKET_SIMULATOR)
+endif()
+
+target_compile_definitions(client PUBLIC SOAK_CLIENT)
+target_compile_definitions(server PUBLIC SOAK_SERVER)
 target_compile_definitions(client PUBLIC NBN_CHANNEL_COUNT=4)
 target_compile_definitions(server PUBLIC NBN_CHANNEL_COUNT=4)
 

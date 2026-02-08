@@ -352,6 +352,55 @@ bool NBN_EventQueue_Enqueue(NBN_EventQueue *, NBN_Event);
 bool NBN_EventQueue_Dequeue(NBN_EventQueue *, NBN_Event *);
 bool NBN_EventQueue_IsEmpty(NBN_EventQueue *);
 
+#if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
+
+#ifndef NBN_PLATFORM_WINDOWS
+#include <pthread.h>
+#endif /* NBN_PLATFORM_WINDOWS */
+
+typedef struct NBN_PacketSimulatorEntry NBN_PacketSimulatorEntry;
+
+struct NBN_PacketSimulatorEntry {
+    NBN_Packet packet;
+    NBN_Connection *receiver;
+    double delay;
+    double enqueued_at;
+    struct NBN_PacketSimulatorEntry *next;
+    struct NBN_PacketSimulatorEntry *prev;
+};
+
+typedef struct NBN_PacketSimulator {
+    NBN_Endpoint *endpoint;
+    NBN_PacketSimulatorEntry *head_packet;
+    NBN_PacketSimulatorEntry *tail_packet;
+    unsigned int packet_count;
+
+#ifdef NBN_PLATFORM_WINDOWS
+    HANDLE queue_mutex;
+    HANDLE thread;
+#else
+    pthread_mutex_t queue_mutex;
+    pthread_t thread;
+#endif
+
+    bool running;
+    unsigned int total_dropped_packets;
+
+    /* Settings */
+    float packet_loss_ratio;
+    float current_packet_loss_ratio;
+    float packet_duplication_ratio;
+    double ping;
+    double jitter;
+} NBN_PacketSimulator;
+
+static void PacketSimulator_Init(NBN_PacketSimulator *, NBN_Endpoint *);
+static int PacketSimulator_EnqueuePacket(NBN_PacketSimulator *, NBN_Packet *, NBN_Connection *);
+static void PacketSimulator_Start(NBN_PacketSimulator *);
+static void PacketSimulator_Stop(NBN_PacketSimulator *);
+
+#endif /* NBN_DEBUG && NBN_USE_PACKET_SIMULATOR */
+
 struct NBN_Endpoint {
     NBN_EventQueue event_queue;
     uint32_t protocol_id;
@@ -1521,16 +1570,7 @@ bool NBN_EventQueue_IsEmpty(NBN_EventQueue *event_queue) { return event_queue->c
 
 #pragma endregion /* NBN_EventQueue */
 
-#pragma region NBN_Endpoint
-
-#if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
-
-static void PacketSimulator_Init(NBN_PacketSimulator *, NBN_Endpoint *);
-static int PacketSimulator_EnqueuePacket(NBN_PacketSimulator *, NBN_Packet *, NBN_Connection *);
-static void PacketSimulator_Start(NBN_PacketSimulator *);
-static void PacketSimulator_Stop(NBN_PacketSimulator *);
-
-#endif /* NBN_DEBUG && NBN_USE_PACKET_SIMULATOR */
+#pragma region Endpoint
 
 static void Endpoint_Init(NBN_Endpoint *, uint32_t, bool, NBN_ChannelMode[NBN_CHANNEL_COUNT]);
 static void Endpoint_Deinit(NBN_Endpoint *);
@@ -3227,6 +3267,20 @@ DWORD WINAPI PacketSimulator_Routine(LPVOID);
 static void *PacketSimulator_Routine(void *);
 #endif
 
+void NBN_GameClient_SetPing(float v) { nbn_game_client.endpoint.packet_simulator.ping = v; }
+void NBN_GameClient_SetJitter(float v) { nbn_game_client.endpoint.packet_simulator.jitter = v; }
+void NBN_GameClient_SetPacketLoss(float v) { nbn_game_client.endpoint.packet_simulator.packet_loss_ratio = v; }
+void NBN_GameClient_SetPacketDuplication(float v) {
+    nbn_game_client.endpoint.packet_simulator.packet_duplication_ratio = v;
+}
+
+void NBN_GameServer_SetPing(float v) { nbn_game_server.endpoint.packet_simulator.ping = v; }
+void NBN_GameServer_SetJitter(float v) { nbn_game_server.endpoint.packet_simulator.jitter = v; }
+void NBN_GameServer_SetPacketLoss(float v) { nbn_game_server.endpoint.packet_simulator.packet_loss_ratio = v; }
+void NBN_GameServer_SetPacketDuplication(float v) {
+    nbn_game_server.endpoint.packet_simulator.packet_duplication_ratio = v;
+}
+
 static int PacketSimulator_SendPacket(NBN_PacketSimulator *, NBN_Packet *, NBN_Connection *receiver);
 static unsigned int PacketSimulator_GetRandomDuplicatePacketCount(NBN_PacketSimulator *);
 
@@ -3306,6 +3360,10 @@ void PacketSimulator_Start(NBN_PacketSimulator *packet_simulator) {
 #endif
 
     packet_simulator->running = true;
+
+    LogDebug("Packet simulator started (Packet loss: %f, Packet duplication: %f, Ping: %f, Jitter: %f)",
+             packet_simulator->packet_loss_ratio, packet_simulator->packet_duplication_ratio, packet_simulator->ping,
+             packet_simulator->jitter);
 }
 
 void PacketSimulator_Stop(NBN_PacketSimulator *packet_simulator) {

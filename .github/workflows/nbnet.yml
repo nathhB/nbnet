@@ -175,7 +175,7 @@ jobs:
           cd soak
           mkdir build
           cd build
-          cmake -G "NMake Makefiles" ..
+          cmake -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Debug -DUDP=ON ..
           nmake
       - name: Run soak test
         run: ./bin/github-actions/run_soak.sh
