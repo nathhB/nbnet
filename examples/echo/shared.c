@@ -22,7 +22,6 @@
 
 #include <assert.h>
 #include <stdarg.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -30,9 +29,11 @@
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/emscripten.h>
 #elif defined(_WIN32) || defined(_WIN64)
+#define WIN32_LEAN_AND_MEAN
+// prevent inclusion of winnt.h in windows.h
+#define _WINNT_
 #include <synchapi.h>
 #include <windows.h>
-#include <winsock2.h>
 #else
 #include <time.h>
 #endif
