@@ -611,7 +611,16 @@ void NBN_Writer_Init(NBN_Writer *writer, uint8_t *buffer, unsigned int length) {
     writer->position = 0;
 }
 
+void NBN_Writer_WriteInt8(NBN_Writer *writer, int8_t value) { NBN_Writer_WriteUInt8(writer, value); }
+
 void NBN_Writer_WriteInt32(NBN_Writer *writer, int32_t value) { NBN_Writer_WriteUInt32(writer, value); }
+
+void NBN_Writer_WriteUInt8(NBN_Writer *writer, uint8_t value) {
+    NBN_Assert(writer->position + 1 <= writer->length);
+
+    writer->buffer[writer->position] = value;
+    writer->position++;
+}
 
 void NBN_Writer_WriteUInt16(NBN_Writer *writer, uint16_t value) {
     NBN_Assert(writer->position + 2 <= writer->length);
@@ -627,11 +636,11 @@ void NBN_Writer_WriteUInt32(NBN_Writer *writer, uint32_t value) {
     writer->position += 4;
 }
 
-void NBN_Writer_WriteUInt8(NBN_Writer *writer, uint8_t value) {
-    NBN_Assert(writer->position + 1 <= writer->length);
+void NBN_Writer_WriteUInt64(NBN_Writer *writer, uint64_t value) {
+    NBN_Assert(writer->position + 8 <= writer->length);
 
-    writer->buffer[writer->position] = value;
-    writer->position++;
+    *((uint64_t *)(writer->buffer + writer->position)) = htonll(value);
+    writer->position += 8;
 }
 
 void NBN_Writer_WriteFloat(NBN_Writer *writer, float value) {
@@ -640,6 +649,8 @@ void NBN_Writer_WriteFloat(NBN_Writer *writer, float value) {
     uint32_t *val_u = (uint32_t *)&value;
     NBN_Writer_WriteUInt32(writer, htonl(*val_u));
 }
+
+void NBN_Writer_WriteBool(NBN_Writer *writer, bool value) { NBN_Writer_WriteUInt8(writer, value); }
 
 void NBN_Writer_WriteBytes(NBN_Writer *writer, uint8_t *bytes, unsigned int length) {
     NBN_Assert(writer->position + length <= writer->length);
@@ -661,8 +672,21 @@ void NBN_Reader_Init(NBN_Reader *reader, uint8_t *buffer, unsigned int length) {
     reader->position = 0;
 }
 
+int NBN_Reader_ReadInt8(NBN_Reader *reader, int8_t *value) { return NBN_Reader_ReadUInt8(reader, (uint8_t *)value); }
+
 int NBN_Reader_ReadInt32(NBN_Reader *reader, int32_t *value) {
     return NBN_Reader_ReadUInt32(reader, (uint32_t *)value);
+}
+
+int NBN_Reader_ReadUInt8(NBN_Reader *reader, uint8_t *value) {
+    if (reader->position + 1 > reader->length) {
+        return NBN_ERROR;
+    }
+
+    *value = reader->buffer[reader->position];
+    reader->position++;
+
+    return 0;
 }
 
 int NBN_Reader_ReadUInt16(NBN_Reader *reader, uint16_t *value) {
@@ -687,19 +711,27 @@ int NBN_Reader_ReadUInt32(NBN_Reader *reader, uint32_t *value) {
     return 0;
 }
 
-int NBN_Reader_ReadUInt8(NBN_Reader *reader, uint8_t *value) {
-    if (reader->position + 1 > reader->length) {
+int NBN_Reader_ReadUInt64(NBN_Reader *reader, uint64_t *value) {
+    if (reader->position + 8 > reader->length) {
         return NBN_ERROR;
     }
 
-    *value = reader->buffer[reader->position];
-    reader->position++;
+    *value = ntohll(*((uint64_t *)(reader->buffer + reader->position)));
+    reader->position += 8;
 
     return 0;
 }
 
 int NBN_Reader_ReadFloat(NBN_Reader *reader, float *value) {
     if (NBN_Reader_ReadUInt32(reader, (uint32_t *)value) < 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int NBN_Reader_ReadBool(NBN_Reader *reader, bool *value) {
+    if (NBN_Reader_ReadUInt8(reader, (uint8_t *)value) < 0) {
         return -1;
     }
 

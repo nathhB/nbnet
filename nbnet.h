@@ -108,20 +108,26 @@ typedef struct NBN_Reader {
 } NBN_Reader;
 
 void NBN_Writer_Init(NBN_Writer *writer, uint8_t *buffer, unsigned int length);
+void NBN_Writer_WriteInt8(NBN_Writer *writer, int8_t value);
 void NBN_Writer_WriteInt32(NBN_Writer *writer, int32_t value);
+void NBN_Writer_WriteUInt8(NBN_Writer *writer, uint8_t value);
 void NBN_Writer_WriteUInt16(NBN_Writer *writer, uint16_t value);
 void NBN_Writer_WriteUInt32(NBN_Writer *writer, uint32_t value);
-void NBN_Writer_WriteUInt8(NBN_Writer *writer, uint8_t value);
+void NBN_Writer_WriteUInt64(NBN_Writer *writer, uint64_t value);
 void NBN_Writer_WriteFloat(NBN_Writer *writer, float value);
+void NBN_Writer_WriteBool(NBN_Writer *writer, bool value);
 void NBN_Writer_WriteBytes(NBN_Writer *writer, uint8_t *bytes, unsigned int length);
 void NBN_Writer_WriteString(NBN_Writer *writer, const char *str, unsigned int max_len);
 
 void NBN_Reader_Init(NBN_Reader *reader, uint8_t *buffer, unsigned int length);
+int NBN_Reader_ReadInt8(NBN_Reader *reader, int8_t *value);
 int NBN_Reader_ReadInt32(NBN_Reader *reader, int32_t *value);
+int NBN_Reader_ReadUInt8(NBN_Reader *reader, uint8_t *value);
 int NBN_Reader_ReadUInt16(NBN_Reader *reader, uint16_t *value);
 int NBN_Reader_ReadUInt32(NBN_Reader *reader, uint32_t *value);
-int NBN_Reader_ReadUInt8(NBN_Reader *reader, uint8_t *value);
+int NBN_Reader_ReadUInt64(NBN_Reader *reader, uint64_t *value);
 int NBN_Reader_ReadFloat(NBN_Reader *reader, float *value);
+int NBN_Reader_ReadBool(NBN_Reader *reader, bool *value);
 int NBN_Reader_ReadBytes(NBN_Reader *reader, uint8_t *bytes, unsigned int length);
 int NBN_Reader_ReadString(NBN_Reader *reader, char *str, unsigned int max_len);
 
