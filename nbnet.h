@@ -31,7 +31,7 @@
 #define NBN_ERROR -1
 
 /**
- * - CONFIGURATION -
+ * ====== CONFIGURATION ======
  *
  * The macros below can be redefined to change how the library behaves.
  */
@@ -353,7 +353,7 @@ int NBN_GameServer_Start(void);
 void NBN_GameServer_Stop(void);
 
 // TODO: doc
-NBN_ConnectionHandle *NBN_GameServer_FindConnection(NBN_Connection_ID);
+NBN_ConnectionHandle *NBN_GameServer_GetConnection(NBN_Connection_ID);
 
 // TODO: doc
 unsigned int NBN_GameServer_GetClientCount(void);
