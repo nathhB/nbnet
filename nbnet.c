@@ -605,6 +605,23 @@ void NBN_WebRTC_SetConfig(NBN_WebRTC_Config config);
 
 #pragma region Serialization
 
+static union {
+    uint64_t v;
+    uint8_t bytes[8];
+} swap;
+
+static uint64_t SwapBytes64(uint64_t v) {
+    if (htonl(1) == 1) {
+        return v;
+    }
+
+    swap.v = v;
+
+    return ((uint64_t)swap.bytes[0] << 56) | ((uint64_t)swap.bytes[1] << 48) | ((uint64_t)swap.bytes[2] << 40) |
+           ((uint64_t)swap.bytes[3] << 32) | ((uint64_t)swap.bytes[4] << 24) | ((uint64_t)swap.bytes[5] << 16) |
+           ((uint64_t)swap.bytes[6] << 8) | (uint64_t)swap.bytes[7];
+}
+
 void NBN_Writer_Init(NBN_Writer *writer, uint8_t *buffer, unsigned int length) {
     writer->buffer = buffer;
     writer->length = length;
@@ -639,7 +656,7 @@ void NBN_Writer_WriteUInt32(NBN_Writer *writer, uint32_t value) {
 void NBN_Writer_WriteUInt64(NBN_Writer *writer, uint64_t value) {
     NBN_Assert(writer->position + 8 <= writer->length);
 
-    *((uint64_t *)(writer->buffer + writer->position)) = htonll(value);
+    *((uint64_t *)(writer->buffer + writer->position)) = htonl(1) == 1 ? value : SwapBytes64(value);
     writer->position += 8;
 }
 
@@ -716,7 +733,12 @@ int NBN_Reader_ReadUInt64(NBN_Reader *reader, uint64_t *value) {
         return NBN_ERROR;
     }
 
-    *value = ntohll(*((uint64_t *)(reader->buffer + reader->position)));
+    *value = *((uint64_t *)(reader->buffer + reader->position));
+
+    if (htonl(1) != 1) {
+        *value = SwapBytes64(*value);
+    }
+
     reader->position += 8;
 
     return 0;
