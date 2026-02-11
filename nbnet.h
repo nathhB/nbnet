@@ -25,16 +25,14 @@
 #ifndef NBNET_H
 #define NBNET_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <stdbool.h>
 
 #define NBN_ERROR -1
-
-/**
- * ====== CONFIGURATION ======
- *
- * The macros below can be redefined to change how the library behaves.
- */
 
 // TODO: doc
 #ifndef NBN_SERVER_INITIAL_DATA_MAX_SIZE
@@ -72,66 +70,6 @@
 #ifndef NBN_CONNECTION_STALE_TIME_THRESHOLD
 #define NBN_CONNECTION_STALE_TIME_THRESHOLD 3
 #endif
-
-/* ========================================================================== */
-
-typedef enum NBN_LogLevel { NBN_LOG_ERROR, NBN_LOG_INFO, NBN_LOG_WARNING, NBN_LOG_DEBUG } NBN_LogLevel;
-
-void NBN_SetLogLevel(NBN_LogLevel);
-
-/**
- * - SERIALIZATION API -
- *
- * Functions to read and write nbnet messages.
- *
- * You'll never need to create a reader or writer yourself - nbnet will provide pointers to
- * NBN_Reader or NBN_Writer, see the client and server API sections.
- *
- * NBN_Writer_Write* functions will assert if trying to write outside the buffer.
- *
- * NBN_Reader_Read* functions returns NBN_ERROR if trying to read outside the buffer.
- * If read successully, 0 is returned and the value pointer points to the read value.
- *
- * Write and Read functions account for endianness.
- */
-
-typedef struct NBN_Writer {
-    uint8_t *buffer;
-    unsigned int length;
-    unsigned int position;
-} NBN_Writer;
-
-typedef struct NBN_Reader {
-    uint8_t *buffer;
-    unsigned int length;
-    unsigned int position;
-} NBN_Reader;
-
-void NBN_Writer_Init(NBN_Writer *writer, uint8_t *buffer, unsigned int length);
-void NBN_Writer_WriteInt8(NBN_Writer *writer, int8_t value);
-void NBN_Writer_WriteInt32(NBN_Writer *writer, int32_t value);
-void NBN_Writer_WriteUInt8(NBN_Writer *writer, uint8_t value);
-void NBN_Writer_WriteUInt16(NBN_Writer *writer, uint16_t value);
-void NBN_Writer_WriteUInt32(NBN_Writer *writer, uint32_t value);
-void NBN_Writer_WriteUInt64(NBN_Writer *writer, uint64_t value);
-void NBN_Writer_WriteFloat(NBN_Writer *writer, float value);
-void NBN_Writer_WriteBool(NBN_Writer *writer, bool value);
-void NBN_Writer_WriteBytes(NBN_Writer *writer, uint8_t *bytes, unsigned int length);
-void NBN_Writer_WriteString(NBN_Writer *writer, const char *str, unsigned int max_len);
-
-void NBN_Reader_Init(NBN_Reader *reader, uint8_t *buffer, unsigned int length);
-int NBN_Reader_ReadInt8(NBN_Reader *reader, int8_t *value);
-int NBN_Reader_ReadInt32(NBN_Reader *reader, int32_t *value);
-int NBN_Reader_ReadUInt8(NBN_Reader *reader, uint8_t *value);
-int NBN_Reader_ReadUInt16(NBN_Reader *reader, uint16_t *value);
-int NBN_Reader_ReadUInt32(NBN_Reader *reader, uint32_t *value);
-int NBN_Reader_ReadUInt64(NBN_Reader *reader, uint64_t *value);
-int NBN_Reader_ReadFloat(NBN_Reader *reader, float *value);
-int NBN_Reader_ReadBool(NBN_Reader *reader, bool *value);
-int NBN_Reader_ReadBytes(NBN_Reader *reader, uint8_t *bytes, unsigned int length);
-int NBN_Reader_ReadString(NBN_Reader *reader, char *str, unsigned int max_len);
-
-/* ============================================= */
 
 typedef uint64_t NBN_Connection_ID;
 
@@ -183,10 +121,6 @@ typedef struct NBN_MessageInfo {
 // TODO: doc
 typedef enum NBN_ChannelMode { NBN_CHANNEL_UNRELIABLE, NBN_CHANNEL_RELIABLE } NBN_ChannelMode;
 
-/**
- * - CLIENT API -
- */
-
 typedef enum NBN_Client_Event {
     NBN_CLIENT_ERROR = NBN_ERROR,
 
@@ -201,6 +135,73 @@ typedef enum NBN_Client_Event {
     /* Client has received a message from the server */
     NBN_CLIENT_MESSAGE_RECEIVED
 } NBN_Client_Event;
+
+typedef enum NBN_Server_Event {
+    NBN_SERVER_ERROR = NBN_ERROR,
+
+    NBN_SERVER_NO_EVENT = 0,
+
+    /* A new client has connected */
+    NBN_SERVER_NEW_CONNECTION,
+
+    /* A client has disconnected */
+    NBN_SERVER_DISCONNECTION,
+
+    /* A message has been received from a client */
+    NBN_SERVER_MESSAGE_RECEIVED
+} NBN_Server_Event;
+
+typedef struct NBN_GameServerStats {
+    float upload_bandwidth;   /* Total upload bandwith of the game server */
+    float download_bandwidth; /* Total download bandwith of the game server */
+} NBN_GameServerStats;
+
+typedef struct NBN_DisconnectionInfo {
+    NBN_Connection_ID conn_id; /* ID if the disconnected connection */
+    void *user_data;           /* Pointer to user-defined data associated with this connection */
+} NBN_DisconnectionInfo;
+
+typedef unsigned int NBN_Client_Iterator;
+
+typedef struct NBN_Writer {
+    uint8_t *buffer;
+    unsigned int length;
+    unsigned int position;
+} NBN_Writer;
+
+typedef struct NBN_Reader {
+    uint8_t *buffer;
+    unsigned int length;
+    unsigned int position;
+} NBN_Reader;
+
+typedef enum NBN_LogLevel { NBN_LOG_ERROR, NBN_LOG_INFO, NBN_LOG_WARNING, NBN_LOG_DEBUG } NBN_LogLevel;
+
+void NBN_SetLogLevel(NBN_LogLevel);
+
+void NBN_Writer_Init(NBN_Writer *writer, uint8_t *buffer, unsigned int length);
+void NBN_Writer_WriteInt8(NBN_Writer *writer, int8_t value);
+void NBN_Writer_WriteInt32(NBN_Writer *writer, int32_t value);
+void NBN_Writer_WriteUInt8(NBN_Writer *writer, uint8_t value);
+void NBN_Writer_WriteUInt16(NBN_Writer *writer, uint16_t value);
+void NBN_Writer_WriteUInt32(NBN_Writer *writer, uint32_t value);
+void NBN_Writer_WriteUInt64(NBN_Writer *writer, uint64_t value);
+void NBN_Writer_WriteFloat(NBN_Writer *writer, float value);
+void NBN_Writer_WriteBool(NBN_Writer *writer, bool value);
+void NBN_Writer_WriteBytes(NBN_Writer *writer, uint8_t *bytes, unsigned int length);
+void NBN_Writer_WriteString(NBN_Writer *writer, const char *str, unsigned int max_len);
+
+void NBN_Reader_Init(NBN_Reader *reader, uint8_t *buffer, unsigned int length);
+int NBN_Reader_ReadInt8(NBN_Reader *reader, int8_t *value);
+int NBN_Reader_ReadInt32(NBN_Reader *reader, int32_t *value);
+int NBN_Reader_ReadUInt8(NBN_Reader *reader, uint8_t *value);
+int NBN_Reader_ReadUInt16(NBN_Reader *reader, uint16_t *value);
+int NBN_Reader_ReadUInt32(NBN_Reader *reader, uint32_t *value);
+int NBN_Reader_ReadUInt64(NBN_Reader *reader, uint64_t *value);
+int NBN_Reader_ReadFloat(NBN_Reader *reader, float *value);
+int NBN_Reader_ReadBool(NBN_Reader *reader, bool *value);
+int NBN_Reader_ReadBytes(NBN_Reader *reader, uint8_t *bytes, unsigned int length);
+int NBN_Reader_ReadString(NBN_Reader *reader, char *str, unsigned int max_len);
 
 /**
  * Initialize the game client with minimal configuration.
@@ -298,35 +299,6 @@ int NBN_GameClient_GetServerCloseCode(void);
  * @return true if connected, false otherwise
  */
 bool NBN_GameClient_IsConnected(void);
-
-/* ============================================= */
-
-typedef enum NBN_Server_Event {
-    NBN_SERVER_ERROR = NBN_ERROR,
-
-    NBN_SERVER_NO_EVENT = 0,
-
-    /* A new client has connected */
-    NBN_SERVER_NEW_CONNECTION,
-
-    /* A client has disconnected */
-    NBN_SERVER_DISCONNECTION,
-
-    /* A message has been received from a client */
-    NBN_SERVER_MESSAGE_RECEIVED
-} NBN_Server_Event;
-
-typedef struct NBN_GameServerStats {
-    float upload_bandwidth;   /* Total upload bandwith of the game server */
-    float download_bandwidth; /* Total download bandwith of the game server */
-} NBN_GameServerStats;
-
-typedef struct NBN_DisconnectionInfo {
-    NBN_Connection_ID conn_id; /* ID if the disconnected connection */
-    void *user_data;           /* Pointer to user-defined data associated with this connection */
-} NBN_DisconnectionInfo;
-
-typedef unsigned int NBN_Client_Iterator;
 
 /**
  * Initialize the game server with minimal configuration.
@@ -497,8 +469,6 @@ typedef struct NBN_WebRTC_Config {
 
 void NBN_WebRTC_SetConfig(NBN_WebRTC_Config config);
 
-/* ========================================================================== */
-
 #endif // __EMSCRIPTEN__
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
@@ -530,5 +500,9 @@ void NBN_GameServer_SetPacketDuplication(float v);
 #define NBN_GameServer_SetPacketDuplication(v) NBN_PacketSimulator_Disabled
 
 #endif /* NBN_DEBUG && NBN_USE_PACKET_SIMULATOR */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* NBNET_H */
