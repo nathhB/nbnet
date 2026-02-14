@@ -29,6 +29,9 @@ target_compile_definitions(server PUBLIC SOAK_SERVER)
 target_compile_definitions(client PUBLIC NBN_CHANNEL_COUNT=4)
 target_compile_definitions(server PUBLIC NBN_CHANNEL_COUNT=4)
 
+target_include_directories(client PUBLIC "../")
+target_include_directories(server PUBLIC "../")
+
 option(WEBRTC_NATIVE OFF)
 option(UDP OFF)
 
@@ -52,16 +55,13 @@ if (WEBRTC_NATIVE)
     message(SEND_ERROR "Can't compile WebRTC native driver with emscripten")
   endif (EMSCRIPTEN)
 
-  message("Compiling with WebRTC native driver")
+  message("Compiling server with WebRTC native driver")
 
   target_compile_definitions(server PUBLIC NBN_WEBRTC_NATIVE)
-  target_compile_definitions(client PUBLIC NBN_WEBRTC_NATIVE)
 
   target_link_libraries(server ${LIBDATACHANNEL_LIBRARY_PATH} m)
-  target_link_libraries(client ${LIBDATACHANNEL_LIBRARY_PATH} m)
 
   target_include_directories(server PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
-  target_include_directories(client PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
 
 endif (WEBRTC_NATIVE)
 
@@ -85,7 +85,7 @@ endif (UNIX)
 if (EMSCRIPTEN)
     set(ASYNCIFY_IMPORTS "[\"__js_game_server_start\", \"__js_game_client_start\", \"__js_game_client_close\"]")
 
-    set_target_properties(server PROPERTIES LINK_FLAGS "--js-library ${CMAKE_CURRENT_SOURCE_DIR}/../net_drivers/webrtc/js/api.js \
+    set_target_properties(server PROPERTIES LINK_FLAGS "--js-library ${CMAKE_CURRENT_SOURCE_DIR}/../webrtc/js/api.js \
     -s EXPORTED_RUNTIME_METHODS=[HEAPU8] \
     -s TOTAL_MEMORY=30MB \
     -s USE_PTHREADS=1 \
@@ -96,7 +96,7 @@ if (EMSCRIPTEN)
     -s ASYNCIFY \
     -s ASYNCIFY_IMPORTS=\"${ASYNCIFY_IMPORTS}\"")
 
-    set_target_properties(client PROPERTIES LINK_FLAGS "--js-library ${CMAKE_CURRENT_SOURCE_DIR}/../net_drivers/webrtc/js/api.js \
+    set_target_properties(client PROPERTIES LINK_FLAGS "--js-library ${CMAKE_CURRENT_SOURCE_DIR}/../webrtc/js/api.js \
     -s TOTAL_MEMORY=30MB \
     -s USE_PTHREADS=1 \
     -s PTHREAD_POOL_SIZE=4 \

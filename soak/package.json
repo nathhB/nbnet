@@ -4,6 +4,6 @@
         "client": "node build_web/client.js"
     },
     "dependencies": {
-        "nbnet": "file:../net_drivers/webrtc"
+        "nbnet": "file:../webrtc"
     }
 }

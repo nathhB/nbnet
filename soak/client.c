@@ -213,8 +213,10 @@ static int Tick(void *data) {
     int ev;
 
     while ((ev = NBN_GameClient_Poll()) != NBN_CLIENT_NO_EVENT) {
-        if (ev < 0)
+        if (ev < 0) {
+            log_error("Error while poling client events");
             return -1;
+        }
 
         switch (ev) {
         case NBN_CLIENT_DISCONNECTED:
@@ -230,8 +232,10 @@ static int Tick(void *data) {
             break;
 
         case NBN_CLIENT_MESSAGE_RECEIVED:
-            if (HandleReceivedMessage(channels) < 0)
+            if (HandleReceivedMessage(channels) < 0) {
+                log_error("Error processing received message");
                 return -1;
+            }
             break;
         }
     }
@@ -263,24 +267,6 @@ int main(int argc, char *argv[]) {
         return -1;
 
     SoakOptions options = Soak_GetOptions();
-
-#ifdef WEBRTC_NATIVE
-
-    if (options.webrtc) {
-        // Register the native WebRTC driver
-        const char *ice_servers[] = {"stun:stun01.sipphone.com"};
-        NBN_WebRTC_Native_Config cfg = {.ice_servers = ice_servers,
-                                        .ice_servers_count = 1,
-                                        .enable_tls = false,
-                                        .cert_path = NULL,
-                                        .key_path = NULL,
-                                        .passphrase = NULL,
-                                        .log_level = RTC_LOG_VERBOSE};
-
-        NBN_WebRTC_Native_Register(cfg);
-    }
-
-#endif // WEBRTC_NATIVE
 
     NBN_GameClient_Init(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT);
 
@@ -329,14 +315,6 @@ int main(int argc, char *argv[]) {
 
     NBN_GameClient_Stop();
     free(channels);
-
-#ifdef WEBRTC_NATIVE
-
-    if (options.webrtc) {
-        NBN_WebRTC_Native_Unregister();
-    }
-
-#endif // WEBRTC_NATIVE
 
 #ifdef __EMSCRIPTEN__
     emscripten_force_exit(ret);

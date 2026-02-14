@@ -27,6 +27,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "nbnet.h"
 #include "soak.h"
 #include "log.h"
 
@@ -276,20 +277,6 @@ int main(int argc, char *argv[]) {
 
     if (Soak_ReadCommandLine(argc, argv) < 0)
         return -1;
-
-#ifdef WEBRTC_NATIVE
-    // Register native WebRTC driver
-    const char *ice_servers[] = {"stun:stun01.sipphone.com"};
-    NBN_WebRTC_Native_Config cfg = {.ice_servers = ice_servers,
-                                    .ice_servers_count = 1,
-                                    .enable_tls = false,
-                                    .cert_path = NULL,
-                                    .key_path = NULL,
-                                    .passphrase = NULL,
-                                    .log_level = RTC_LOG_VERBOSE};
-
-    NBN_WebRTC_Native_Register(cfg);
-#endif // WEBRTC_NATIVE
 
     SoakOptions options = Soak_GetOptions();
 
