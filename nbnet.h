@@ -181,7 +181,9 @@ void NBN_SetLogLevel(NBN_LogLevel);
 
 void NBN_Writer_Init(NBN_Writer *writer, uint8_t *buffer, unsigned int length);
 void NBN_Writer_WriteInt8(NBN_Writer *writer, int8_t value);
+void NBN_Writer_WriteInt16(NBN_Writer *writer, int16_t value);
 void NBN_Writer_WriteInt32(NBN_Writer *writer, int32_t value);
+void NBN_Writer_WriteInt64(NBN_Writer *writer, int64_t value);
 void NBN_Writer_WriteUInt8(NBN_Writer *writer, uint8_t value);
 void NBN_Writer_WriteUInt16(NBN_Writer *writer, uint16_t value);
 void NBN_Writer_WriteUInt32(NBN_Writer *writer, uint32_t value);
@@ -193,7 +195,9 @@ void NBN_Writer_WriteString(NBN_Writer *writer, const char *str, unsigned int ma
 
 void NBN_Reader_Init(NBN_Reader *reader, uint8_t *buffer, unsigned int length);
 int NBN_Reader_ReadInt8(NBN_Reader *reader, int8_t *value);
+int NBN_Reader_ReadInt16(NBN_Reader *reader, int16_t *value);
 int NBN_Reader_ReadInt32(NBN_Reader *reader, int32_t *value);
+int NBN_Reader_ReadInt64(NBN_Reader *reader, int64_t *value);
 int NBN_Reader_ReadUInt8(NBN_Reader *reader, uint8_t *value);
 int NBN_Reader_ReadUInt16(NBN_Reader *reader, uint16_t *value);
 int NBN_Reader_ReadUInt32(NBN_Reader *reader, uint32_t *value);
