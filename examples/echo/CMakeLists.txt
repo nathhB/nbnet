@@ -80,7 +80,7 @@ endif (UNIX)
 if (EMSCRIPTEN)
     set(ASYNCIFY_IMPORTS "[\"__js_game_server_start\", \"__js_game_client_start\", \"__js_game_client_close\"]")
 
-    set_target_properties(echo_server PROPERTIES LINK_FLAGS "--js-library ${CMAKE_CURRENT_SOURCE_DIR}/../../net_drivers/webrtc/js/api.js \
+    set_target_properties(echo_server PROPERTIES LINK_FLAGS "--js-library ${CMAKE_CURRENT_SOURCE_DIR}/../../webrtc/js/api.js \
     -s ALLOW_MEMORY_GROWTH=1 \
     -s TOTAL_MEMORY=30MB \
     -s EXIT_RUNTIME=1 \
@@ -88,7 +88,7 @@ if (EMSCRIPTEN)
     -s ASYNCIFY \
     -s ASYNCIFY_IMPORTS=\"${ASYNCIFY_IMPORTS}\"")
 
-    set_target_properties(echo_client PROPERTIES LINK_FLAGS "--js-library ${CMAKE_CURRENT_SOURCE_DIR}/../../net_drivers/webrtc/js/api.js \
+    set_target_properties(echo_client PROPERTIES LINK_FLAGS "--js-library ${CMAKE_CURRENT_SOURCE_DIR}/../../webrtc/js/api.js \
     -s ALLOW_MEMORY_GROWTH=1 \
     -s TOTAL_MEMORY=30MB \
     -s EXIT_RUNTIME=1 \

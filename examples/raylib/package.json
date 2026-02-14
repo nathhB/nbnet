@@ -3,6 +3,6 @@
         "server": "node raylib_server.js"
     },
     "dependencies": {
-        "nbnet": "file:../../net_drivers/webrtc"
+        "nbnet": "file:../../webrtc"
     }
 }
