@@ -98,7 +98,7 @@ jobs:
           npm update
           npm install -g node-pre-gyp
           npm install -g node-gyp
-          cd net_drivers/webrtc
+          cd webrtc
           npm install --build-from-resource
       - name: Compile soak test
         run: ./bin/github-actions/build_soak_web.sh
@@ -154,7 +154,7 @@ jobs:
           npm update
           npm install -g node-pre-gyp
           npm install -g node-gyp
-          cd net_drivers/webrtc
+          cd webrtc
           npm install --build-from-resource
       - name: Compile soak test
         run: ./bin/github-actions/build_soak_web.sh 
@@ -195,7 +195,7 @@ jobs:
           npm update
           npm install -g node-pre-gyp
           npm install -g node-gyp
-          cd net_drivers/webrtc
+          cd webrtc
           npm install --build-from-resource
       - name: Compile soak test (native)
         run: |
