@@ -488,10 +488,24 @@ typedef struct NBN_WebRTC_Config {
     rtcLogLevel log_level;
 } NBN_WebRTC_Config;
 
-#define NBN_WEBRTC_DEFAULT_CONFIG(ice_servers, ice_servers_count)                                                      \
+static const char *default_ice_servers[] = {"stun:stun01.sipphone.com"};
+
+#ifdef NBN_DEBUG
+
+#define NBN_DEFAULT_RTC_LOG_LEVEL RTC_LOG_DEBUG
+
+#else
+
+#define NBN_DEFAULT_RTC_LOG_LEVEL RTC_LOG_ERROR
+
+#endif // NBN_DEBUG
+
+#define NBN_WEBRTC_DEFAULT_CONFIG                                                                                      \
     (NBN_WebRTC_Config) {                                                                                              \
-        .enable_tls = false, .cert_path = NULL, .key_path = NULL, .passphrase = NULL, .ice_servers = ice_servers,      \
-        .ice_servers_count = ice_servers_count, .log_level = RTC_LOG_ERROR                                             \
+        .enable_tls = false, .cert_path = NULL, .key_path = NULL, .passphrase = NULL,                                  \
+        .ice_servers = default_ice_servers,                                                                            \
+        .ice_servers_count = sizeof(default_ice_servers) / sizeof(default_ice_servers[0]),                             \
+        .log_level = NBN_DEFAULT_RTC_LOG_LEVEL                                                                         \
     }
 
 void NBN_WebRTC_SetConfig(NBN_WebRTC_Config config);

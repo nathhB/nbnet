@@ -526,7 +526,8 @@ static int UDP_Server_RecvPackets(NBN_GameServer *server);
 static int UDP_Server_SendPacketTo(NBN_GameServer *server, NBN_Packet *packet, NBN_Connection *connection);
 static void UDP_Server_CleanupConnection(NBN_GameServer *server, NBN_Connection *connection);
 
-static NBN_Driver nbn_udp_driver = {.name = "UDP",
+static NBN_Driver nbn_udp_driver = {.id = NBN_DRIVER_UDP,
+                                    .name = "UDP",
                                     .impl = {// Client implementation
                                              .cli_start = UDP_Client_Start,
                                              .cli_stop = UDP_Client_Stop,
@@ -569,7 +570,8 @@ static int WebRTC_Server_RecvPackets(NBN_GameServer *server);
 static int WebRTC_Server_SendPacketTo(NBN_GameServer *server, NBN_Packet *packet, NBN_Connection *connection);
 static void WebRTC_Server_CleanupConnection(NBN_GameServer *server, NBN_Connection *connection);
 
-static NBN_Driver nbn_webrtc_em_driver = {.name = "WebRTC_EMSCRIPTEN",
+static NBN_Driver nbn_webrtc_em_driver = {.id = NBN_DRIVER_WEBRTC_EMSCRIPTEN,
+                                          .name = "WebRTC_EMSCRIPTEN",
                                           .impl = {// Client implementation
                                                    .cli_start = WebRTC_Client_Start,
                                                    .cli_stop = WebRTC_Client_Stop,
@@ -601,6 +603,7 @@ static int WebRTC_Native_Server_SendPacketTo(NBN_GameServer *server, NBN_Packet 
 static void WebRTC_Native_Server_CleanupConnection(NBN_GameServer *server, NBN_Connection *connection);
 
 static NBN_Driver nbn_webrtc_native_driver = {
+    .id = NBN_DRIVER_WEBRTC_NATIVE,
     .name = "WebRTC_NATIVE",
     .impl = {// Client implementation
              .cli_start = WebRTC_Native_Client_Start,
@@ -614,6 +617,8 @@ static NBN_Driver nbn_webrtc_native_driver = {
              .serv_recv_packets = WebRTC_Native_Server_RecvPackets,
              .serv_send_packet_to = WebRTC_Native_Server_SendPacketTo,
              .serv_cleanup_connection = WebRTC_Native_Server_CleanupConnection}};
+
+static NBN_WebRTC_Config nbn_wrtc_cfg = NBN_WEBRTC_DEFAULT_CONFIG;
 
 #endif // NBN_WEBRTC_NATIVE
 
@@ -1874,6 +1879,7 @@ static int StartClientDrivers(const char *host, uint16_t port) {
         return NBN_ERROR;
     }
 
+    LogInfo("%s driver started", nbn_udp_driver.name);
     driver_count++;
 #endif // NBN_UDP
 
@@ -1885,6 +1891,7 @@ static int StartClientDrivers(const char *host, uint16_t port) {
         return NBN_ERROR;
     }
 
+    LogInfo("%s driver started", nbn_webrtc_native_driver.name);
     driver_count++;
 #endif // NBN_WEBRTC_NATIVE
 
@@ -1896,6 +1903,7 @@ static int StartClientDrivers(const char *host, uint16_t port) {
         return NBN_ERROR;
     }
 
+    LogInfo("%s driver started", nbn_webrtc_em_driver.name);
     driver_count++;
 #endif // __EMSCRIPTEN__
 
@@ -2303,6 +2311,7 @@ static int StartServerDrivers(uint16_t port) {
         return NBN_ERROR;
     }
 
+    LogInfo("%s driver started", nbn_udp_driver.name);
     driver_count++;
 #endif // NBN_UDP
 
@@ -2312,6 +2321,7 @@ static int StartServerDrivers(uint16_t port) {
         return NBN_ERROR;
     }
 
+    LogInfo("%s driver started", nbn_webrtc_native_driver.name);
     driver_count++;
 #endif // NBN_WEBRTC_NATIVE
 
@@ -2321,6 +2331,7 @@ static int StartServerDrivers(uint16_t port) {
         return NBN_ERROR;
     }
 
+    LogInfo("%s driver started", nbn_webrtc_em_driver.name);
     driver_count++;
 #endif // __EMSCRIPTEN__
 
@@ -2912,6 +2923,8 @@ static bool GameServer_HandleMessageReceivedEvent(NBN_Server_Event *ev) {
     // at this point we know it's a connection request
     NBN_Assert(message_info.type == NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
 
+    LogDebug("Received a connection request from client %ul", sender->handle.id);
+
     if (message_info.length < 4) {
         LogError("Connection request invalid length");
 
@@ -3262,7 +3275,7 @@ static int UDP_Client_SendPacket(NBN_GameClient *client, NBN_Packet *packet) {
 /**
  * JS API
  *
- * See net_drivers/webrtc/js for the implementation of these functions.
+ * See webrtc/js folder for the implementation of these functions.
  */
 
 extern void __js_game_server_init(uint32_t, bool, const char *, const char *);
@@ -3724,6 +3737,10 @@ static int WebRTC_Native_Server_RecvPackets(NBN_GameServer *server) {
 
     for (unsigned int i = 0; i < hmlen(nbn_game_server.clients); i++) {
         NBN_Connection *conn = server->clients[i].value;
+
+        if (conn->driver->id != NBN_DRIVER_WEBRTC_NATIVE)
+            continue;
+
         int channel_id = conn->driver_data.webrtc.channel_id;
 
         while (rtcReceiveMessage(channel_id, (char *)packet.buffer, &size) == RTC_ERR_SUCCESS) {
