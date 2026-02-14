@@ -54,8 +54,8 @@ if (WEBRTC_NATIVE)
 
   message("Compiling with WebRTC native driver")
 
-  target_compile_definitions(server PUBLIC WEBRTC_NATIVE)
-  target_compile_definitions(client PUBLIC WEBRTC_NATIVE)
+  target_compile_definitions(server PUBLIC NBN_WEBRTC_NATIVE)
+  target_compile_definitions(client PUBLIC NBN_WEBRTC_NATIVE)
 
   target_link_libraries(server ${LIBDATACHANNEL_LIBRARY_PATH} m)
   target_link_libraries(client ${LIBDATACHANNEL_LIBRARY_PATH} m)
