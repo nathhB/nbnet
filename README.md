@@ -8,6 +8,9 @@
 
 [![](https://dcbadge.vercel.app/api/server/P9N7fy677D)](https://discord.gg/P9N7fy677D)
 
+> [!IMPORTANT]  
+> If you are interested in giving nbnet a try, please consider using version 3.0 (available in 3.0 branch). I'm still working on it, but it's usable already and will be released soon(TM). 3.0 improves a lot of stuff internally and provides a cleaner API. The documentation is lacking (all READMEs are obsolete), but you can look at the examples, which are up to date.
+
 nbnet is a single header C (C99) library designed to implement client-server architecture, more precisely for online video games. The library is based on this [great series of articles](https://gafferongames.com/) by Glenn Fiedler.
 
 nbnet can target different protocols such as UDP or [WebRTC](WEBRTC.md) through "drivers" (see below for more information).
