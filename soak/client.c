@@ -278,8 +278,6 @@ int main(int argc, char *argv[]) {
                                         .log_level = RTC_LOG_VERBOSE};
 
         NBN_WebRTC_Native_Register(cfg);
-    } else {
-        NBN_UDP_Register();
     }
 
 #endif // WEBRTC_NATIVE

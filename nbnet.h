@@ -457,9 +457,7 @@ NBN_GameServerStats NBN_GameServer_GetStats(void);
 
 #ifdef __EMSCRIPTEN__
 
-/**
- * - EMSCRIPTEN WEBRTC DRIVER SPECIFIC API -
- */
+/* EMSCRIPTEN WEBRTC DRIVER SPECIFIC API */
 
 typedef struct NBN_WebRTC_Config {
     bool enable_tls;
@@ -469,7 +467,36 @@ typedef struct NBN_WebRTC_Config {
 
 void NBN_WebRTC_SetConfig(NBN_WebRTC_Config config);
 
+// TODO: ice servers currently hard coded in driver js code
+#define NBN_WEBRTC_DEFAULT_CONFIG (NBN_WebRTC_Config){.enable_tls = false, .cert_path = NULL, .key_path = NULL};
+
 #endif // __EMSCRIPTEN__
+
+#ifdef NBN_WEBRTC_NATIVE
+
+/* NATIVE WEBRTC DRIVER SPECIFIC API */
+
+#include <rtc/rtc.h>
+
+typedef struct NBN_WebRTC_Config {
+    bool enable_tls;
+    const char *cert_path;
+    const char *key_path;
+    const char *passphrase;
+    const char **ice_servers;
+    unsigned int ice_servers_count;
+    rtcLogLevel log_level;
+} NBN_WebRTC_Config;
+
+#define NBN_WEBRTC_DEFAULT_CONFIG(ice_servers, ice_servers_count)                                                      \
+    (NBN_WebRTC_Config) {                                                                                              \
+        .enable_tls = false, .cert_path = NULL, .key_path = NULL, .passphrase = NULL, .ice_servers = ice_servers,      \
+        .ice_servers_count = ice_servers_count, .log_level = RTC_LOG_ERROR                                             \
+    }
+
+void NBN_WebRTC_SetConfig(NBN_WebRTC_Config config);
+
+#endif
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
 

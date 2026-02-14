@@ -110,7 +110,7 @@ static char *NBN_WebRTC_Native_ParseSignalingMessage(const char *msg, size_t msg
     struct json_object_element_s *curr = object->start;
 
     if (root->type != json_type_object) {
-        NBN_LogDebug("Received an invalid signaling message: %s", msg);
+        LogDebug("Received an invalid signaling message: %s", msg);
         goto leave_free_root;
     }
 
