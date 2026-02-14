@@ -202,7 +202,9 @@ jobs:
           cd soak
           mkdir build
           cd build
-          cmake -DLIBDATACHANNEL_LIBRARY_PATH=${{ github.workspace }}/libdatachannel/build/libdatachannel.so -DLIBDATACHANNEL_INCLUDE_PATH=${{ github.workspace }}/libdatachannel/include -DWEBRTC_NATIVE=ON -DUDP=ON ..
+          cmake -DLIBDATACHANNEL_LIBRARY_PATH=${{ github.workspace }}/libdatachannel/build/libdatachannel.so \
+            -DLIBDATACHANNEL_INCLUDE_PATH=${{ github.workspace }}/libdatachannel/include \
+          -DWEBRTC_NATIVE=ON -DUDP=ON -DCMAKE_BUILD_TYPE=Debug ..
           make
       - name: Compile soak test (web)
         run: ./bin/github-actions/build_soak_web.sh 
