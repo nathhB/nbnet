@@ -1721,6 +1721,12 @@ static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *endpoint, NBN_Con
         break;
 #endif // NBN_UDP
 
+#ifdef NBN_WEBRTC_NATIVE
+    case NBN_DRIVER_WEBRTC_NATIVE:
+        connection->driver = &nbn_webrtc_native_driver;
+        break;
+#endif // NBN_WEBRTC_NATIVE
+
 #ifdef __EMSCRIPTEN__
     case NBN_DRIVER_WEBRTC_EMSCRIPTEN:
         connection->driver = &nbn_webrtc_em_driver;
@@ -1871,6 +1877,17 @@ static int StartClientDrivers(const char *host, uint16_t port) {
     driver_count++;
 #endif // NBN_UDP
 
+#ifdef NBN_WEBRTC_NATIVE
+    nbn_game_client.server_connection = CreateServerConnection(NBN_DRIVER_WEBRTC_NATIVE);
+
+    if (nbn_webrtc_native_driver.impl.cli_start(&nbn_game_client, host, port) < 0) {
+        LogError("Failed to start driver %s", nbn_webrtc_native_driver.name);
+        return NBN_ERROR;
+    }
+
+    driver_count++;
+#endif // NBN_WEBRTC_NATIVE
+
 #ifdef __EMSCRIPTEN__
     nbn_game_client.server_connection = CreateServerConnection(NBN_DRIVER_WEBRTC_EMSCRIPTEN);
 
@@ -1963,6 +1980,10 @@ void NBN_GameClient_Stop(void) {
     nbn_udp_driver.impl.cli_stop(&nbn_game_client);
 #endif // NBN_UDP
 
+#ifdef NBN_WEBRTC_NATIVE
+    nbn_webrtc_native_driver.impl.cli_stop(&nbn_game_client);
+#endif // NBN_WEBRTC_NATIVE
+
 #ifdef __EMSCRIPTEN__
     nbn_webrtc_em_driver.impl.cli_stop(&nbn_game_client);
 #endif // __EMSCRIPTEN__
@@ -1992,6 +2013,13 @@ static int ReadPacketsFromClientDrivers(void) {
         return NBN_ERROR;
     }
 #endif // NBN_UDP
+
+#ifdef NBN_WEBRTC_NATIVE
+    if (nbn_webrtc_native_driver.impl.cli_recv_packets(&nbn_game_client) < 0) {
+        LogError("Failed to read packets from driver %s", nbn_webrtc_native_driver.name);
+        return NBN_ERROR;
+    }
+#endif // NBN_WEBRTC_NATIVE
 
 #ifdef __EMSCRIPTEN__
     if (nbn_webrtc_em_driver.impl.cli_recv_packets(&nbn_game_client) < 0) {
@@ -2278,6 +2306,15 @@ static int StartServerDrivers(uint16_t port) {
     driver_count++;
 #endif // NBN_UDP
 
+#ifdef NBN_WEBRTC_NATIVE
+    if (nbn_webrtc_native_driver.impl.serv_start(&nbn_game_server, port) < 0) {
+        LogError("Failed to start driver %s", nbn_webrtc_native_driver.name);
+        return NBN_ERROR;
+    }
+
+    driver_count++;
+#endif // NBN_WEBRTC_NATIVE
+
 #ifdef __EMSCRIPTEN__
     if (nbn_webrtc_em_driver.impl.serv_start(&nbn_game_server, port) < 0) {
         LogError("Failed to start driver %s", nbn_webrtc_em_driver.name);
@@ -2329,6 +2366,10 @@ void NBN_GameServer_Stop(void) {
 #ifdef NBN_UDP
     nbn_udp_driver.impl.serv_stop(&nbn_game_server);
 #endif // NBN_UDP
+
+#ifdef NBN_WEBRTC_NATIVE
+    nbn_webrtc_native_driver.impl.serv_stop(&nbn_game_server);
+#endif // NBN_WEBRTC_NATIVE
 
 #ifdef __EMSCRIPTEN__
     nbn_webrtc_em_driver.impl.serv_stop(&nbn_game_server);
@@ -2384,6 +2425,12 @@ static void ReadPacketsFromServerDrivers(void) {
         LogError("Failed to read packets from driver %s", nbn_udp_driver.name);
     }
 #endif // NBN_UDP
+
+#ifdef NBN_WEBRTC_NATIVE
+    if (nbn_webrtc_native_driver.impl.serv_recv_packets(&nbn_game_server) < 0) {
+        LogError("Failed to read packets from driver %s", nbn_webrtc_native_driver.name);
+    }
+#endif // NBN_WEBRTC_NATIVE
 
 #ifdef __EMSCRIPTEN__
     if (nbn_webrtc_em_driver.impl.serv_recv_packets(&nbn_game_server) < 0) {
