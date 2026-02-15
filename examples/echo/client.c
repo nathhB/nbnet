@@ -97,8 +97,6 @@ int main(int argc, char *argv[]) {
 #endif
     }
 
-    NBN_SetLogLevel(NBN_LOG_INFO);
-
     const char *msg = argv[1];
     // reserve 4 bytes to write the message length in the message (see the SendEcho function)
     unsigned int msg_max_len = ECHO_MESSAGE_MAX_LENGTH - 4;
@@ -113,40 +111,6 @@ int main(int argc, char *argv[]) {
         return 1;
 #endif
     }
-
-#ifdef __EMSCRIPTEN__
-
-    // Register the WebRTC driver
-#ifdef NBN_TLS
-    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = true});
-#else
-    NBN_WebRTC_Register((NBN_WebRTC_Config){.enable_tls = false});
-#endif // NBN_TLS
-
-#endif // __EMSCRIPTEN__
-
-#ifdef NBN_WEBRTC_NATIVE
-
-#ifdef NBN_TLS
-    bool enable_tls = true;
-#else
-    bool enable_tls = false;
-#endif // NBN_TLS
-
-    const char *ice_servers[] = {"stun:stun01.sipphone.com"};
-    NBN_WebRTC_C_Config cfg = {.ice_servers = ice_servers,
-                               .ice_servers_count = 1,
-                               .enable_tls = enable_tls,
-                               .cert_path = NULL,
-                               .key_path = NULL,
-                               .passphrase = NULL,
-                               .log_level = RTC_LOG_VERBOSE};
-
-    NBN_WebRTC_C_Register(cfg);
-
-#endif // NBN_WEBRTC_NATIVE
-
-    // Initialize the client
 
     // Start the client with a protocol name (must be the same than the one used by the server)
     // the server host and port

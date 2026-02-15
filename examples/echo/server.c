@@ -34,8 +34,11 @@ static int EchoReceivedMessage(void) {
     // Get info about the received message
     NBN_MessageInfo msg_info = NBN_GameServer_GetMessageInfo();
 
-    assert(msg_info.sender->id == conn_id);
     assert(msg_info.type == ECHO_MESSAGE_TYPE);
+
+    log_info("Received message of type %d from %lld", msg_info.type, msg_info.sender->id);
+
+    assert(msg_info.sender->id == conn_id);
 
     // read message data
     NBN_Reader *reader = NBN_GameServer_ReadMessage();
@@ -65,8 +68,6 @@ static int EchoReceivedMessage(void) {
 static bool error = false;
 
 int main(int argc, const char **argv) {
-    NBN_SetLogLevel(NBN_LOG_INFO);
-
 #ifdef __EMSCRIPTEN__
 
     // Register the WebRTC driver

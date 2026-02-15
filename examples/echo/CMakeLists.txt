@@ -59,8 +59,12 @@ endif (WEBRTC_NATIVE)
 
 unset(WEBRTC_NATIVE)
 
-target_compile_definitions(echo_client PUBLIC NBN_DEBUG)
-target_compile_definitions(echo_server PUBLIC NBN_DEBUG)
+if (CMAKE_BUILD_TYPE MATCHES "Debug")
+    message("Compiling in Debug mode with packet simulator enabled")
+
+    target_compile_definitions(echo_client PUBLIC NBN_DEBUG NBN_USE_PACKET_SIMULATOR)
+    target_compile_definitions(echo_server PUBLIC NBN_DEBUG NBN_USE_PACKET_SIMULATOR)
+endif()
 
 if(WIN32)
   target_link_libraries(echo_client ws2_32)
