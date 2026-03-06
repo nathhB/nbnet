@@ -54,6 +54,7 @@
 #define SOAK_DONE 1
 #define SOAK_CLIENT_MAX_PENDING_MESSAGES 50 // max number of unacked messages at a time
 #define SOAK_SERVER_FULL_CODE 1234
+#define SOAK_CHANNEL_COUNT 4
 
 typedef struct {
     unsigned int message_count;

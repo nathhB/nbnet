@@ -45,21 +45,6 @@ extern "C" {
 #endif
 
 // TODO: doc
-#ifndef NBN_CHANNEL_COUNT
-#define NBN_CHANNEL_COUNT 2
-#endif
-
-// TODO: doc
-#ifndef NBN_MESSAGE_MAX_SIZE
-#define NBN_MESSAGE_MAX_SIZE 256
-#endif
-
-// TODO: doc
-#ifndef NBN_CHANNEL_BUFFER_SIZE
-#define NBN_CHANNEL_BUFFER_SIZE 256
-#endif
-
-// TODO: doc
 #ifndef NBN_MESSAGE_RESEND_DELAY
 #define NBN_MESSAGE_RESEND_DELAY 0.1 /* Number of seconds before a message is resent (reliable messages redundancy) */
 #endif
@@ -119,7 +104,7 @@ typedef struct NBN_MessageInfo {
 } NBN_MessageInfo;
 
 // TODO: doc
-typedef enum NBN_ChannelMode { NBN_CHANNEL_UNRELIABLE, NBN_CHANNEL_RELIABLE } NBN_ChannelMode;
+typedef enum NBN_Channel_Mode { NBN_CHANNEL_UNRELIABLE, NBN_CHANNEL_RELIABLE } NBN_Channel_Mode;
 
 typedef enum NBN_Client_Event {
     NBN_CLIENT_ERROR = NBN_ERROR,
@@ -218,7 +203,7 @@ int NBN_Reader_ReadString(NBN_Reader *reader, char *str, unsigned int max_len);
 void NBN_GameClient_Init(const char *protocol_name, const char *host, uint16_t port);
 
 // TODO: doc
-void NBN_GameClient_SetChannelMode(uint8_t channel_id, NBN_ChannelMode mode);
+uint8_t NBN_GameClient_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_size, unsigned int max_message_len);
 
 // TODO: doc
 NBN_Writer *NBN_GameClient_WriteConnectionRequestData(void);
@@ -314,7 +299,7 @@ bool NBN_GameClient_IsConnected(void);
 void NBN_GameServer_Init(const char *protocol_name, uint16_t port);
 
 // TODO: doc
-void NBN_GameServer_SetChannelMode(uint8_t channel_id, NBN_ChannelMode mode);
+uint8_t NBN_GameServer_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_size, unsigned int max_message_len);
 
 /**
  * Start the game server with the provided configuration.

@@ -22,9 +22,11 @@
 */
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include "nbnet.h"
 #include "soak.h"
 #include "log.h"
 
@@ -128,7 +130,9 @@ static int SendSoakMessages(SoakChannel *channel, uint8_t channel_id) {
 }
 
 static int HandleReceivedSoakMessage(uint8_t channel_id, SoakChannel *channels) {
-    SoakChannel *channel = &channels[channel_id];
+    assert(channel_id >= 2 && channel_id < SOAK_CHANNEL_COUNT + 2);
+
+    SoakChannel *channel = &channels[channel_id - 2];
     unsigned int msg_id;
     unsigned int data_length;
     static uint8_t recv_buffer[SOAK_MESSAGE_BIG_MAX_DATA_LENGTH];
@@ -155,7 +159,7 @@ static int HandleReceivedSoakMessage(uint8_t channel_id, SoakChannel *channels) 
 
     if (data_length != entry->length) {
         log_error("Expected message %d to have length %d but was %d (channel_id: %d)", msg_id, entry->length,
-                  data_length);
+                  data_length, channel_id);
 
         return -1;
     }
@@ -181,7 +185,7 @@ static int HandleReceivedSoakMessage(uint8_t channel_id, SoakChannel *channels) 
         done_channel_count++;
     }
 
-    if (done_channel_count >= NBN_CHANNEL_COUNT) {
+    if (done_channel_count >= SOAK_CHANNEL_COUNT) {
         log_info("Received all soak message echoes on all channels");
         Soak_Stop();
 
@@ -270,8 +274,11 @@ int main(int argc, char *argv[]) {
 
     NBN_GameClient_Init(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT);
 
-    for (uint8_t c = 0; c < NBN_CHANNEL_COUNT; c++) {
-        NBN_GameClient_SetChannelMode(c, NBN_CHANNEL_RELIABLE);
+    for (uint8_t c = 0; c < SOAK_CHANNEL_COUNT; c++) {
+        uint8_t channel_id = NBN_GameClient_CreateChannel(NBN_CHANNEL_RELIABLE, 128, 256);
+
+        // channels 0 and 1 are the default nbnet channels
+        assert(channel_id == 2 + c);
     }
 
     if (NBN_GameClient_Start() < 0) {
@@ -290,14 +297,14 @@ int main(int argc, char *argv[]) {
     }
 
     unsigned int message_count = options.message_count;
-    unsigned int message_per_channel = message_count / NBN_CHANNEL_COUNT;
-    unsigned int leftover_message_count = message_count % NBN_CHANNEL_COUNT;
-    SoakChannel *channels = (SoakChannel *)malloc(sizeof(SoakChannel) * NBN_CHANNEL_COUNT);
+    unsigned int message_per_channel = message_count / SOAK_CHANNEL_COUNT;
+    unsigned int leftover_message_count = message_count % SOAK_CHANNEL_COUNT;
+    SoakChannel *channels = (SoakChannel *)malloc(sizeof(SoakChannel) * SOAK_CHANNEL_COUNT);
 
-    for (int c = 0; c < NBN_CHANNEL_COUNT; c++) {
+    for (int c = 0; c < SOAK_CHANNEL_COUNT; c++) {
         SoakChannel *channel = &channels[c];
 
-        channel->id = c; // channels 0 and 1 are reserved by the library
+        channel->id = 2 + c; // channels 0 and 1 are the default nbnet channels
         channel->next_msg_id = 1;
         channel->sent_message_count = 0;
         channel->last_recved_message_id = 0;
@@ -309,7 +316,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    channels[NBN_CHANNEL_COUNT - 1].message_count += leftover_message_count;
+    channels[SOAK_CHANNEL_COUNT - 1].message_count += leftover_message_count;
 
     int ret = Soak_MainLoop(Tick, channels);
 

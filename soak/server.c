@@ -70,12 +70,12 @@ static void HandleNewConnection(void) {
 
     soak_client->error = false;
     soak_client->is_closed = false;
-    soak_client->channels = (SoakChannel *)malloc(sizeof(SoakChannel) * NBN_CHANNEL_COUNT);
+    soak_client->channels = (SoakChannel *)malloc(sizeof(SoakChannel) * SOAK_CHANNEL_COUNT);
 
-    for (unsigned int c = 0; c < NBN_CHANNEL_COUNT; c++) {
+    for (unsigned int c = 0; c < SOAK_CHANNEL_COUNT; c++) {
         SoakChannel *channel = &soak_client->channels[c];
 
-        channel->id = c;
+        channel->id = 2 + c;
         channel->recved_messages_count = 0;
         channel->last_recved_message_id = 0;
 
@@ -116,7 +116,7 @@ static void EchoReceivedSoakMessages(void) {
         if (soak_client->is_closed)
             continue;
 
-        for (unsigned int c = 0; c < NBN_CHANNEL_COUNT; c++) {
+        for (unsigned int c = 0; c < SOAK_CHANNEL_COUNT; c++) {
             SoakChannel *channel = &soak_client->channels[c];
 
             while (channel->echo_queue.count > 0) {
@@ -157,7 +157,7 @@ static int HandleReceivedSoakMessage(NBN_Reader *reader, NBN_ConnectionHandle *s
     if (soak_client->error)
         return 0;
 
-    SoakChannel *channel = &soak_client->channels[channel_id];
+    SoakChannel *channel = &soak_client->channels[channel_id - 2];
     unsigned int msg_id;
     unsigned int data_length;
     static uint8_t recv_buffer[SOAK_MESSAGE_BIG_MAX_DATA_LENGTH];
@@ -282,8 +282,11 @@ int main(int argc, char *argv[]) {
 
     NBN_GameServer_Init(SOAK_PROTOCOL_NAME, SOAK_PORT);
 
-    for (uint8_t c = 0; c < NBN_CHANNEL_COUNT; c++) {
-        NBN_GameServer_SetChannelMode(c, NBN_CHANNEL_RELIABLE);
+    for (uint8_t c = 0; c < SOAK_CHANNEL_COUNT; c++) {
+        uint8_t channel_id = NBN_GameServer_CreateChannel(NBN_CHANNEL_RELIABLE, 128, 256);
+
+        // channels 0 and 1 are the default nbnet channels
+        assert(channel_id == 2 + c);
     }
 
     if (NBN_GameServer_Start()) {
