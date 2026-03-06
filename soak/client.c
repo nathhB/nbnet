@@ -245,7 +245,7 @@ static int Tick(void *data) {
     }
 
     if (connected) {
-        for (unsigned int c = 0; c < NBN_CHANNEL_COUNT; c++) {
+        for (unsigned int c = 0; c < SOAK_CHANNEL_COUNT; c++) {
             SoakChannel *channel = &channels[c];
 
             if (SendSoakMessages(channel, channel->id) < 0) {

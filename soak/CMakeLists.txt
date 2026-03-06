@@ -15,14 +15,15 @@ unset(CPP_COMPILE)
 add_executable(client client.c soak.c log.c cargs.c ../nbnet.c)
 add_executable(server server.c soak.c log.c cargs.c ../nbnet.c)
 
-add_compile_options(-Wall -Wextra -Wpedantic -std=c99)
-
 if (CMAKE_BUILD_TYPE MATCHES "Debug")
     message("Compiling in Debug mode with packet simulator enabled")
 
     target_compile_definitions(client PUBLIC NBN_DEBUG NBN_USE_PACKET_SIMULATOR)
     target_compile_definitions(server PUBLIC NBN_DEBUG NBN_USE_PACKET_SIMULATOR)
 endif()
+
+target_compile_options(server PUBLIC -Wall -Wextra -std=c99)
+target_compile_options(client PUBLIC -Wall -Wextra -std=c99)
 
 target_compile_definitions(client PUBLIC SOAK_CLIENT)
 target_compile_definitions(server PUBLIC SOAK_SERVER)

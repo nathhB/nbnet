@@ -1050,12 +1050,9 @@ static NBN_IncomingMessage *Channel_AddReceivedMessage(NBN_Channel *channel, NBN
             return inc_msg;
         }
 
-        return false;
+        return NULL;
     } else if (channel->mode == NBN_CHANNEL_RELIABLE) {
         unsigned int dt = Channel_ComputeMessageIdDelta(header->id, channel->most_recent_message_id);
-
-        LogDebug("Add incomoing message %d of type %d to reliable channel %d (most recent msg id: %d, dt: %d)",
-                 header->id, header->type, channel->id, channel->most_recent_message_id, dt);
 
         if (SEQUENCE_NUMBER_GT(header->id, channel->most_recent_message_id)) {
             NBN_Assert(dt < channel->buffer_size);
@@ -1069,6 +1066,9 @@ static NBN_IncomingMessage *Channel_AddReceivedMessage(NBN_Channel *channel, NBN
                 return NULL;
             }
         }
+
+        LogDebug("Add incomoing message %d of type %d to reliable channel %d (most recent msg id: %d, dt: %d)",
+                 header->id, header->type, channel->id, channel->most_recent_message_id, dt);
 
         NBN_IncomingMessage *inc_msg = &channel->incoming_messages_buffer[header->id % channel->buffer_size];
 
@@ -1301,7 +1301,7 @@ static int Connection_ProcessReceivedPacket(NBN_Endpoint *endpoint, NBN_Connecti
         uint8_t channel_id = header.channel_id;
 
         if (channel_id > endpoint->channel_count - 1) {
-            LogError("Failed to read packet: invalid message channel %d", channel_id);
+            LogError("Failed to read packet: invalid channel %d", channel_id);
 
             return NBN_ERROR;
         }
@@ -1329,6 +1329,10 @@ static int Connection_ProcessReceivedPacket(NBN_Endpoint *endpoint, NBN_Connecti
             LogDebug("Received message %d (type: %d) on channel %d", header.id, header.type, channel->id);
         } else {
             LogDebug("Message %d was discarded by channel %d", header.id, channel->id);
+
+            // NBN_Reader_ReadBytes is not called for discarded messages, so we need to
+            // advance the reader position "manually"
+            msg_reader.position += msg_len;
         }
     }
 
