@@ -26,6 +26,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <time.h>
 #include "log.h"
 
 #ifdef __EMSCRIPTEN__
