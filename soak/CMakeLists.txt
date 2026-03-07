@@ -22,13 +22,11 @@ if (CMAKE_BUILD_TYPE MATCHES "Debug")
     target_compile_definitions(server PUBLIC NBN_DEBUG NBN_USE_PACKET_SIMULATOR)
 endif()
 
-target_compile_options(server PUBLIC -Wall -Wextra -std=c99)
-target_compile_options(client PUBLIC -Wall -Wextra -std=c99)
+target_compile_options(server PUBLIC -Wall -Wextra)
+target_compile_options(client PUBLIC -Wall -Wextra)
 
 target_compile_definitions(client PUBLIC SOAK_CLIENT)
 target_compile_definitions(server PUBLIC SOAK_SERVER)
-target_compile_definitions(client PUBLIC NBN_CHANNEL_COUNT=4)
-target_compile_definitions(server PUBLIC NBN_CHANNEL_COUNT=4)
 
 target_include_directories(client PUBLIC "../")
 target_include_directories(server PUBLIC "../")

@@ -59,13 +59,22 @@
 
 #include <arpa/inet.h>
 #include <sys/time.h>
+
+#if _POSIX_C_SOURCE >= 199309L
+
 #include <time.h>
+
+#else
+
+#include <unistd.h>
+
+#endif // _POSIX_C_SOURCE >= 199309L
 
 #ifndef CLOCK_MONOTONIC_RAW
 #define CLOCK_MONOTONIC_RAW CLOCK_MONOTONIC
 #endif
 
-#endif
+#endif // NBN_PLATFORM_WINDOWS
 
 typedef struct NBN_Connection NBN_Connection;
 typedef struct NBN_Endpoint NBN_Endpoint;
@@ -3923,23 +3932,28 @@ static int WebRTC_Native_Client_Start(NBN_GameClient *client, const char *host, 
 
     // wait for the connection to be established
     const float delay = 0.3f;
-    const long timeout = 5 * 1e9; // 5 seconds to connect
-
-    struct timespec rqtp;
-    rqtp.tv_sec = 0;
-    rqtp.tv_nsec = delay * 1e9;
-
+    const long timeout = 5; // 5 seconds to connect
     float current_time_sec = 0;
 
     while (true) {
 #if defined(_WIN32) || defined(_WIN64)
         Sleep(delay * 1000);
-#else
+#elif _POSIX_C_SOURCE >= 199309L
+        struct timespec rqtp;
+        rqtp.tv_sec = 0;
+        rqtp.tv_nsec = delay * 1e9;
+
         if (nanosleep(&rqtp, NULL) < 0) {
             LogError("nanosleep failed");
-            return NBN_ERROR;
+            NBN_Abort();
+        }
+#else
+        if (usleep(delay * 1e6) < 0) {
+            LogError("usleep failed");
+            NBN_Abort();
         }
 #endif
+
         current_time_sec += delay;
 
         if (current_time_sec >= timeout || wrtc_client_connected) {
