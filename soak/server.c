@@ -121,14 +121,10 @@ static void EchoReceivedSoakMessages(void) {
 
             while (channel->echo_queue.count > 0) {
                 Soak_MessageEntry *msg_entry = &channel->echo_queue.messages[channel->echo_queue.head];
-                NBN_Writer *writer = NBN_GameServer_CreateMessage(SOAK_MESSAGE_SMALL, channel->id); // TODO: support big
+                NBN_Writer *writer =
+                    NBN_GameServer_CreateMessage(SOAK_MESSAGE_SMALL, channel->id, conn); // TODO: support big
 
-                SoakMessage_Write(writer, msg_entry->msg_id, msg_entry->data, msg_entry->length);
-
-                log_info("Send soak message %d's echo (length: %d) to client %llu", msg_entry->msg_id,
-                         msg_entry->length, conn->id);
-
-                if (NBN_GameServer_EnqueueMessageFor(conn) < 0) {
+                if (!writer) {
                     log_error("Failed to send soak message to client %llu, closing client", conn->id);
 
                     if (NBN_GameServer_CloseClient(conn) < 0) {
@@ -139,6 +135,11 @@ static void EchoReceivedSoakMessages(void) {
                     soak_client->is_closed = true;
                     return;
                 }
+
+                SoakMessage_Write(writer, msg_entry->msg_id, msg_entry->data, msg_entry->length);
+
+                log_info("Send soak message %d's echo (length: %d) to client %llu", msg_entry->msg_id,
+                         msg_entry->length, conn->id);
 
                 msg_entry->length = 0;
 

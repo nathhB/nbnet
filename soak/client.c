@@ -116,10 +116,11 @@ static int SendSoakMessages(SoakChannel *channel, uint8_t channel_id) {
             // TODO: support big messages
             NBN_Writer *writer = NBN_GameClient_CreateMessage(SOAK_MESSAGE_SMALL, channel->id);
 
-            SoakMessage_Write(writer, msg_id, entry->data, entry->length);
-
-            if (NBN_GameClient_EnqueueMessage() < 0)
+            if (!writer) {
                 return -1;
+            }
+
+            SoakMessage_Write(writer, msg_id, entry->data, entry->length);
 
             channel->sent_message_count++;
             channel->last_sent_message_id = msg_id;

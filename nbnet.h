@@ -150,14 +150,14 @@ typedef unsigned int NBN_Client_Iterator;
 
 typedef struct NBN_Writer {
     uint8_t *buffer;
-    unsigned int length;
-    unsigned int position;
+    uint16_t length;
+    uint16_t position;
 } NBN_Writer;
 
 typedef struct NBN_Reader {
     uint8_t *buffer;
-    unsigned int length;
-    unsigned int position;
+    uint16_t length;
+    uint16_t position;
 } NBN_Reader;
 
 typedef enum NBN_LogLevel { NBN_LOG_ERROR, NBN_LOG_INFO, NBN_LOG_WARNING, NBN_LOG_DEBUG } NBN_LogLevel;
@@ -206,6 +206,9 @@ void NBN_GameClient_Init(const char *protocol_name, const char *host, uint16_t p
 uint8_t NBN_GameClient_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_size, unsigned int max_message_len);
 
 // TODO: doc
+unsigned int NBN_GameClient_GetChannelCurrentCapacity(uint8_t channel_id);
+
+// TODO: doc
 NBN_Writer *NBN_GameClient_WriteConnectionRequestData(void);
 
 /**
@@ -251,9 +254,6 @@ NBN_Writer *NBN_GameClient_CreateReliableMessage(uint8_t type);
 
 // TODO: doc
 NBN_Writer *NBN_GameClient_CreateUnreliableMessage(uint8_t type);
-
-// TODO: doc
-int NBN_GameClient_EnqueueMessage(void);
 
 // TODO: doc
 NBN_Reader *NBN_GameClient_ReadMessage(void);
@@ -362,18 +362,13 @@ int NBN_GameServer_CloseClient(NBN_ConnectionHandle *conn);
 int NBN_GameServer_CloseClientWithCode(NBN_ConnectionHandle *conn, int code);
 
 // TODO: doc
-NBN_Writer *NBN_GameServer_CreateMessage(uint8_t type, uint8_t channel_id);
+NBN_Writer *NBN_GameServer_CreateMessage(uint8_t type, uint8_t channel_id, NBN_ConnectionHandle *receiver);
 
 // TODO: doc
-NBN_Writer *NBN_GameServer_CreateReliableMessage(uint8_t type);
+NBN_Writer *NBN_GameServer_CreateReliableMessage(uint8_t type, NBN_ConnectionHandle *receiver);
 
 // TODO: doc
-NBN_Writer *NBN_GameServer_CreateUnreliableMessage(uint8_t type);
-
-// TODO: doc
-int NBN_GameServer_EnqueueMessageFor(NBN_ConnectionHandle *conn);
-// TODO: doc
-int NBN_GameServer_EnqueueBroadcastMessage(void);
+NBN_Writer *NBN_GameServer_CreateUnreliableMessage(uint8_t type, NBN_ConnectionHandle *receiver);
 
 // TODO: doc
 NBN_Reader *NBN_GameServer_ReadMessage(void);
