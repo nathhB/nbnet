@@ -72,16 +72,19 @@ static int SendSoakMessages(SoakChannel *channel, uint8_t channel_id) {
         log_info("Compute number of soak messages to send (sent: %d, pending: %d, remaining: %d)",
                  channel->sent_message_count, pending_message_count, remaining_message_count);
 
+        unsigned int capacity = NBN_GameClient_GetChannelCurrentCapacity(channel->id);
+        // make sure that we don't exceed channel capacity
+        unsigned int max_pending_messages = (unsigned int)fmin(SOAK_CLIENT_MAX_PENDING_MESSAGES, capacity);
+
         // don't send anything on this tick if we have reached the max number of unacked messages
-        if (pending_message_count >= SOAK_CLIENT_MAX_PENDING_MESSAGES) {
+        if (pending_message_count >= max_pending_messages) {
             log_info("Max number of pending messages has been reached, not sending anything this tick");
 
             return 0;
         }
 
         // number of messages to send on this tick
-        unsigned int send_message_count =
-            fmin(SOAK_CLIENT_MAX_PENDING_MESSAGES - pending_message_count, remaining_message_count);
+        unsigned int send_message_count = fmin(max_pending_messages - pending_message_count, remaining_message_count);
 
         log_info("Will send %d soak messages this tick", send_message_count);
 
@@ -276,7 +279,8 @@ int main(int argc, char *argv[]) {
     NBN_GameClient_Init(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT);
 
     for (uint8_t c = 0; c < SOAK_CHANNEL_COUNT; c++) {
-        uint8_t channel_id = NBN_GameClient_CreateChannel(NBN_CHANNEL_RELIABLE, 128, 256);
+        uint8_t channel_id =
+            NBN_GameClient_CreateChannel(NBN_CHANNEL_RELIABLE, SOAK_CHANNEL_BUFFER_SIZE, SOAK_MAX_MESSAGE_SIZE);
 
         // channels 0 and 1 are the default nbnet channels
         assert(channel_id == 2 + c);

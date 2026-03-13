@@ -97,7 +97,7 @@ static void HandleClientDisconnection(NBN_DisconnectionInfo info) {
 
     assert(soak_client != NULL);
 
-    log_info("Client has disconnected (ID: %d)", info.conn_id);
+    log_info("Client has disconnected (ID: %lld)", info.conn_id);
 
     free(soak_client->channels);
     free(soak_client);
@@ -118,8 +118,10 @@ static void EchoReceivedSoakMessages(void) {
 
         for (unsigned int c = 0; c < SOAK_CHANNEL_COUNT; c++) {
             SoakChannel *channel = &soak_client->channels[c];
+            int send_count = NBN_GameServer_GetChannelCurrentCapacity(channel->id, conn);
 
-            while (channel->echo_queue.count > 0) {
+            // make sure that we don't exceed channel capacity
+            while (channel->echo_queue.count > 0 && --send_count >= 0) {
                 Soak_MessageEntry *msg_entry = &channel->echo_queue.messages[channel->echo_queue.head];
                 NBN_Writer *writer =
                     NBN_GameServer_CreateMessage(SOAK_MESSAGE_SMALL, channel->id, conn); // TODO: support big
@@ -284,7 +286,8 @@ int main(int argc, char *argv[]) {
     NBN_GameServer_Init(SOAK_PROTOCOL_NAME, SOAK_PORT);
 
     for (uint8_t c = 0; c < SOAK_CHANNEL_COUNT; c++) {
-        uint8_t channel_id = NBN_GameServer_CreateChannel(NBN_CHANNEL_RELIABLE, 128, 256);
+        uint8_t channel_id =
+            NBN_GameServer_CreateChannel(NBN_CHANNEL_RELIABLE, SOAK_CHANNEL_BUFFER_SIZE, SOAK_MAX_MESSAGE_SIZE);
 
         // channels 0 and 1 are the default nbnet channels
         assert(channel_id == 2 + c);
