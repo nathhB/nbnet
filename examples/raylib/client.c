@@ -285,31 +285,25 @@ static void HandleGameClientEvent(int ev) {
 }
 
 static int SendStateUpdate(void) {
-    // Create a new UPDATE_STATE_MESSAGE unreliable message
     NBN_Writer *writer = NBN_GameClient_CreateUnreliableMessage(UPDATE_STATE_MESSAGE);
 
-    // Write the local client state to the message
-    UpdateClientStateMessage_Write(writer, local_client_state);
-
-    // Send the message to the server
-    if (NBN_GameClient_EnqueueMessage() < 0) {
+    if (!writer) {
         return -1;
     }
+
+    UpdateClientStateMessage_Write(writer, local_client_state);
 
     return 0;
 }
 
 static int SendColorUpdate(void) {
-    // Create a new CHANGE_COLOR_MESSAGE reliable message
     NBN_Writer *writer = NBN_GameClient_CreateReliableMessage(CHANGE_COLOR_MESSAGE);
 
-    // Write the new client color to the message
-    ChangeColorMessage_Write(writer, local_client_state.color);
-
-    // Send the message to the server
-    if (NBN_GameClient_EnqueueMessage() < 0) {
+    if (!writer) {
         return -1;
     }
+
+    ChangeColorMessage_Write(writer, local_client_state.color);
 
     return 0;
 }

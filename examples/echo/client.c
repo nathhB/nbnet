@@ -77,12 +77,17 @@ void OnMessageReceived(void) {
 
 int SendEcho(const char *msg) {
     NBN_Writer *writer = NBN_GameClient_CreateReliableMessage(ECHO_MESSAGE_TYPE);
+
+    if (!writer) {
+        return -1;
+    }
+
     unsigned int length = strlen(msg);
 
     NBN_Writer_WriteUInt32(writer, length);
     NBN_Writer_WriteBytes(writer, (uint8_t *)msg, length);
 
-    return NBN_GameClient_EnqueueMessage();
+    return 0;
 }
 
 int main(int argc, char *argv[]) {

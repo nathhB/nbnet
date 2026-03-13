@@ -242,11 +242,16 @@ static int BroadcastGameState(void) {
 
     game_state.client_count = client_count;
 
-    // Create a unreliable message GAME_STATE_MESSAGE and write to it
-    NBN_Writer *writer = NBN_GameServer_CreateUnreliableMessage(GAME_STATE_MESSAGE);
-    GameStateMessage_Write(writer, &game_state);
+    NBN_Client_Iterator it = 0;
+    NBN_ConnectionHandle *cli;
 
-    return NBN_GameServer_EnqueueBroadcastMessage();
+    // Broadcast GAME_STATE_MESSAGE to all clients
+    while ((cli = NBN_GameServer_GetNextClient(&it)) != NULL) {
+        NBN_Writer *writer = NBN_GameServer_CreateUnreliableMessage(GAME_STATE_MESSAGE, cli);
+        GameStateMessage_Write(writer, &game_state);
+    }
+
+    return 0;
 }
 
 static bool running = true;

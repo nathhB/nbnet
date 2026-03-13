@@ -57,12 +57,16 @@ static int EchoReceivedMessage(void) {
              msg_info.channel_id);
 
     // create and send an echo of the received message
-    NBN_Writer *writer = NBN_GameServer_CreateReliableMessage(ECHO_MESSAGE_TYPE);
+    NBN_Writer *writer = NBN_GameServer_CreateReliableMessage(ECHO_MESSAGE_TYPE, connection);
+
+    if (!writer) {
+        return -1;
+    }
 
     NBN_Writer_WriteUInt32(writer, length);
     NBN_Writer_WriteBytes(writer, (uint8_t *)msg_str, length);
 
-    return NBN_GameServer_EnqueueMessageFor(connection);
+    return 0;
 }
 
 static bool error = false;
