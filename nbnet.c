@@ -209,6 +209,7 @@ struct NBN_Channel {
     unsigned int outgoing_message_count;
     unsigned int buffer_size;
     unsigned int max_message_len;
+    unsigned int current_capacity;
     NBN_OutgoingMessage *outgoing_messages_buffer;
     NBN_IncomingMessage *incoming_messages_buffer;
     bool *ack_buffer; // TODO: needed?
@@ -1009,6 +1010,7 @@ static void Channel_Init(NBN_Channel *channel, uint8_t id, NBN_Channel_Config cf
     channel->most_recent_message_id = 0;
     channel->buffer_size = cfg.buffer_size;
     channel->max_message_len = cfg.max_message_len;
+    channel->current_capacity = cfg.buffer_size;
     channel->outgoing_messages_buffer = malloc(sizeof(NBN_OutgoingMessage) * cfg.buffer_size);
     channel->incoming_messages_buffer = malloc(sizeof(NBN_IncomingMessage) * cfg.buffer_size);
     channel->ack_buffer = malloc(sizeof(bool) * cfg.buffer_size);
@@ -1093,8 +1095,8 @@ static NBN_Writer *Channel_AddOutgoingMessage(NBN_Channel *channel, uint8_t type
     NBN_OutgoingMessage *out_msg = &channel->outgoing_messages_buffer[index];
 
     // make sure the outgoing message is not already in use
-    if (!out_msg->free) {
-        LogError("No outgoing message available in channel %d (mode: %d, outgoing message count: %d, msg_id: %d, "
+    if (channel->current_capacity == 0) {
+        LogError("Channel %d outgoing buffer reached it's capacity (mode: %d, outgoing message count: %d, msg_id: %d, "
                  "index: %d, oldest unacked msg: %d)",
                  channel->id, channel->mode, channel->outgoing_message_count, msg_id, index,
                  channel->oldest_unacked_message_id);
@@ -1105,6 +1107,8 @@ static NBN_Writer *Channel_AddOutgoingMessage(NBN_Channel *channel, uint8_t type
         return NULL;
     }
 
+    NBN_Assert(out_msg->free);
+
     out_msg->free = false;
     out_msg->last_send_time = -1;
     out_msg->message.header.id = msg_id;
@@ -1114,6 +1118,7 @@ static NBN_Writer *Channel_AddOutgoingMessage(NBN_Channel *channel, uint8_t type
 
     channel->next_outgoing_message_id++;
     channel->outgoing_message_count++;
+    channel->current_capacity--;
 
     NBN_Writer_Init(&out_msg->writer, out_msg->message.data, channel->max_message_len);
 
@@ -1199,11 +1204,10 @@ static bool Channel_GetNextOutgoingMessage(NBN_Channel *channel, NBN_Message *re
 }
 
 static int Channel_OnMessageSent(NBN_Endpoint *endpoint, NBN_Channel *channel, NBN_Message *message) {
-    if (channel->mode != NBN_CHANNEL_UNRELIABLE) {
-        return 0;
+    if (channel->mode == NBN_CHANNEL_UNRELIABLE) {
+        channel->outgoing_message_count--;
+        channel->current_capacity++;
     }
-
-    channel->outgoing_message_count--;
 
     return 0;
 }
@@ -1235,6 +1239,8 @@ static int Channel_OnOutgoingMessageAcked(NBN_Endpoint *endpoint, NBN_Channel *c
             if (channel->ack_buffer[index]) {
                 channel->ack_buffer[index] = false;
                 channel->oldest_unacked_message_id++;
+                channel->current_capacity++;
+                NBN_Assert(channel->current_capacity <= channel->buffer_size);
             } else {
                 break;
             }
@@ -1911,13 +1917,7 @@ unsigned int NBN_GameClient_GetChannelCurrentCapacity(uint8_t channel_id) {
 
     NBN_Channel *channel = &nbn_game_client.server_connection->channels[channel_id];
 
-    if (channel->mode == NBN_CHANNEL_UNRELIABLE) {
-        return 0; // TODO:
-    } else if (channel->mode == NBN_CHANNEL_RELIABLE) {
-        return 0; // TODO:
-    }
-
-    NBN_Abort();
+    return channel->current_capacity;
 }
 
 NBN_Writer *NBN_GameClient_WriteConnectionRequestData(void) {
@@ -2341,6 +2341,14 @@ uint8_t NBN_GameServer_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_
     cfg->channel_count++;
 
     return channel_id;
+}
+
+unsigned int NBN_GameServer_GetChannelCurrentCapacity(uint8_t channel_id, NBN_ConnectionHandle *conn) {
+    NBN_Assert(channel_id < nbn_game_server.endpoint.channel_count);
+
+    NBN_Channel *channel = &HANDLE_TO_CONN(conn)->channels[channel_id];
+
+    return channel->current_capacity;
 }
 
 static int StartServerDrivers(uint16_t port) {

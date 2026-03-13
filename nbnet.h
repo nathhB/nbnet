@@ -301,6 +301,9 @@ void NBN_GameServer_Init(const char *protocol_name, uint16_t port);
 // TODO: doc
 uint8_t NBN_GameServer_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_size, unsigned int max_message_len);
 
+// TODO: doc
+unsigned int NBN_GameServer_GetChannelCurrentCapacity(uint8_t channel_id, NBN_ConnectionHandle *conn);
+
 /**
  * Start the game server with the provided configuration.
  *
