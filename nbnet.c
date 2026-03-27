@@ -2174,8 +2174,6 @@ NBN_Reader *NBN_GameClient_ReadMessage(void) {
     NBN_Assert(nbn_game_client.last_event.type == NBN_CLIENT_MESSAGE_RECEIVED);
 
     NBN_MessageInfo msg_info = nbn_game_client.last_event.data.message_info;
-    NBN_Assert(msg_info.length > 0 && msg_info.data != NULL);
-
     NBN_Reader *reader = &nbn_game_client.endpoint.message_reader;
 
     NBN_Reader_Init(reader, msg_info.data, msg_info.length);
@@ -2623,8 +2621,6 @@ NBN_Reader *NBN_GameServer_ReadMessage(void) {
     NBN_Assert(nbn_game_server.last_event.type == NBN_CLIENT_MESSAGE_RECEIVED);
 
     NBN_MessageInfo msg_info = nbn_game_server.last_event.data.message_info;
-    NBN_Assert(msg_info.length > 0 && msg_info.data != NULL);
-
     NBN_Reader *reader = &nbn_game_server.endpoint.message_reader;
 
     NBN_Reader_Init(reader, msg_info.data, msg_info.length);
