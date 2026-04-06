@@ -417,59 +417,59 @@ struct NBN_Endpoint {
 #endif
 };
 
-typedef struct NBN_GameServer_Config {
+typedef struct NBN_Server_Config {
     const char *protocol_name;
     uint16_t port;
     NBN_Channel_Config channels[NBN_MAX_CHANNEL_COUNT];
     unsigned int channel_count;
-} NBN_GameServer_Config;
+} NBN_Server_Config;
 
-typedef struct NBN_GameServer {
+typedef struct NBN_Server {
     NBN_Endpoint endpoint;
-    NBN_GameServer_Config config;
+    NBN_Server_Config config;
     struct {
         NBN_Connection_ID key;
         NBN_Connection *value;
     } *clients;
     NBN_ConnectionListNode *closed_clients_head;
-    NBN_GameServerStats stats;
+    NBN_ServerStats stats;
     NBN_Event last_event;
     NBN_Writer server_data_writer;
     NBN_Reader client_data_reader;
-} NBN_GameServer;
+} NBN_Server;
 
-typedef struct NBN_GameClient_Config {
+typedef struct NBN_Client_Config {
     const char *protocol_name;
     const char *host;
     uint16_t port;
     NBN_Channel_Config channels[NBN_MAX_CHANNEL_COUNT];
     unsigned int channel_count;
-} NBN_GameClient_Config;
+} NBN_Client_Config;
 
-typedef struct NBN_GameClient {
+typedef struct NBN_Client {
     NBN_Endpoint endpoint;
-    NBN_GameClient_Config config;
+    NBN_Client_Config config;
     NBN_Connection *server_connection;
     bool is_connected;
     NBN_Event last_event;
     int closed_code;
     NBN_Writer client_data_writer;
     NBN_Reader server_data_reader;
-} NBN_GameClient;
+} NBN_Client;
 
-static NBN_GameServer nbn_game_server;
-static NBN_GameClient nbn_game_client;
+static NBN_Server nbn_game_server;
+static NBN_Client nbn_game_client;
 
-typedef int (*NBN_Driver_Func_ClientStart)(NBN_GameClient *, const char *, uint16_t);
-typedef void (*NBN_Driver_Func_ClientStop)(NBN_GameClient *);
-typedef int (*NBN_Driver_Func_ClientSendPacket)(NBN_GameClient *, NBN_Packet *);
-typedef int (*NBN_Driver_Func_ClientRecvPackets)(NBN_GameClient *);
+typedef int (*NBN_Driver_Func_ClientStart)(NBN_Client *, const char *, uint16_t);
+typedef void (*NBN_Driver_Func_ClientStop)(NBN_Client *);
+typedef int (*NBN_Driver_Func_ClientSendPacket)(NBN_Client *, NBN_Packet *);
+typedef int (*NBN_Driver_Func_ClientRecvPackets)(NBN_Client *);
 
-typedef int (*NBN_Driver_Func_ServerStart)(NBN_GameServer *, uint16_t);
-typedef void (*NBN_Driver_Func_ServerStop)(NBN_GameServer *);
-typedef int (*NBN_Driver_Func_ServerSendPacketTo)(NBN_GameServer *, NBN_Packet *, NBN_Connection *);
-typedef void (*NBN_Driver_Func_ServerCleanupConnection)(NBN_GameServer *, NBN_Connection *);
-typedef int (*NBN_Driver_Func_ServerRecvPackets)(NBN_GameServer *);
+typedef int (*NBN_Driver_Func_ServerStart)(NBN_Server *, uint16_t);
+typedef void (*NBN_Driver_Func_ServerStop)(NBN_Server *);
+typedef int (*NBN_Driver_Func_ServerSendPacketTo)(NBN_Server *, NBN_Packet *, NBN_Connection *);
+typedef void (*NBN_Driver_Func_ServerCleanupConnection)(NBN_Server *, NBN_Connection *);
+typedef int (*NBN_Driver_Func_ServerRecvPackets)(NBN_Server *);
 
 typedef struct NBN_Driver_Implementation {
     /* Client functions */
@@ -522,16 +522,16 @@ typedef struct in_addr IN_ADDR;
 
 #endif // NBN_PLATFORM_WINDOWS
 
-static int UDP_Client_Start(NBN_GameClient *client, const char *host, uint16_t port);
-static void UDP_Client_Stop(NBN_GameClient *client);
-static int UDP_Client_RecvPackets(NBN_GameClient *client);
-static int UDP_Client_SendPacket(NBN_GameClient *client, NBN_Packet *packet);
+static int UDP_Client_Start(NBN_Client *client, const char *host, uint16_t port);
+static void UDP_Client_Stop(NBN_Client *client);
+static int UDP_Client_RecvPackets(NBN_Client *client);
+static int UDP_Client_SendPacket(NBN_Client *client, NBN_Packet *packet);
 
-static int UDP_Server_Start(NBN_GameServer *server, uint16_t port);
-static void UDP_Server_Stop(NBN_GameServer *server);
-static int UDP_Server_RecvPackets(NBN_GameServer *server);
-static int UDP_Server_SendPacketTo(NBN_GameServer *server, NBN_Packet *packet, NBN_Connection *connection);
-static void UDP_Server_CleanupConnection(NBN_GameServer *server, NBN_Connection *connection);
+static int UDP_Server_Start(NBN_Server *server, uint16_t port);
+static void UDP_Server_Stop(NBN_Server *server);
+static int UDP_Server_RecvPackets(NBN_Server *server);
+static int UDP_Server_SendPacketTo(NBN_Server *server, NBN_Packet *packet, NBN_Connection *connection);
+static void UDP_Server_CleanupConnection(NBN_Server *server, NBN_Connection *connection);
 
 static NBN_Driver nbn_udp_driver = {.id = NBN_DRIVER_UDP,
                                     .name = "UDP",
@@ -566,16 +566,16 @@ static SOCKET nbn_udp_sock;
 
 #include <emscripten.h>
 
-static int WebRTC_Client_Start(NBN_GameClient *client, const char *host, uint16_t port);
-static void WebRTC_Client_Stop(NBN_GameClient *client);
-static int WebRTC_Client_RecvPackets(NBN_GameClient *client);
-static int WebRTC_Client_SendPacket(NBN_GameClient *client, NBN_Packet *packet);
+static int WebRTC_Client_Start(NBN_Client *client, const char *host, uint16_t port);
+static void WebRTC_Client_Stop(NBN_Client *client);
+static int WebRTC_Client_RecvPackets(NBN_Client *client);
+static int WebRTC_Client_SendPacket(NBN_Client *client, NBN_Packet *packet);
 
-static int WebRTC_Server_Start(NBN_GameServer *server, uint16_t port);
-static void WebRTC_Server_Stop(NBN_GameServer *server);
-static int WebRTC_Server_RecvPackets(NBN_GameServer *server);
-static int WebRTC_Server_SendPacketTo(NBN_GameServer *server, NBN_Packet *packet, NBN_Connection *connection);
-static void WebRTC_Server_CleanupConnection(NBN_GameServer *server, NBN_Connection *connection);
+static int WebRTC_Server_Start(NBN_Server *server, uint16_t port);
+static void WebRTC_Server_Stop(NBN_Server *server);
+static int WebRTC_Server_RecvPackets(NBN_Server *server);
+static int WebRTC_Server_SendPacketTo(NBN_Server *server, NBN_Packet *packet, NBN_Connection *connection);
+static void WebRTC_Server_CleanupConnection(NBN_Server *server, NBN_Connection *connection);
 
 static NBN_Driver nbn_webrtc_em_driver = {.id = NBN_DRIVER_WEBRTC_EMSCRIPTEN,
                                           .name = "WebRTC_EMSCRIPTEN",
@@ -598,16 +598,16 @@ static NBN_WebRTC_Config nbn_wrtc_cfg = NBN_WEBRTC_DEFAULT_CONFIG;
 
 #ifdef NBN_WEBRTC_NATIVE
 
-static int WebRTC_Native_Client_Start(NBN_GameClient *client, const char *host, uint16_t port);
-static void WebRTC_Native_Client_Stop(NBN_GameClient *client);
-static int WebRTC_Native_Client_RecvPackets(NBN_GameClient *client);
-static int WebRTC_Native_Client_SendPacket(NBN_GameClient *client, NBN_Packet *packet);
+static int WebRTC_Native_Client_Start(NBN_Client *client, const char *host, uint16_t port);
+static void WebRTC_Native_Client_Stop(NBN_Client *client);
+static int WebRTC_Native_Client_RecvPackets(NBN_Client *client);
+static int WebRTC_Native_Client_SendPacket(NBN_Client *client, NBN_Packet *packet);
 
-static int WebRTC_Native_Server_Start(NBN_GameServer *server, uint16_t port);
-static void WebRTC_Native_Server_Stop(NBN_GameServer *server);
-static int WebRTC_Native_Server_RecvPackets(NBN_GameServer *server);
-static int WebRTC_Native_Server_SendPacketTo(NBN_GameServer *server, NBN_Packet *packet, NBN_Connection *connection);
-static void WebRTC_Native_Server_CleanupConnection(NBN_GameServer *server, NBN_Connection *connection);
+static int WebRTC_Native_Server_Start(NBN_Server *server, uint16_t port);
+static void WebRTC_Native_Server_Stop(NBN_Server *server);
+static int WebRTC_Native_Server_RecvPackets(NBN_Server *server);
+static int WebRTC_Native_Server_SendPacketTo(NBN_Server *server, NBN_Packet *packet, NBN_Connection *connection);
+static void WebRTC_Native_Server_CleanupConnection(NBN_Server *server, NBN_Connection *connection);
 
 static NBN_Driver nbn_webrtc_native_driver = {
     .id = NBN_DRIVER_WEBRTC_NATIVE,
@@ -1203,7 +1203,7 @@ static bool Channel_GetNextOutgoingMessage(NBN_Channel *channel, NBN_Message *re
     }
 }
 
-static int Channel_OnMessageSent(NBN_Endpoint *endpoint, NBN_Channel *channel, NBN_Message *message) {
+static int Channel_OnMessageSent(NBN_Channel *channel) {
     if (channel->mode == NBN_CHANNEL_UNRELIABLE) {
         channel->outgoing_message_count--;
         channel->current_capacity++;
@@ -1212,7 +1212,7 @@ static int Channel_OnMessageSent(NBN_Endpoint *endpoint, NBN_Channel *channel, N
     return 0;
 }
 
-static int Channel_OnOutgoingMessageAcked(NBN_Endpoint *endpoint, NBN_Channel *channel, uint16_t msg_id) {
+static int Channel_OnOutgoingMessageAcked(NBN_Channel *channel, uint16_t msg_id) {
     if (channel->mode != NBN_CHANNEL_RELIABLE) {
         return 0;
     }
@@ -1232,7 +1232,7 @@ static int Channel_OnOutgoingMessageAcked(NBN_Endpoint *endpoint, NBN_Channel *c
     channel->outgoing_message_count--;
 
     if (msg_id == channel->oldest_unacked_message_id) {
-        for (int i = 0; i < channel->buffer_size; i++) {
+        for (unsigned int i = 0; i < channel->buffer_size; i++) {
             uint16_t ack_msg_id = msg_id + i;
             int index = ack_msg_id % channel->buffer_size;
 
@@ -1262,15 +1262,15 @@ static int Channel_OnOutgoingMessageAcked(NBN_Endpoint *endpoint, NBN_Channel *c
 
 static void Connection_Destroy(NBN_Connection *);
 static uint32_t Connection_BuildPacketAckBits(NBN_Connection *);
-static int Connection_DecodePacketHeader(NBN_Endpoint *, NBN_Connection *, NBN_Packet *, double);
-static int Connection_AckPacket(NBN_Endpoint *, NBN_Connection *, uint16_t, double time);
+static int Connection_DecodePacketHeader(NBN_Connection *, NBN_Packet *, double);
+static int Connection_AckPacket(NBN_Connection *, uint16_t, double time);
 static void Connection_InitOutgoingPacket(NBN_Connection *, uint32_t, NBN_Packet *, NBN_PacketEntry **);
 static NBN_PacketEntry *Connection_InsertOutgoingPacketEntry(NBN_Connection *, uint16_t);
 static bool Connection_InsertReceivedPacketEntry(NBN_Connection *, uint16_t);
 static NBN_PacketEntry *Connection_FindSendPacketEntry(NBN_Connection *, uint16_t);
 static bool Connection_IsPacketReceived(NBN_Connection *, uint16_t);
 static int Connection_SendPacket(NBN_Connection *, NBN_Packet *, NBN_PacketEntry *, double, bool);
-static int Connection_ReadNextMessageHeader(NBN_Endpoint *, NBN_Reader *, NBN_MessageHeader *);
+static int Connection_ReadNextMessageHeader(NBN_Reader *, NBN_MessageHeader *);
 static void Connection_UpdateAveragePing(NBN_Connection *, double);
 static void Connection_UpdateAveragePacketLoss(NBN_Connection *, uint16_t);
 static void Connection_UpdateAverageUploadBandwidth(NBN_Connection *, float);
@@ -1281,7 +1281,7 @@ static bool Connection_CheckIfStale(NBN_Connection *, double);
 
 static int Connection_ProcessReceivedPacket(NBN_Endpoint *endpoint, NBN_Connection *connection, NBN_Packet *packet,
                                             double time) {
-    if (Connection_DecodePacketHeader(endpoint, connection, packet, time) < 0) {
+    if (Connection_DecodePacketHeader(connection, packet, time) < 0) {
         LogError("Failed to decode packet %d header", packet->header.seq_number);
 
         return NBN_ERROR;
@@ -1306,7 +1306,7 @@ static int Connection_ProcessReceivedPacket(NBN_Endpoint *endpoint, NBN_Connecti
         LogDebug("Reading message number %d from packet %d", i, packet->header.seq_number);
 
         static NBN_MessageHeader header = {0};
-        int msg_len = Connection_ReadNextMessageHeader(endpoint, &msg_reader, &header);
+        int msg_len = Connection_ReadNextMessageHeader(&msg_reader, &header);
 
         if (msg_len < 0) {
             LogError("Failed to read packet: invalid message header");
@@ -1324,7 +1324,7 @@ static int Connection_ProcessReceivedPacket(NBN_Endpoint *endpoint, NBN_Connecti
 
         NBN_Channel *channel = &connection->channels[channel_id];
 
-        if (msg_len > channel->max_message_len) {
+        if ((unsigned int)msg_len > channel->max_message_len) {
             LogError("Failed to read packet: message %d too large for channel %d (%d > %d)", header.id, channel_id,
                      header.length, channel->max_message_len);
 
@@ -1422,7 +1422,7 @@ static int Connection_FlushChannels(NBN_Endpoint *endpoint, NBN_Connection *conn
 
                 packet_entry->messages[packet_entry->messages_count++] = (NBN_MessageEntry){msg_id, channel->id};
 
-                Channel_OnMessageSent(endpoint, channel, &out_msg);
+                Channel_OnMessageSent(channel);
             }
 
             j++;
@@ -1458,9 +1458,8 @@ static bool Connection_CheckIfStale(NBN_Connection *connection, double time) {
 #endif
 }
 
-static int Connection_DecodePacketHeader(NBN_Endpoint *endpoint, NBN_Connection *connection, NBN_Packet *packet,
-                                         double time) {
-    if (Connection_AckPacket(endpoint, connection, packet->header.ack, time) < 0) {
+static int Connection_DecodePacketHeader(NBN_Connection *connection, NBN_Packet *packet, double time) {
+    if (Connection_AckPacket(connection, packet->header.ack, time) < 0) {
         LogError("Failed to ack packet %d", packet->header.seq_number);
 
         return NBN_ERROR;
@@ -1470,7 +1469,7 @@ static int Connection_DecodePacketHeader(NBN_Endpoint *endpoint, NBN_Connection 
         if (B_IS_UNSET(packet->header.ack_bits, i))
             continue;
 
-        if (Connection_AckPacket(endpoint, connection, packet->header.ack - (i + 1), time) < 0) {
+        if (Connection_AckPacket(connection, packet->header.ack - (i + 1), time) < 0) {
             LogError("Failed to ack packet %d", packet->header.seq_number);
 
             return NBN_ERROR;
@@ -1481,10 +1480,10 @@ static int Connection_DecodePacketHeader(NBN_Endpoint *endpoint, NBN_Connection 
 }
 
 static void Connection_Destroy(NBN_Connection *connection) {
-    for (int i = 0; i < connection->channel_count; i++) {
+    for (unsigned int i = 0; i < connection->channel_count; i++) {
         NBN_Channel *channel = &connection->channels[i];
 
-        for (int j = 0; j < channel->buffer_size; j++) {
+        for (unsigned int j = 0; j < channel->buffer_size; j++) {
             free(channel->incoming_messages_buffer[j].message.data);
             free(channel->outgoing_messages_buffer[j].message.data);
         }
@@ -1516,8 +1515,7 @@ static uint32_t Connection_BuildPacketAckBits(NBN_Connection *connection) {
     return ack_bits;
 }
 
-static int Connection_AckPacket(NBN_Endpoint *endpoint, NBN_Connection *connection, uint16_t ack_packet_seq_number,
-                                double time) {
+static int Connection_AckPacket(NBN_Connection *connection, uint16_t ack_packet_seq_number, double time) {
     NBN_PacketEntry *packet_entry = Connection_FindSendPacketEntry(connection, ack_packet_seq_number);
 
     if (packet_entry && !packet_entry->acked) {
@@ -1533,7 +1531,7 @@ static int Connection_AckPacket(NBN_Endpoint *endpoint, NBN_Connection *connecti
 
             NBN_Assert(channel != NULL);
 
-            if (Channel_OnOutgoingMessageAcked(endpoint, channel, msg_entry->id) < 0) {
+            if (Channel_OnOutgoingMessageAcked(channel, msg_entry->id) < 0) {
                 return NBN_ERROR;
             }
         }
@@ -1634,7 +1632,7 @@ static int Connection_SendPacket(NBN_Connection *connection, NBN_Packet *packet,
     }
 }
 
-static int Connection_ReadNextMessageHeader(NBN_Endpoint *endpoint, NBN_Reader *reader, NBN_MessageHeader *header) {
+static int Connection_ReadNextMessageHeader(NBN_Reader *reader, NBN_MessageHeader *header) {
     if (NBN_Reader_ReadUInt16(reader, &header->id) < 0) {
         LogError("Failed to read message id");
 
@@ -1781,7 +1779,7 @@ static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *endpoint, NBN_Con
     connection->channels = malloc(sizeof(NBN_Channel) * endpoint->channel_count);
     connection->channel_count = endpoint->channel_count;
 
-    for (int i = 0; i < endpoint->channel_count; i++) {
+    for (unsigned int i = 0; i < endpoint->channel_count; i++) {
         Channel_Init(&connection->channels[i], i, endpoint->channels[i]);
     }
 
@@ -1883,23 +1881,23 @@ static void Endpoint_UpdateTime(NBN_Endpoint *endpoint) {
  * ====== CLIENT ======
  */
 
-static int GameClient_ProcessReceivedMessage(NBN_Message *, NBN_Connection *);
-static NBN_Client_Event GameClient_HandleEvent(void);
-static NBN_Client_Event GameClient_HandleMessageReceivedEvent(void);
+static int Client_ProcessReceivedMessage(NBN_Message *, NBN_Connection *);
+static NBN_Client_Event Client_HandleEvent(void);
+static NBN_Client_Event Client_HandleMessageReceivedEvent(void);
 static NBN_Connection *CreateServerConnection(NBN_Driver_ID driver_id);
 
-void NBN_GameClient_Init(const char *protocol_name, const char *host, uint16_t port) {
-    nbn_game_client.config = (NBN_GameClient_Config){.protocol_name = protocol_name, .host = host, .port = port};
+void NBN_Client_Init(const char *protocol_name, const char *host, uint16_t port) {
+    nbn_game_client.config = (NBN_Client_Config){.protocol_name = protocol_name, .host = host, .port = port};
     nbn_game_client.client_data_writer.position = 0;
 
-    nbn_game_client.endpoint.default_reliable_channel = NBN_GameClient_CreateChannel(
+    nbn_game_client.endpoint.default_reliable_channel = NBN_Client_CreateChannel(
         NBN_CHANNEL_RELIABLE, NBN_CHANNEL_DEFAULT_BUFFER_SIZE, NBN_CHANNEL_DEFAULT_MAX_MESSAGE_SIZE);
-    nbn_game_client.endpoint.default_unreliable_channel = NBN_GameClient_CreateChannel(
+    nbn_game_client.endpoint.default_unreliable_channel = NBN_Client_CreateChannel(
         NBN_CHANNEL_UNRELIABLE, NBN_CHANNEL_DEFAULT_BUFFER_SIZE, NBN_CHANNEL_DEFAULT_MAX_MESSAGE_SIZE);
 }
 
-uint8_t NBN_GameClient_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_size, unsigned int max_message_len) {
-    NBN_GameClient_Config *cfg = &nbn_game_client.config;
+uint8_t NBN_Client_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_size, unsigned int max_message_len) {
+    NBN_Client_Config *cfg = &nbn_game_client.config;
 
     NBN_Assert(cfg->channel_count < NBN_MAX_CHANNEL_COUNT);
 
@@ -1912,7 +1910,7 @@ uint8_t NBN_GameClient_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_
     return channel_id;
 }
 
-unsigned int NBN_GameClient_GetChannelCurrentCapacity(uint8_t channel_id) {
+unsigned int NBN_Client_GetChannelCurrentCapacity(uint8_t channel_id) {
     NBN_Assert(channel_id < nbn_game_client.endpoint.channel_count);
 
     NBN_Channel *channel = &nbn_game_client.server_connection->channels[channel_id];
@@ -1920,7 +1918,7 @@ unsigned int NBN_GameClient_GetChannelCurrentCapacity(uint8_t channel_id) {
     return channel->current_capacity;
 }
 
-NBN_Writer *NBN_GameClient_WriteConnectionRequestData(void) {
+NBN_Writer *NBN_Client_WriteConnectionRequestData(void) {
     NBN_Writer_Init(&nbn_game_client.client_data_writer, nbn_game_client.endpoint.connection_request_data_buffer,
                     sizeof(nbn_game_client.endpoint.connection_request_data_buffer));
 
@@ -1969,8 +1967,8 @@ static int StartClientDrivers(const char *host, uint16_t port) {
     return driver_count;
 }
 
-int NBN_GameClient_Start(void) {
-    NBN_GameClient_Config config = nbn_game_client.config;
+int NBN_Client_Start(void) {
+    NBN_Client_Config config = nbn_game_client.config;
     const char *protocol_name = config.protocol_name;
     const char *host = config.host;
     uint16_t port = config.port;
@@ -1993,7 +1991,7 @@ int NBN_GameClient_Start(void) {
 
     unsigned int connection_data_len = nbn_game_client.client_data_writer.position;
 
-    NBN_Writer *writer = NBN_GameClient_CreateReliableMessage(NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
+    NBN_Writer *writer = NBN_Client_CreateReliableMessage(NBN_CONNECTION_REQUEST_MESSAGE_TYPE);
 
     if (!writer) {
         return NBN_ERROR;
@@ -2013,20 +2011,20 @@ int NBN_GameClient_Start(void) {
     return 0;
 }
 
-void NBN_GameClient_Stop(void) {
+void NBN_Client_Stop(void) {
     // Poll remaining events to clear the event queue
-    while (NBN_GameClient_Poll() != NBN_CLIENT_NO_EVENT) {
+    while (NBN_Client_Poll() != NBN_CLIENT_NO_EVENT) {
     }
 
     if (nbn_game_client.server_connection) {
         if (!nbn_game_client.server_connection->is_closed && !nbn_game_client.server_connection->is_stale) {
             LogInfo("Disconnecting...");
 
-            if (!NBN_GameClient_CreateReliableMessage(NBN_DISCONNECTION_MESSAGE_TYPE)) {
+            if (!NBN_Client_CreateReliableMessage(NBN_DISCONNECTION_MESSAGE_TYPE)) {
                 LogError("Failed to send disconnection message");
             }
 
-            if (NBN_GameClient_Flush() < 0) {
+            if (NBN_Client_Flush() < 0) {
                 LogError("Failed to send packets");
             }
 
@@ -2062,7 +2060,7 @@ void NBN_GameClient_Stop(void) {
     LogInfo("Stopped");
 }
 
-NBN_Reader *NBN_GameClient_ReadServerData(void) {
+NBN_Reader *NBN_Client_ReadServerData(void) {
     NBN_Endpoint *endpoint = &nbn_game_client.endpoint;
 
     NBN_Reader_Init(&nbn_game_client.server_data_reader, endpoint->server_initial_data_buffer,
@@ -2096,7 +2094,7 @@ static int ReadPacketsFromClientDrivers(void) {
     return 0;
 }
 
-NBN_Client_Event NBN_GameClient_Poll(void) {
+NBN_Client_Event NBN_Client_Poll(void) {
     NBN_Endpoint *endpoint = &nbn_game_client.endpoint;
 
     Endpoint_UpdateTime(endpoint);
@@ -2133,7 +2131,7 @@ NBN_Client_Event NBN_GameClient_Poll(void) {
                     LogDebug("Got message %d of type %d from channel %d", msg->header.id, msg->header.type,
                              channel->id);
 
-                    if (GameClient_ProcessReceivedMessage(msg, server_conn) < 0) {
+                    if (Client_ProcessReceivedMessage(msg, server_conn) < 0) {
                         LogError("Failed to process received message");
 
                         return NBN_ERROR;
@@ -2149,28 +2147,28 @@ NBN_Client_Event NBN_GameClient_Poll(void) {
 
     bool ret = EventQueue_Dequeue(&endpoint->event_queue, &nbn_game_client.last_event);
 
-    return ret ? GameClient_HandleEvent() : NBN_CLIENT_NO_EVENT;
+    return ret ? Client_HandleEvent() : NBN_CLIENT_NO_EVENT;
 }
 
-int NBN_GameClient_Flush(void) {
+int NBN_Client_Flush(void) {
     return Connection_FlushChannels(&nbn_game_client.endpoint, nbn_game_client.server_connection,
                                     nbn_game_client.endpoint.protocol_id, nbn_game_client.endpoint.time);
 }
 
-NBN_Writer *NBN_GameClient_CreateMessage(uint8_t type, uint8_t channel_id) {
+NBN_Writer *NBN_Client_CreateMessage(uint8_t type, uint8_t channel_id) {
     return Endpoint_CreateOutgoingMessage(&nbn_game_client.endpoint, nbn_game_client.server_connection, type,
                                           channel_id);
 }
 
-NBN_Writer *NBN_GameClient_CreateReliableMessage(uint8_t type) {
-    return NBN_GameClient_CreateMessage(type, nbn_game_client.endpoint.default_reliable_channel);
+NBN_Writer *NBN_Client_CreateReliableMessage(uint8_t type) {
+    return NBN_Client_CreateMessage(type, nbn_game_client.endpoint.default_reliable_channel);
 }
 
-NBN_Writer *NBN_GameClient_CreateUnreliableMessage(uint8_t type) {
-    return NBN_GameClient_CreateMessage(type, nbn_game_client.endpoint.default_unreliable_channel);
+NBN_Writer *NBN_Client_CreateUnreliableMessage(uint8_t type) {
+    return NBN_Client_CreateMessage(type, nbn_game_client.endpoint.default_unreliable_channel);
 }
 
-NBN_Reader *NBN_GameClient_ReadMessage(void) {
+NBN_Reader *NBN_Client_ReadMessage(void) {
     NBN_Assert(nbn_game_client.last_event.type == NBN_CLIENT_MESSAGE_RECEIVED);
 
     NBN_MessageInfo msg_info = nbn_game_client.last_event.data.message_info;
@@ -2189,19 +2187,19 @@ static NBN_Connection *CreateServerConnection(NBN_Driver_ID driver_id) {
     return server_connection;
 }
 
-NBN_MessageInfo NBN_GameClient_GetMessageInfo(void) {
+NBN_MessageInfo NBN_Client_GetMessageInfo(void) {
     NBN_Assert(nbn_game_client.last_event.type == NBN_CLIENT_MESSAGE_RECEIVED);
 
     return nbn_game_client.last_event.data.message_info;
 }
 
-NBN_ConnectionStats NBN_GameClient_GetStats(void) { return nbn_game_client.server_connection->stats; }
+NBN_ConnectionStats NBN_Client_GetStats(void) { return nbn_game_client.server_connection->stats; }
 
-int NBN_GameClient_GetServerCloseCode(void) { return nbn_game_client.closed_code; }
+int NBN_Client_GetServerCloseCode(void) { return nbn_game_client.closed_code; }
 
-bool NBN_GameClient_IsConnected(void) { return nbn_game_client.is_connected; }
+bool NBN_Client_IsConnected(void) { return nbn_game_client.is_connected; }
 
-static int GameClient_ProcessReceivedMessage(NBN_Message *message, NBN_Connection *server_connection) {
+static int Client_ProcessReceivedMessage(NBN_Message *message, NBN_Connection *server_connection) {
     NBN_Assert(nbn_game_client.server_connection == server_connection);
 
     NBN_Event ev;
@@ -2224,17 +2222,17 @@ static int GameClient_ProcessReceivedMessage(NBN_Message *message, NBN_Connectio
     return 0;
 }
 
-static NBN_Client_Event GameClient_HandleEvent(void) {
+static NBN_Client_Event Client_HandleEvent(void) {
     switch (nbn_game_client.last_event.type) {
     case NBN_CLIENT_MESSAGE_RECEIVED:
-        return GameClient_HandleMessageReceivedEvent();
+        return Client_HandleMessageReceivedEvent();
 
     default:
         return nbn_game_client.last_event.type;
     }
 }
 
-static NBN_Client_Event GameClient_HandleMessageReceivedEvent(void) {
+static NBN_Client_Event Client_HandleMessageReceivedEvent(void) {
     NBN_MessageInfo message_info = nbn_game_client.last_event.data.message_info;
     NBN_Endpoint *endpoint = &nbn_game_client.endpoint;
 
@@ -2242,7 +2240,7 @@ static NBN_Client_Event GameClient_HandleMessageReceivedEvent(void) {
 
     if (message_info.type == NBN_CLIENT_CLOSED_MESSAGE_TYPE) {
         nbn_game_client.is_connected = false;
-        NBN_Reader *reader = NBN_GameClient_ReadMessage();
+        NBN_Reader *reader = NBN_Client_ReadMessage();
 
         if (NBN_Reader_ReadInt32(reader, &nbn_game_client.closed_code) < 0) {
             LogError("Failed to read code from client closed message");
@@ -2258,7 +2256,7 @@ static NBN_Client_Event GameClient_HandleMessageReceivedEvent(void) {
             return NBN_ERROR;
         }
 
-        NBN_Reader *reader = NBN_GameClient_ReadMessage();
+        NBN_Reader *reader = NBN_Client_ReadMessage();
         unsigned int data_length;
 
         if (NBN_Reader_ReadUInt32(reader, &data_length) < 0) {
@@ -2306,29 +2304,29 @@ static void ClientDriver_OnPacketReceived(NBN_Packet *packet) {
  * ====== SERVER ======
  */
 
-static void GameServer_AddClient(NBN_Connection *);
-static int GameServer_CloseClientWithCode(NBN_Connection *client, int code, bool disconnection);
-static void GameServer_AddClientToClosedList(NBN_Connection *client);
-static int GameServer_ProcessReceivedMessage(NBN_Message *, NBN_Connection *);
-static int GameServer_CloseStaleClientConnections(void);
-static void GameServer_RemoveClosedClientConnections(void);
-static bool GameServer_HandleEvent(NBN_Server_Event *ev);
-static bool GameServer_HandleMessageReceivedEvent(NBN_Server_Event *ev);
+static void Server_AddClient(NBN_Connection *);
+static int Server_CloseClientWithCode(NBN_Connection *client, int code, bool disconnection);
+static void Server_AddClientToClosedList(NBN_Connection *client);
+static int Server_ProcessReceivedMessage(NBN_Message *, NBN_Connection *);
+static int Server_CloseStaleClientConnections(void);
+static void Server_RemoveClosedClientConnections(void);
+static bool Server_HandleEvent(NBN_Server_Event *ev);
+static bool Server_HandleMessageReceivedEvent(NBN_Server_Event *ev);
 
-void NBN_GameServer_Init(const char *protocol_name, uint16_t port) {
-    nbn_game_server.config = (NBN_GameServer_Config){.protocol_name = protocol_name, .port = port};
+void NBN_Server_Init(const char *protocol_name, uint16_t port) {
+    nbn_game_server.config = (NBN_Server_Config){.protocol_name = protocol_name, .port = port};
 
     nbn_game_server.server_data_writer.position = 0;
     hmdefault(nbn_game_server.clients, NULL);
 
-    nbn_game_server.endpoint.default_reliable_channel = NBN_GameServer_CreateChannel(
+    nbn_game_server.endpoint.default_reliable_channel = NBN_Server_CreateChannel(
         NBN_CHANNEL_RELIABLE, NBN_CHANNEL_DEFAULT_BUFFER_SIZE, NBN_CHANNEL_DEFAULT_MAX_MESSAGE_SIZE);
-    nbn_game_server.endpoint.default_unreliable_channel = NBN_GameServer_CreateChannel(
+    nbn_game_server.endpoint.default_unreliable_channel = NBN_Server_CreateChannel(
         NBN_CHANNEL_UNRELIABLE, NBN_CHANNEL_DEFAULT_BUFFER_SIZE, NBN_CHANNEL_DEFAULT_MAX_MESSAGE_SIZE);
 }
 
-uint8_t NBN_GameServer_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_size, unsigned int max_message_len) {
-    NBN_GameServer_Config *cfg = &nbn_game_server.config;
+uint8_t NBN_Server_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_size, unsigned int max_message_len) {
+    NBN_Server_Config *cfg = &nbn_game_server.config;
 
     NBN_Assert(cfg->channel_count < NBN_MAX_CHANNEL_COUNT);
 
@@ -2341,7 +2339,7 @@ uint8_t NBN_GameServer_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_
     return channel_id;
 }
 
-unsigned int NBN_GameServer_GetChannelCurrentCapacity(uint8_t channel_id, NBN_ConnectionHandle *conn) {
+unsigned int NBN_Server_GetChannelCurrentCapacity(uint8_t channel_id, NBN_ConnectionHandle *conn) {
     NBN_Assert(channel_id < nbn_game_server.endpoint.channel_count);
 
     NBN_Channel *channel = &HANDLE_TO_CONN(conn)->channels[channel_id];
@@ -2385,8 +2383,8 @@ static int StartServerDrivers(uint16_t port) {
     return driver_count;
 }
 
-int NBN_GameServer_Start(void) {
-    NBN_GameServer_Config config = nbn_game_server.config;
+int NBN_Server_Start(void) {
+    NBN_Server_Config config = nbn_game_server.config;
     const char *protocol_name = config.protocol_name;
     uint16_t port = config.port;
     uint32_t protocol_id = Endpoint_BuildProtocolId(protocol_name);
@@ -2407,9 +2405,9 @@ int NBN_GameServer_Start(void) {
     return 0;
 }
 
-void NBN_GameServer_Stop(void) {
+void NBN_Server_Stop(void) {
     // Poll remaning events to clear the event queue
-    while (NBN_GameServer_Poll() != NBN_SERVER_NO_EVENT) {
+    while (NBN_Server_Poll() != NBN_SERVER_NO_EVENT) {
     }
 
     for (unsigned int i = 0; i < hmlen(nbn_game_server.clients); i++) {
@@ -2457,13 +2455,13 @@ static NBN_Connection_ID NBN_BuildConnectionHash(NBN_Connection_ID id, NBN_Drive
     return ((NBN_Connection_ID)driver_byte << 56) | id;
 }
 
-NBN_ConnectionHandle *NBN_GameServer_GetConnection(NBN_Connection_ID id) {
+NBN_ConnectionHandle *NBN_Server_GetConnection(NBN_Connection_ID id) {
     return (NBN_ConnectionHandle *)hmget(nbn_game_server.clients, id);
 }
 
-unsigned int NBN_GameServer_GetClientCount(void) { return hmlen(nbn_game_server.clients); }
+unsigned int NBN_Server_GetClientCount(void) { return hmlen(nbn_game_server.clients); }
 
-NBN_ConnectionHandle *NBN_GameServer_GetNextClient(NBN_Client_Iterator *it) {
+NBN_ConnectionHandle *NBN_Server_GetNextClient(NBN_Client_Iterator *it) {
     for (; *it < hmlen(nbn_game_server.clients);) {
         NBN_Connection *conn = (NBN_Connection *)nbn_game_server.clients[*it].value;
 
@@ -2497,13 +2495,13 @@ static void ReadPacketsFromServerDrivers(void) {
 #endif // __EMSCRIPTEN__
 }
 
-NBN_Server_Event NBN_GameServer_Poll(void) {
+NBN_Server_Event NBN_Server_Poll(void) {
     Endpoint_UpdateTime(&nbn_game_server.endpoint);
 
     NBN_Endpoint *endpoint = &nbn_game_server.endpoint;
 
     if (EventQueue_IsEmpty(&endpoint->event_queue)) {
-        if (GameServer_CloseStaleClientConnections() < 0)
+        if (Server_CloseStaleClientConnections() < 0)
             return NBN_ERROR;
 
         ReadPacketsFromServerDrivers();
@@ -2520,7 +2518,7 @@ NBN_Server_Event NBN_GameServer_Poll(void) {
                     NBN_Message *msg;
 
                     while ((msg = Channel_GetNextRecvedMessage(channel)) != NULL) {
-                        if (GameServer_ProcessReceivedMessage(msg, client) < 0) {
+                        if (Server_ProcessReceivedMessage(msg, client) < 0) {
                             LogError("Failed to process received message");
 
                             return NBN_ERROR;
@@ -2536,13 +2534,13 @@ NBN_Server_Event NBN_GameServer_Poll(void) {
             client->last_read_packets_time = endpoint->time;
         }
 
-        GameServer_RemoveClosedClientConnections();
+        Server_RemoveClosedClientConnections();
     }
 
     NBN_Server_Event ev;
 
     while (EventQueue_Dequeue(&endpoint->event_queue, &nbn_game_server.last_event)) {
-        if (GameServer_HandleEvent(&ev)) {
+        if (Server_HandleEvent(&ev)) {
             return ev;
         }
     }
@@ -2550,10 +2548,10 @@ NBN_Server_Event NBN_GameServer_Poll(void) {
     return NBN_SERVER_NO_EVENT;
 }
 
-int NBN_GameServer_Flush(void) {
+int NBN_Server_Flush(void) {
     nbn_game_server.stats.upload_bandwidth = 0;
 
-    GameServer_RemoveClosedClientConnections();
+    Server_RemoveClosedClientConnections();
 
     for (unsigned int i = 0; i < hmlen(nbn_game_server.clients); i++) {
         NBN_Connection *client = nbn_game_server.clients[i].value;
@@ -2580,15 +2578,15 @@ static NBN_Connection *CreateClientConnection(NBN_Driver_ID driver_id, NBN_Conne
     return client;
 }
 
-int NBN_GameServer_CloseClientWithCode(NBN_ConnectionHandle *conn, int code) {
-    return GameServer_CloseClientWithCode(HANDLE_TO_CONN(conn), code, false);
+int NBN_Server_CloseClientWithCode(NBN_ConnectionHandle *conn, int code) {
+    return Server_CloseClientWithCode(HANDLE_TO_CONN(conn), code, false);
 }
 
-int NBN_GameServer_CloseClient(NBN_ConnectionHandle *conn) {
-    return GameServer_CloseClientWithCode(HANDLE_TO_CONN(conn), -1, false);
+int NBN_Server_CloseClient(NBN_ConnectionHandle *conn) {
+    return Server_CloseClientWithCode(HANDLE_TO_CONN(conn), -1, false);
 }
 
-NBN_Writer *NBN_GameServer_CreateMessage(uint8_t type, uint8_t channel_id, NBN_ConnectionHandle *receiver) {
+NBN_Writer *NBN_Server_CreateMessage(uint8_t type, uint8_t channel_id, NBN_ConnectionHandle *receiver) {
     NBN_Connection *conn = HANDLE_TO_CONN(receiver);
 
     NBN_Assert(conn->is_accepted || type == NBN_CLIENT_ACCEPTED_MESSAGE_TYPE || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE);
@@ -2600,7 +2598,7 @@ NBN_Writer *NBN_GameServer_CreateMessage(uint8_t type, uint8_t channel_id, NBN_C
 
         /* Do not close the client if we failed to send the close client message to avoid infinite loops */
         if (type != NBN_CLIENT_CLOSED_MESSAGE_TYPE) {
-            GameServer_CloseClientWithCode(conn, -1, false);
+            Server_CloseClientWithCode(conn, -1, false);
 
             return NULL;
         }
@@ -2609,15 +2607,15 @@ NBN_Writer *NBN_GameServer_CreateMessage(uint8_t type, uint8_t channel_id, NBN_C
     return writer;
 }
 
-NBN_Writer *NBN_GameServer_CreateReliableMessage(uint8_t type, NBN_ConnectionHandle *receiver) {
-    return NBN_GameServer_CreateMessage(type, nbn_game_server.endpoint.default_reliable_channel, receiver);
+NBN_Writer *NBN_Server_CreateReliableMessage(uint8_t type, NBN_ConnectionHandle *receiver) {
+    return NBN_Server_CreateMessage(type, nbn_game_server.endpoint.default_reliable_channel, receiver);
 }
 
-NBN_Writer *NBN_GameServer_CreateUnreliableMessage(uint8_t type, NBN_ConnectionHandle *receiver) {
-    return NBN_GameServer_CreateMessage(type, nbn_game_server.endpoint.default_unreliable_channel, receiver);
+NBN_Writer *NBN_Server_CreateUnreliableMessage(uint8_t type, NBN_ConnectionHandle *receiver) {
+    return NBN_Server_CreateMessage(type, nbn_game_server.endpoint.default_unreliable_channel, receiver);
 }
 
-NBN_Reader *NBN_GameServer_ReadMessage(void) {
+NBN_Reader *NBN_Server_ReadMessage(void) {
     NBN_Assert(nbn_game_server.last_event.type == NBN_CLIENT_MESSAGE_RECEIVED);
 
     NBN_MessageInfo msg_info = nbn_game_server.last_event.data.message_info;
@@ -2628,7 +2626,7 @@ NBN_Reader *NBN_GameServer_ReadMessage(void) {
     return reader;
 }
 
-NBN_Writer *NBN_GameServer_WriteConnectionData(void) {
+NBN_Writer *NBN_Server_WriteConnectionData(void) {
     NBN_Assert(nbn_game_server.last_event.type == NBN_SERVER_NEW_CONNECTION);
     NBN_Assert(nbn_game_server.last_event.data.connection != NULL);
 
@@ -2640,14 +2638,14 @@ NBN_Writer *NBN_GameServer_WriteConnectionData(void) {
     return &nbn_game_server.server_data_writer;
 }
 
-int NBN_GameServer_AcceptIncomingConnection(void) {
+int NBN_Server_AcceptIncomingConnection(void) {
     NBN_Assert(nbn_game_server.last_event.type == NBN_SERVER_NEW_CONNECTION);
     NBN_Assert(nbn_game_server.last_event.data.connection != NULL);
 
     unsigned data_length = nbn_game_server.server_data_writer.position;
     NBN_Connection *client = nbn_game_server.last_event.data.connection;
     NBN_Writer *writer =
-        NBN_GameServer_CreateReliableMessage(NBN_CLIENT_ACCEPTED_MESSAGE_TYPE, (NBN_ConnectionHandle *)client);
+        NBN_Server_CreateReliableMessage(NBN_CLIENT_ACCEPTED_MESSAGE_TYPE, (NBN_ConnectionHandle *)client);
 
     if (!writer) {
         return NBN_ERROR;
@@ -2669,26 +2667,26 @@ int NBN_GameServer_AcceptIncomingConnection(void) {
     return 0;
 }
 
-int NBN_GameServer_RejectIncomingConnectionWithCode(int code) {
+int NBN_Server_RejectIncomingConnectionWithCode(int code) {
     NBN_Assert(nbn_game_server.last_event.type == NBN_SERVER_NEW_CONNECTION);
     NBN_Assert(nbn_game_server.last_event.data.connection != NULL);
 
     NBN_Connection *conn = nbn_game_server.last_event.data.connection;
     LogDebug("Rejecting incoming connection %lld (code: %d)", conn->handle.id, code);
 
-    return GameServer_CloseClientWithCode(conn, code, false);
+    return Server_CloseClientWithCode(conn, code, false);
 }
 
-int NBN_GameServer_RejectIncomingConnection(void) { return NBN_GameServer_RejectIncomingConnectionWithCode(-1); }
+int NBN_Server_RejectIncomingConnection(void) { return NBN_Server_RejectIncomingConnectionWithCode(-1); }
 
-NBN_ConnectionHandle *NBN_GameServer_GetIncomingConnection(void) {
+NBN_ConnectionHandle *NBN_Server_GetIncomingConnection(void) {
     NBN_Assert(nbn_game_server.last_event.type == NBN_SERVER_NEW_CONNECTION);
     NBN_Assert(nbn_game_server.last_event.data.connection != NULL);
 
     return (NBN_ConnectionHandle *)nbn_game_server.last_event.data.connection;
 }
 
-NBN_Reader *NBN_GameServer_ReadConnectionRequestData(void) {
+NBN_Reader *NBN_Server_ReadConnectionRequestData(void) {
     NBN_Assert(nbn_game_server.last_event.type == NBN_SERVER_NEW_CONNECTION);
 
     NBN_Endpoint *endpoint = &nbn_game_server.endpoint;
@@ -2699,28 +2697,28 @@ NBN_Reader *NBN_GameServer_ReadConnectionRequestData(void) {
     return &nbn_game_server.client_data_reader;
 }
 
-NBN_DisconnectionInfo NBN_GameServer_GetDisconnectionInfo(void) {
+NBN_DisconnectionInfo NBN_Server_GetDisconnectionInfo(void) {
     NBN_Assert(nbn_game_server.last_event.type == NBN_SERVER_DISCONNECTION);
 
     return nbn_game_server.last_event.data.disconnection;
 }
 
-NBN_MessageInfo NBN_GameServer_GetMessageInfo(void) {
+NBN_MessageInfo NBN_Server_GetMessageInfo(void) {
     NBN_Assert(nbn_game_server.last_event.type == NBN_SERVER_MESSAGE_RECEIVED);
 
     return nbn_game_server.last_event.data.message_info;
 }
 
-NBN_GameServerStats NBN_GameServer_GetStats(void) { return nbn_game_server.stats; }
+NBN_ServerStats NBN_Server_GetStats(void) { return nbn_game_server.stats; }
 
-static void GameServer_AddClient(NBN_Connection *client) {
+static void Server_AddClient(NBN_Connection *client) {
     NBN_Assert(hmgeti(nbn_game_server.clients, client->handle.id) == -1);
 
     hmput(nbn_game_server.clients, client->handle.id, client);
     LogDebug("New client %lld", client->handle.id);
 }
 
-static int GameServer_CloseClientWithCode(NBN_Connection *client, int code, bool disconnection) {
+static int Server_CloseClientWithCode(NBN_Connection *client, int code, bool disconnection) {
     if (!client->is_closed && client->is_accepted) {
         if (!disconnection) {
             NBN_Event e;
@@ -2736,7 +2734,7 @@ static int GameServer_CloseClientWithCode(NBN_Connection *client, int code, bool
     if (client->is_stale) {
         LogDebug("Closing stale connection %lld", client->handle.id);
 
-        GameServer_AddClientToClosedList(client);
+        Server_AddClientToClosedList(client);
         client->is_closed = true;
 
         return 0;
@@ -2744,14 +2742,14 @@ static int GameServer_CloseClientWithCode(NBN_Connection *client, int code, bool
 
     LogDebug("Closing active connection %lld (will send a disconnection message)", client->handle.id);
 
-    GameServer_AddClientToClosedList(client);
+    Server_AddClientToClosedList(client);
     client->is_closed = true;
 
     if (!disconnection) {
         LogDebug("Send close message for client %lld (code: %d)", client->handle.id, code);
 
         NBN_Writer *writer =
-            NBN_GameServer_CreateReliableMessage(NBN_CLIENT_CLOSED_MESSAGE_TYPE, (NBN_ConnectionHandle *)client);
+            NBN_Server_CreateReliableMessage(NBN_CLIENT_CLOSED_MESSAGE_TYPE, (NBN_ConnectionHandle *)client);
 
         if (!writer) {
             return NBN_ERROR;
@@ -2763,7 +2761,7 @@ static int GameServer_CloseClientWithCode(NBN_Connection *client, int code, bool
     return 0;
 }
 
-static void GameServer_AddClientToClosedList(NBN_Connection *client) {
+static void Server_AddClientToClosedList(NBN_Connection *client) {
     if (client->is_closed)
         return;
 
@@ -2789,7 +2787,7 @@ static void GameServer_AddClientToClosedList(NBN_Connection *client) {
     }
 }
 
-static int GameServer_ProcessReceivedMessage(NBN_Message *message, NBN_Connection *client) {
+static int Server_ProcessReceivedMessage(NBN_Message *message, NBN_Connection *client) {
     NBN_Event ev;
 
     ev.type = NBN_CLIENT_MESSAGE_RECEIVED;
@@ -2812,7 +2810,7 @@ static int GameServer_ProcessReceivedMessage(NBN_Message *message, NBN_Connectio
     return 0;
 }
 
-static int GameServer_CloseStaleClientConnections(void) {
+static int Server_CloseStaleClientConnections(void) {
     for (unsigned int i = 0; i < hmlen(nbn_game_server.clients); i++) {
         NBN_Connection *client = nbn_game_server.clients[i].value;
 
@@ -2821,7 +2819,7 @@ static int GameServer_CloseStaleClientConnections(void) {
 
             client->is_stale = true;
 
-            if (GameServer_CloseClientWithCode(client, -1, false) < 0)
+            if (Server_CloseClientWithCode(client, -1, false) < 0)
                 return NBN_ERROR;
         }
     }
@@ -2829,7 +2827,7 @@ static int GameServer_CloseStaleClientConnections(void) {
     return 0;
 }
 
-static void GameServer_RemoveClosedClientConnections(void) {
+static void Server_RemoveClosedClientConnections(void) {
     NBN_ConnectionListNode *current = nbn_game_server.closed_clients_head;
 
     while (current) {
@@ -2878,9 +2876,9 @@ static void GameServer_RemoveClosedClientConnections(void) {
     }
 }
 
-static bool GameServer_HandleEvent(NBN_Server_Event *ev) {
+static bool Server_HandleEvent(NBN_Server_Event *ev) {
     if (nbn_game_server.last_event.type == NBN_SERVER_MESSAGE_RECEIVED) {
-        return GameServer_HandleMessageReceivedEvent(ev);
+        return Server_HandleMessageReceivedEvent(ev);
     }
 
     *ev = nbn_game_server.last_event.type;
@@ -2888,7 +2886,7 @@ static bool GameServer_HandleEvent(NBN_Server_Event *ev) {
 }
 
 // TODO: big ass function
-static bool GameServer_HandleMessageReceivedEvent(NBN_Server_Event *ev) {
+static bool Server_HandleMessageReceivedEvent(NBN_Server_Event *ev) {
     NBN_Event *last_event = &nbn_game_server.last_event;
     NBN_MessageInfo message_info = last_event->data.message_info;
     NBN_Connection *sender = HANDLE_TO_CONN(message_info.sender);
@@ -2902,7 +2900,7 @@ static bool GameServer_HandleMessageReceivedEvent(NBN_Server_Event *ev) {
         LogInfo("Received a disconnection request from client %lld (user_data: %p)", sender->handle.id,
                 sender->handle.user_data);
 
-        if (GameServer_CloseClientWithCode(sender, -1, true) < 0) {
+        if (Server_CloseClientWithCode(sender, -1, true) < 0) {
             *ev = NBN_ERROR;
             return true;
         }
@@ -2912,7 +2910,7 @@ static bool GameServer_HandleMessageReceivedEvent(NBN_Server_Event *ev) {
         last_event->type = NBN_SERVER_DISCONNECTION;
         last_event->data.disconnection = (NBN_DisconnectionInfo){sender->handle.id, sender->handle.user_data};
 
-        GameServer_RemoveClosedClientConnections();
+        Server_RemoveClosedClientConnections();
 
         *ev = NBN_SERVER_DISCONNECTION;
         return true;
@@ -2937,7 +2935,7 @@ static bool GameServer_HandleMessageReceivedEvent(NBN_Server_Event *ev) {
         return true;
     }
 
-    NBN_Reader *reader = NBN_GameServer_ReadMessage();
+    NBN_Reader *reader = NBN_Server_ReadMessage();
     unsigned int data_length;
 
     if (NBN_Reader_ReadUInt32(reader, &data_length) < 0) {
@@ -2979,14 +2977,14 @@ static bool GameServer_HandleMessageReceivedEvent(NBN_Server_Event *ev) {
     return true;
 }
 
-static void ServerDriver_OnClientConnected(NBN_Connection *client) { GameServer_AddClient(client); }
+static void ServerDriver_OnClientConnected(NBN_Connection *client) { Server_AddClient(client); }
 
 static int ServerDriver_OnClientPacketReceived(NBN_Packet *packet) {
     if (Endpoint_ProcessReceivedPacket(&nbn_game_server.endpoint, packet, packet->sender) < 0) {
         LogError("An error occured while processing packet from client %d, closing the client",
                  packet->sender->handle.id);
 
-        return GameServer_CloseClientWithCode(packet->sender, -1, false);
+        return Server_CloseClientWithCode(packet->sender, -1, false);
     }
 
     return 0;
@@ -3078,7 +3076,7 @@ static NBN_Connection_ID UDP_BuildConnectionID(NBN_IPAddress address) {
 static NBN_Connection *UDP_FindOrCreateClientConnectionByAddress(NBN_IPAddress address) {
     NBN_Connection_ID conn_id = UDP_BuildConnectionID(address);
     conn_id = NBN_BuildConnectionHash(conn_id, NBN_DRIVER_UDP);
-    NBN_ConnectionHandle *handle = NBN_GameServer_GetConnection(conn_id);
+    NBN_ConnectionHandle *handle = NBN_Server_GetConnection(conn_id);
 
     if (handle) {
         return HANDLE_TO_CONN(handle);
@@ -3131,7 +3129,9 @@ static char *UDP_GetLastErrorMessage(void) {
 #endif
 }
 
-static int UDP_Server_Start(NBN_GameServer *server, uint16_t port) {
+static int UDP_Server_Start(NBN_Server *server, uint16_t port) {
+    (void)server;
+
     if (UDP_InitSocket() < 0)
         return NBN_ERROR;
 
@@ -3141,9 +3141,12 @@ static int UDP_Server_Start(NBN_GameServer *server, uint16_t port) {
     return 0;
 }
 
-static void UDP_Server_Stop(NBN_GameServer *server) { UDP_DeinitSocket(); }
+static void UDP_Server_Stop(NBN_Server *server) {
+    (void)server;
+    UDP_DeinitSocket();
+}
 
-static int UDP_Server_RecvPackets(NBN_GameServer *server) {
+static int UDP_Server_RecvPackets(NBN_Server *server) {
     static NBN_Packet packet = {0};
     SOCKADDR_IN src_addr;
     socklen_t src_addr_len = sizeof(src_addr);
@@ -3177,9 +3180,14 @@ static int UDP_Server_RecvPackets(NBN_GameServer *server) {
     return 0;
 }
 
-static void UDP_Server_CleanupConnection(NBN_GameServer *server, NBN_Connection *connection) {}
+static void UDP_Server_CleanupConnection(NBN_Server *server, NBN_Connection *connection) {
+    (void)server;
+    (void)connection;
+}
 
-static int UDP_Server_SendPacketTo(NBN_GameServer *server, NBN_Packet *packet, NBN_Connection *connection) {
+static int UDP_Server_SendPacketTo(NBN_Server *server, NBN_Packet *packet, NBN_Connection *connection) {
+    (void)server;
+
     NBN_IPAddress dest_address = connection->driver_data.udp.ip_address;
     SOCKADDR_IN dest_addr;
 
@@ -3197,7 +3205,7 @@ static int UDP_Server_SendPacketTo(NBN_GameServer *server, NBN_Packet *packet, N
     return 0;
 }
 
-static int UDP_Client_Start(NBN_GameClient *client, const char *host, uint16_t port) {
+static int UDP_Client_Start(NBN_Client *client, const char *host, uint16_t port) {
     NBN_IPAddress *ip_address = &client->server_connection->driver_data.udp.ip_address;
 
     UDP_ParseIpAddress(host, port, ip_address);
@@ -3211,9 +3219,12 @@ static int UDP_Client_Start(NBN_GameClient *client, const char *host, uint16_t p
     return 0;
 }
 
-static void UDP_Client_Stop(NBN_GameClient *client) { UDP_DeinitSocket(); }
+static void UDP_Client_Stop(NBN_Client *client) {
+    (void)client;
+    UDP_DeinitSocket();
+}
 
-static int UDP_Client_RecvPackets(NBN_GameClient *client) {
+static int UDP_Client_RecvPackets(NBN_Client *client) {
     NBN_IPAddress server_address = client->server_connection->driver_data.udp.ip_address;
     static NBN_Packet packet = {0};
     SOCKADDR_IN src_addr;
@@ -3248,7 +3259,7 @@ static int UDP_Client_RecvPackets(NBN_GameClient *client) {
     return 0;
 }
 
-static int UDP_Client_SendPacket(NBN_GameClient *client, NBN_Packet *packet) {
+static int UDP_Client_SendPacket(NBN_Client *client, NBN_Packet *packet) {
     NBN_IPAddress server_address = client->server_connection->driver_data.udp.ip_address;
     SOCKADDR_IN dest_addr;
 
@@ -3298,7 +3309,7 @@ extern void __js_game_client_close(void);
 
 void NBN_WebRTC_SetConfig(NBN_WebRTC_Config config) { nbn_wrtc_cfg = config; }
 
-static int WebRTC_Server_Start(NBN_GameServer *server, uint16_t port) {
+static int WebRTC_Server_Start(NBN_Server *server, uint16_t port) {
     __js_game_server_init(server->endpoint.protocol_id, nbn_wrtc_cfg.enable_tls, nbn_wrtc_cfg.key_path,
                           nbn_wrtc_cfg.cert_path);
 
@@ -3308,16 +3319,16 @@ static int WebRTC_Server_Start(NBN_GameServer *server, uint16_t port) {
     return 0;
 }
 
-static void WebRTC_Server_Stop(NBN_GameServer *server) { __js_game_server_stop(); }
+static void WebRTC_Server_Stop(NBN_Server *server) { __js_game_server_stop(); }
 
-static int WebRTC_Server_RecvPackets(NBN_GameServer *server) {
+static int WebRTC_Server_RecvPackets(NBN_Server *server) {
     static NBN_Packet packet = {0};
     uint32_t peer_id;
     unsigned int len;
 
     while ((len = __js_game_server_dequeue_packet(&peer_id, packet.buffer)) > 0) {
         NBN_Connection_ID conn_id = NBN_BuildConnectionHash(peer_id, NBN_DRIVER_WEBRTC_EMSCRIPTEN);
-        NBN_ConnectionHandle *handle = NBN_GameServer_GetConnection(conn_id);
+        NBN_ConnectionHandle *handle = NBN_Server_GetConnection(conn_id);
         NBN_Connection *conn = NULL;
 
         if (handle == NULL) {
@@ -3342,17 +3353,17 @@ static int WebRTC_Server_RecvPackets(NBN_GameServer *server) {
     return 0;
 }
 
-static void WebRTC_Server_CleanupConnection(NBN_GameServer *server, NBN_Connection *conn) {
+static void WebRTC_Server_CleanupConnection(NBN_Server *server, NBN_Connection *conn) {
     NBN_Assert(conn != NULL);
 
     __js_game_server_close_client_peer(conn->driver_data.webrtc.peer_id);
 }
 
-static int WebRTC_Server_SendPacketTo(NBN_GameServer *server, NBN_Packet *packet, NBN_Connection *conn) {
+static int WebRTC_Server_SendPacketTo(NBN_Server *server, NBN_Packet *packet, NBN_Connection *conn) {
     return __js_game_server_send_packet_to(packet->buffer, packet->size, conn->driver_data.webrtc.peer_id);
 }
 
-static int WebRTC_Client_Start(NBN_GameClient *client, const char *host, uint16_t port) {
+static int WebRTC_Client_Start(NBN_Client *client, const char *host, uint16_t port) {
     __js_game_client_init(client->endpoint.protocol_id, nbn_wrtc_cfg.enable_tls);
 
     int res;
@@ -3363,9 +3374,9 @@ static int WebRTC_Client_Start(NBN_GameClient *client, const char *host, uint16_
     return 0;
 }
 
-static void WebRTC_Client_Stop(NBN_GameClient *client) { __js_game_client_close(); }
+static void WebRTC_Client_Stop(NBN_Client *client) { __js_game_client_close(); }
 
-static int WebRTC_Client_RecvPackets(NBN_GameClient *client) {
+static int WebRTC_Client_RecvPackets(NBN_Client *client) {
     static NBN_Packet packet = {0};
     unsigned int len;
 
@@ -3381,7 +3392,7 @@ static int WebRTC_Client_RecvPackets(NBN_GameClient *client) {
     return 0;
 }
 
-static int WebRTC_Client_SendPacket(NBN_GameClient *client, NBN_Packet *packet) {
+static int WebRTC_Client_SendPacket(NBN_Client *client, NBN_Packet *packet) {
     return __js_game_client_send_packet(packet->buffer, packet->size);
 }
 
@@ -3585,6 +3596,8 @@ static void ClosePeer(NBN_Connection *conn) {
 }
 
 static void Server_OnLocalDescription(int pc, const char *sdp, const char *type, void *user_ptr) {
+    (void)pc;
+
     LogDebug("Processing local description of type '%s'", type);
 
     if (strncmp(type, "answer", strlen("answer")) != 0) {
@@ -3613,8 +3626,8 @@ static void Server_OnPeerStateChanged(int pc, rtcState state, void *user_ptr) {
     }
 }
 
-static int CreatePeer(int ws, NBN_WebRTC_Peer_ID *peer_id, int *channel_id,
-                      rtcDescriptionCallbackFunc on_rtc_description_cb, rtcStateChangeCallbackFunc state_changed_cb) {
+static int CreatePeer(NBN_WebRTC_Peer_ID *peer_id, int *channel_id, rtcDescriptionCallbackFunc on_rtc_description_cb,
+                      rtcStateChangeCallbackFunc state_changed_cb) {
     rtcConfiguration rtcCfg = {.iceServers = nbn_wrtc_cfg.ice_servers,
                                .iceServersCount = (int)nbn_wrtc_cfg.ice_servers_count,
                                .disableAutoNegotiation = false};
@@ -3656,12 +3669,14 @@ static int CreatePeer(int ws, NBN_WebRTC_Peer_ID *peer_id, int *channel_id,
 }
 
 static void WS_Server_OnOpen(int ws, void *user_ptr) {
+    (void)user_ptr;
+
     LogDebug("WS %d is open", ws);
 
     NBN_WebRTC_Peer_ID peer_id;
     int channel_id;
 
-    if (CreatePeer(ws, &peer_id, &channel_id, Server_OnLocalDescription, Server_OnPeerStateChanged) < 0) {
+    if (CreatePeer(&peer_id, &channel_id, Server_OnLocalDescription, Server_OnPeerStateChanged) < 0) {
         LogError("Failed to create peer");
         return;
     }
@@ -3699,6 +3714,8 @@ static void WS_Server_OnMessage(int ws, const char *msg, int size, void *user_pt
 }
 
 static void OnWs_Connection(int wsserver, int ws, void *user_ptr) {
+    (void)wsserver;
+
     LogDebug("New WS connection %d (user_ptr: %p)", ws, user_ptr);
 
     rtcSetOpenCallback(ws, WS_Server_OnOpen);
@@ -3707,7 +3724,9 @@ static void OnWs_Connection(int wsserver, int ws, void *user_ptr) {
     rtcSetMessageCallback(ws, WS_Server_OnMessage);
 }
 
-static int WebRTC_Native_Server_Start(NBN_GameServer *server, uint16_t port) {
+static int WebRTC_Native_Server_Start(NBN_Server *server, uint16_t port) {
+    (void)server;
+
     rtcInitLogger(nbn_wrtc_cfg.log_level, WebRTC_Native_Log);
     rtcPreload();
 
@@ -3727,7 +3746,9 @@ static int WebRTC_Native_Server_Start(NBN_GameServer *server, uint16_t port) {
     return 0;
 }
 
-static void WebRTC_Native_Server_Stop(NBN_GameServer *server) {
+static void WebRTC_Native_Server_Stop(NBN_Server *server) {
+    (void)server;
+
     if (wsserver >= 0) {
         rtcDeleteWebSocketServer(wsserver);
     }
@@ -3735,7 +3756,7 @@ static void WebRTC_Native_Server_Stop(NBN_GameServer *server) {
     rtcCleanup();
 }
 
-static int WebRTC_Native_Server_RecvPackets(NBN_GameServer *server) {
+static int WebRTC_Native_Server_RecvPackets(NBN_Server *server) {
     static NBN_Packet packet = {0};
     const int buffer_size = sizeof(packet.buffer);
     int size = buffer_size;
@@ -3762,12 +3783,16 @@ static int WebRTC_Native_Server_RecvPackets(NBN_GameServer *server) {
     return 0;
 }
 
-static void WebRTC_Native_Server_CleanupConnection(NBN_GameServer *server, NBN_Connection *conn) {
+static void WebRTC_Native_Server_CleanupConnection(NBN_Server *server, NBN_Connection *conn) {
+    (void)server;
+
     NBN_Assert(conn != NULL);
     ClosePeer(conn);
 }
 
-static int WebRTC_Native_Server_SendPacketTo(NBN_GameServer *server, NBN_Packet *packet, NBN_Connection *conn) {
+static int WebRTC_Native_Server_SendPacketTo(NBN_Server *server, NBN_Packet *packet, NBN_Connection *conn) {
+    (void)server;
+
     NBN_WebRTC_Peer_ID peer_id = conn->driver_data.webrtc.peer_id;
     int channel_id = conn->driver_data.webrtc.channel_id;
 
@@ -3783,6 +3808,8 @@ static int WebRTC_Native_Server_SendPacketTo(NBN_GameServer *server, NBN_Packet 
 static bool wrtc_client_connected;
 
 static void Client_OnLocalDescription(int pc, const char *sdp, const char *type, void *user_ptr) {
+    (void)pc;
+
     LogDebug("Processing local description of type '%s'", type);
 
     if (strncmp(type, "offer", strlen("offer")) != 0) {
@@ -3797,6 +3824,8 @@ static void Client_OnLocalDescription(int pc, const char *sdp, const char *type,
 }
 
 static void Client_OnPeerStateChanged(int pc, rtcState state, void *user_ptr) {
+    (void)user_ptr;
+
     LogDebug("Server peer state changed to %d", pc, state);
 
     if (state == RTC_CONNECTED) {
@@ -3806,12 +3835,14 @@ static void Client_OnPeerStateChanged(int pc, rtcState state, void *user_ptr) {
 }
 
 static void WS_Client_OnOpen(int ws, void *user_ptr) {
+    (void)user_ptr;
+
     LogDebug("WS %d is open, creating peer...", ws);
 
     NBN_WebRTC_Peer_ID peer_id;
     int channel_id;
 
-    if (CreatePeer(ws, &peer_id, &channel_id, Client_OnLocalDescription, Client_OnPeerStateChanged) < 0) {
+    if (CreatePeer(&peer_id, &channel_id, Client_OnLocalDescription, Client_OnPeerStateChanged) < 0) {
         LogError("Failed to create peer");
         return;
     }
@@ -3842,7 +3873,9 @@ static void WS_Client_OnMessage(int ws, const char *msg, int size, void *user_pt
     ProcessSignalingMessage(peer_id, ws, msg, size, "answer");
 }
 
-static int WebRTC_Native_Client_Start(NBN_GameClient *client, const char *host, uint16_t port) {
+static int WebRTC_Native_Client_Start(NBN_Client *client, const char *host, uint16_t port) {
+    (void)client;
+
     wrtc_client_connected = false;
 
     rtcInitLogger(nbn_wrtc_cfg.log_level, WebRTC_Native_Log);
@@ -3900,7 +3933,7 @@ static int WebRTC_Native_Client_Start(NBN_GameClient *client, const char *host, 
     return wrtc_client_connected ? 0 : NBN_ERROR;
 }
 
-static void WebRTC_Native_Client_Stop(NBN_GameClient *client) {
+static void WebRTC_Native_Client_Stop(NBN_Client *client) {
     if (wrtc_client_connected) {
         ClosePeer(client->server_connection);
     }
@@ -3909,7 +3942,7 @@ static void WebRTC_Native_Client_Stop(NBN_GameClient *client) {
     rtcCleanup();
 }
 
-static int WebRTC_Native_Client_RecvPackets(NBN_GameClient *client) {
+static int WebRTC_Native_Client_RecvPackets(NBN_Client *client) {
     static NBN_Packet packet = {0};
     const int buffer_size = sizeof(packet.buffer);
     int size = buffer_size;
@@ -3928,7 +3961,7 @@ static int WebRTC_Native_Client_RecvPackets(NBN_GameClient *client) {
     return 0;
 }
 
-static int WebRTC_Native_Client_SendPacket(NBN_GameClient *client, NBN_Packet *packet) {
+static int WebRTC_Native_Client_SendPacket(NBN_Client *client, NBN_Packet *packet) {
     int channel_id = client->server_connection->driver_data.webrtc.channel_id;
 
     if (rtcSendMessage(channel_id, (char *)packet->buffer, packet->size) < 0) {
@@ -3959,17 +3992,17 @@ DWORD WINAPI PacketSimulator_Routine(LPVOID);
 static void *PacketSimulator_Routine(void *);
 #endif
 
-void NBN_GameClient_SetPing(float v) { nbn_game_client.endpoint.packet_simulator.ping = v; }
-void NBN_GameClient_SetJitter(float v) { nbn_game_client.endpoint.packet_simulator.jitter = v; }
-void NBN_GameClient_SetPacketLoss(float v) { nbn_game_client.endpoint.packet_simulator.packet_loss_ratio = v; }
-void NBN_GameClient_SetPacketDuplication(float v) {
+void NBN_Client_SetPing(float v) { nbn_game_client.endpoint.packet_simulator.ping = v; }
+void NBN_Client_SetJitter(float v) { nbn_game_client.endpoint.packet_simulator.jitter = v; }
+void NBN_Client_SetPacketLoss(float v) { nbn_game_client.endpoint.packet_simulator.packet_loss_ratio = v; }
+void NBN_Client_SetPacketDuplication(float v) {
     nbn_game_client.endpoint.packet_simulator.packet_duplication_ratio = v;
 }
 
-void NBN_GameServer_SetPing(float v) { nbn_game_server.endpoint.packet_simulator.ping = v; }
-void NBN_GameServer_SetJitter(float v) { nbn_game_server.endpoint.packet_simulator.jitter = v; }
-void NBN_GameServer_SetPacketLoss(float v) { nbn_game_server.endpoint.packet_simulator.packet_loss_ratio = v; }
-void NBN_GameServer_SetPacketDuplication(float v) {
+void NBN_Server_SetPing(float v) { nbn_game_server.endpoint.packet_simulator.ping = v; }
+void NBN_Server_SetJitter(float v) { nbn_game_server.endpoint.packet_simulator.jitter = v; }
+void NBN_Server_SetPacketLoss(float v) { nbn_game_server.endpoint.packet_simulator.packet_loss_ratio = v; }
+void NBN_Server_SetPacketDuplication(float v) {
     nbn_game_server.endpoint.packet_simulator.packet_duplication_ratio = v;
 }
 
@@ -4194,7 +4227,7 @@ static unsigned int PacketSimulator_GetRandomDuplicatePacketCount(NBN_PacketSimu
 
 #endif // NBN_DEBUG
 
-static int log_level = NBN_DEFAULT_LOG_LEVEL;
+static NBN_LogLevel log_level = NBN_DEFAULT_LOG_LEVEL;
 
 void NBN_SetLogLevel(NBN_LogLevel level) { log_level = level; }
 

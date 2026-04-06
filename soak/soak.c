@@ -75,17 +75,17 @@ int Soak_Init(int argc, char *argv[]) {
 
     /* Packet simulator configuration */
 #ifdef SOAK_CLIENT
-    NBN_GameClient_SetPing(soak_options.ping);
-    NBN_GameClient_SetJitter(soak_options.jitter);
-    NBN_GameClient_SetPacketLoss(soak_options.packet_loss);
-    NBN_GameClient_SetPacketDuplication(soak_options.packet_duplication);
+    NBN_Client_SetPing(soak_options.ping);
+    NBN_Client_SetJitter(soak_options.jitter);
+    NBN_Client_SetPacketLoss(soak_options.packet_loss);
+    NBN_Client_SetPacketDuplication(soak_options.packet_duplication);
 #endif
 
 #ifdef SOAK_SERVER
-    NBN_GameServer_SetPing(soak_options.ping);
-    NBN_GameServer_SetJitter(soak_options.jitter);
-    NBN_GameServer_SetPacketLoss(soak_options.packet_loss);
-    NBN_GameServer_SetPacketDuplication(soak_options.packet_duplication);
+    NBN_Server_SetPing(soak_options.ping);
+    NBN_Server_SetJitter(soak_options.jitter);
+    NBN_Server_SetPacketLoss(soak_options.packet_loss);
+    NBN_Server_SetPacketDuplication(soak_options.packet_duplication);
 #endif
 
     return 0;

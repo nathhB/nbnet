@@ -136,10 +136,10 @@ typedef enum NBN_Server_Event {
     NBN_SERVER_MESSAGE_RECEIVED
 } NBN_Server_Event;
 
-typedef struct NBN_GameServerStats {
+typedef struct NBN_ServerStats {
     float upload_bandwidth;   /* Total upload bandwith of the game server */
     float download_bandwidth; /* Total download bandwith of the game server */
-} NBN_GameServerStats;
+} NBN_ServerStats;
 
 typedef struct NBN_DisconnectionInfo {
     NBN_Connection_ID conn_id; /* ID if the disconnected connection */
@@ -200,32 +200,32 @@ int NBN_Reader_ReadString(NBN_Reader *reader, char *str, unsigned int max_len);
  * @param host Host to connect to
  * @param port Port to connect to
  */
-void NBN_GameClient_Init(const char *protocol_name, const char *host, uint16_t port);
+void NBN_Client_Init(const char *protocol_name, const char *host, uint16_t port);
 
 // TODO: doc
-uint8_t NBN_GameClient_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_size, unsigned int max_message_len);
+uint8_t NBN_Client_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_size, unsigned int max_message_len);
 
 // TODO: doc
-unsigned int NBN_GameClient_GetChannelCurrentCapacity(uint8_t channel_id);
+unsigned int NBN_Client_GetChannelCurrentCapacity(uint8_t channel_id);
 
 // TODO: doc
-NBN_Writer *NBN_GameClient_WriteConnectionRequestData(void);
+NBN_Writer *NBN_Client_WriteConnectionRequestData(void);
 
 /**
  * Start the game client.
  *
  * @return 0 when successully started, -1 otherwise
  */
-int NBN_GameClient_Start(void);
+int NBN_Client_Start(void);
 
 /**
- * Disconnect from the server. The client can be restarted by calling NBN_GameClient_Start or
- * NBN_GameClient_StartWithData again.
+ * Disconnect from the server. The client can be restarted by calling NBN_Client_Start or
+ * NBN_Client_StartWithData again.
  */
-void NBN_GameClient_Stop(void);
+void NBN_Client_Stop(void);
 
 // TODO: doc
-NBN_Reader *NBN_GameClient_ReadServerData(void);
+NBN_Reader *NBN_Client_ReadServerData(void);
 
 /**
  * Poll game client events.
@@ -234,7 +234,7 @@ NBN_Reader *NBN_GameClient_ReadServerData(void);
  *
  * @return The code of the polled event or NBN_NO_EVENT when there is no more events.
  */
-NBN_Client_Event NBN_GameClient_Poll(void);
+NBN_Client_Event NBN_Client_Poll(void);
 
 /**
  * Pack all enqueued messages into packets and send them.
@@ -244,19 +244,19 @@ NBN_Client_Event NBN_GameClient_Poll(void);
  *
  * @return 0 when successful, -1 otherwise
  */
-int NBN_GameClient_Flush(void);
+int NBN_Client_Flush(void);
 
 // TODO: doc
-NBN_Writer *NBN_GameClient_CreateMessage(uint8_t type, uint8_t channel_id);
+NBN_Writer *NBN_Client_CreateMessage(uint8_t type, uint8_t channel_id);
 
 // TODO: doc
-NBN_Writer *NBN_GameClient_CreateReliableMessage(uint8_t type);
+NBN_Writer *NBN_Client_CreateReliableMessage(uint8_t type);
 
 // TODO: doc
-NBN_Writer *NBN_GameClient_CreateUnreliableMessage(uint8_t type);
+NBN_Writer *NBN_Client_CreateUnreliableMessage(uint8_t type);
 
 // TODO: doc
-NBN_Reader *NBN_GameClient_ReadMessage(void);
+NBN_Reader *NBN_Client_ReadMessage(void);
 
 /**
  * Retrieve the info about the last received message.
@@ -266,14 +266,14 @@ NBN_Reader *NBN_GameClient_ReadMessage(void);
  *
  * @return A structure containing information about the received message
  */
-NBN_MessageInfo NBN_GameClient_GetMessageInfo(void);
+NBN_MessageInfo NBN_Client_GetMessageInfo(void);
 
 /**
  * Retrieve network stats about the game client.
  *
  * @return A structure containing network related stats about the game client
  */
-NBN_ConnectionStats NBN_GameClient_GetStats(void);
+NBN_ConnectionStats NBN_Client_GetStats(void);
 
 /**
  * Retrieve the code sent by the server when closing the connection.
@@ -282,12 +282,12 @@ NBN_ConnectionStats NBN_GameClient_GetStats(void);
  *
  * @return The code used by the server when closing the connection or -1 (the default code)
  */
-int NBN_GameClient_GetServerCloseCode(void);
+int NBN_Client_GetServerCloseCode(void);
 
 /**
  * @return true if connected, false otherwise
  */
-bool NBN_GameClient_IsConnected(void);
+bool NBN_Client_IsConnected(void);
 
 /**
  * Initialize the game server with minimal configuration.
@@ -296,33 +296,33 @@ bool NBN_GameClient_IsConnected(void);
  * able to communicate
  * @param port The port clients will connect to
  */
-void NBN_GameServer_Init(const char *protocol_name, uint16_t port);
+void NBN_Server_Init(const char *protocol_name, uint16_t port);
 
 // TODO: doc
-uint8_t NBN_GameServer_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_size, unsigned int max_message_len);
+uint8_t NBN_Server_CreateChannel(NBN_Channel_Mode mode, unsigned int buffer_size, unsigned int max_message_len);
 
 // TODO: doc
-unsigned int NBN_GameServer_GetChannelCurrentCapacity(uint8_t channel_id, NBN_ConnectionHandle *conn);
+unsigned int NBN_Server_GetChannelCurrentCapacity(uint8_t channel_id, NBN_ConnectionHandle *conn);
 
 /**
  * Start the game server with the provided configuration.
  *
  * @return 0 when successfully started, -1 otherwise
  */
-int NBN_GameServer_Start(void);
+int NBN_Server_Start(void);
 
 /**
  * Stop the game server and clean everything up.
  */
-void NBN_GameServer_Stop(void);
+void NBN_Server_Stop(void);
 
 // TODO: doc
-NBN_ConnectionHandle *NBN_GameServer_GetConnection(NBN_Connection_ID);
+NBN_ConnectionHandle *NBN_Server_GetConnection(NBN_Connection_ID);
 
 // TODO: doc
-unsigned int NBN_GameServer_GetClientCount(void);
+unsigned int NBN_Server_GetClientCount(void);
 
-NBN_ConnectionHandle *NBN_GameServer_GetNextClient(NBN_Client_Iterator *it);
+NBN_ConnectionHandle *NBN_Server_GetNextClient(NBN_Client_Iterator *it);
 
 /**
  * Poll game server events.
@@ -331,7 +331,7 @@ NBN_ConnectionHandle *NBN_GameServer_GetNextClient(NBN_Client_Iterator *it);
  *
  * @return The code of the polled event or NBN_NO_EVENT when there is no more events.
  */
-NBN_Server_Event NBN_GameServer_Poll(void);
+NBN_Server_Event NBN_Server_Poll(void);
 
 /**
  * Pack all enqueued messages into packets and send them.
@@ -341,7 +341,7 @@ NBN_Server_Event NBN_GameServer_Poll(void);
  *
  * @return 0 when successful, -1 otherwise
  */
-int NBN_GameServer_Flush(void);
+int NBN_Server_Flush(void);
 
 /**
  * Close a client's connection without a specific code (default code is -1)
@@ -350,7 +350,7 @@ int NBN_GameServer_Flush(void);
  *
  * @return 0 when successful, -1 otherwise
  */
-int NBN_GameServer_CloseClient(NBN_ConnectionHandle *conn);
+int NBN_Server_CloseClient(NBN_ConnectionHandle *conn);
 
 /**
  * Close a client's connection with a specific code.
@@ -362,25 +362,25 @@ int NBN_GameServer_CloseClient(NBN_ConnectionHandle *conn);
  *
  * @return 0 when successful, -1 otherwise
  */
-int NBN_GameServer_CloseClientWithCode(NBN_ConnectionHandle *conn, int code);
+int NBN_Server_CloseClientWithCode(NBN_ConnectionHandle *conn, int code);
 
 // TODO: doc
-NBN_Writer *NBN_GameServer_CreateMessage(uint8_t type, uint8_t channel_id, NBN_ConnectionHandle *receiver);
+NBN_Writer *NBN_Server_CreateMessage(uint8_t type, uint8_t channel_id, NBN_ConnectionHandle *receiver);
 
 // TODO: doc
-NBN_Writer *NBN_GameServer_CreateReliableMessage(uint8_t type, NBN_ConnectionHandle *receiver);
+NBN_Writer *NBN_Server_CreateReliableMessage(uint8_t type, NBN_ConnectionHandle *receiver);
 
 // TODO: doc
-NBN_Writer *NBN_GameServer_CreateUnreliableMessage(uint8_t type, NBN_ConnectionHandle *receiver);
+NBN_Writer *NBN_Server_CreateUnreliableMessage(uint8_t type, NBN_ConnectionHandle *receiver);
 
 // TODO: doc
-NBN_Reader *NBN_GameServer_ReadMessage(void);
+NBN_Reader *NBN_Server_ReadMessage(void);
 
 // TODO: doc
-NBN_Writer *NBN_GameServer_WriteConnectionData(void);
+NBN_Writer *NBN_Server_WriteConnectionData(void);
 
 // TODO: doc
-int NBN_GameServer_AcceptIncomingConnection(void);
+int NBN_Server_AcceptIncomingConnection(void);
 
 /**
  * Reject the last client connection request with a specific code.
@@ -392,7 +392,7 @@ int NBN_GameServer_AcceptIncomingConnection(void);
  *
  * @return 0 when successful, -1 otherwise
  */
-int NBN_GameServer_RejectIncomingConnectionWithCode(int code);
+int NBN_Server_RejectIncomingConnectionWithCode(int code);
 
 /**
  * Reject the last client connection request without any specific code (default code is -1)
@@ -401,7 +401,7 @@ int NBN_GameServer_RejectIncomingConnectionWithCode(int code);
  *
  * @return 0 when successful, -1 otherwise
  */
-int NBN_GameServer_RejectIncomingConnection(void);
+int NBN_Server_RejectIncomingConnection(void);
 
 /**
  * Retrieve the last connection to the game server.
@@ -410,10 +410,10 @@ int NBN_GameServer_RejectIncomingConnection(void);
  *
  * @return A pointer to a NBN_Connection representing the new connection
  */
-NBN_ConnectionHandle *NBN_GameServer_GetIncomingConnection(void);
+NBN_ConnectionHandle *NBN_Server_GetIncomingConnection(void);
 
 // TODO: doc
-NBN_Reader *NBN_GameServer_ReadConnectionRequestData(void);
+NBN_Reader *NBN_Server_ReadConnectionRequestData(void);
 
 /**
  * Return the information about the last disconnected client.
@@ -423,7 +423,7 @@ NBN_Reader *NBN_GameServer_ReadConnectionRequestData(void);
  *
  * @return information about the last disconnected client
  */
-NBN_DisconnectionInfo NBN_GameServer_GetDisconnectionInfo(void);
+NBN_DisconnectionInfo NBN_Server_GetDisconnectionInfo(void);
 
 /**
  * Retrieve the info about the last received message.
@@ -433,14 +433,14 @@ NBN_DisconnectionInfo NBN_GameServer_GetDisconnectionInfo(void);
  *
  * @return A structure containing information about the received message
  */
-NBN_MessageInfo NBN_GameServer_GetMessageInfo(void);
+NBN_MessageInfo NBN_Server_GetMessageInfo(void);
 
 /**
  * Retrieve network stats about the game server.
  *
  * @return A structure containing network related stats about the game server
  */
-NBN_GameServerStats NBN_GameServer_GetStats(void);
+NBN_ServerStats NBN_Server_GetStats(void);
 
 #ifdef __EMSCRIPTEN__
 
@@ -501,15 +501,15 @@ void NBN_WebRTC_SetConfig(NBN_WebRTC_Config config);
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
 
-void NBN_GameClient_SetPing(float v);
-void NBN_GameClient_SetJitter(float v);
-void NBN_GameClient_SetPacketLoss(float v);
-void NBN_GameClient_SetPacketDuplication(float v);
+void NBN_Client_SetPing(float v);
+void NBN_Client_SetJitter(float v);
+void NBN_Client_SetPacketLoss(float v);
+void NBN_Client_SetPacketDuplication(float v);
 
-void NBN_GameServer_SetPing(float v);
-void NBN_GameServer_SetJitter(float v);
-void NBN_GameServer_SetPacketLoss(float v);
-void NBN_GameServer_SetPacketDuplication(float v);
+void NBN_Server_SetPing(float v);
+void NBN_Server_SetJitter(float v);
+void NBN_Server_SetPacketLoss(float v);
+void NBN_Server_SetPacketDuplication(float v);
 
 #else
 
@@ -517,15 +517,15 @@ void NBN_GameServer_SetPacketDuplication(float v);
     do {                                                                                                               \
     } while (0);
 
-#define NBN_GameClient_SetPing(v) NBN_PacketSimulator_Disabled
-#define NBN_GameClient_SetJitter(v) NBN_PacketSimulator_Disabled
-#define NBN_GameClient_SetPacketLoss(v) NBN_PacketSimulator_Disabled
-#define NBN_GameClient_SetPacketDuplication(v) NBN_PacketSimulator_Disabled
+#define NBN_Client_SetPing(v) NBN_PacketSimulator_Disabled
+#define NBN_Client_SetJitter(v) NBN_PacketSimulator_Disabled
+#define NBN_Client_SetPacketLoss(v) NBN_PacketSimulator_Disabled
+#define NBN_Client_SetPacketDuplication(v) NBN_PacketSimulator_Disabled
 
-#define NBN_GameServer_SetPing(v) NBN_PacketSimulator_Disabled
-#define NBN_GameServer_SetJitter(v) NBN_PacketSimulator_Disabled
-#define NBN_GameServer_SetPacketLoss(v) NBN_PacketSimulator_Disabled
-#define NBN_GameServer_SetPacketDuplication(v) NBN_PacketSimulator_Disabled
+#define NBN_Server_SetPing(v) NBN_PacketSimulator_Disabled
+#define NBN_Server_SetJitter(v) NBN_PacketSimulator_Disabled
+#define NBN_Server_SetPacketLoss(v) NBN_PacketSimulator_Disabled
+#define NBN_Server_SetPacketDuplication(v) NBN_PacketSimulator_Disabled
 
 #endif /* NBN_DEBUG && NBN_USE_PACKET_SIMULATOR */
 
