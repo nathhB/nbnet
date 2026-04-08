@@ -458,7 +458,8 @@ typedef struct NBN_WebRTC_Config {
     const char *key_path;
 } NBN_WebRTC_Config;
 
-void NBN_WebRTC_SetConfig(NBN_WebRTC_Config config);
+void NBN_Client_SetWebRTC_Config(NBN_Client *client, NBN_WebRTC_Config config);
+void NBN_Server_SetWebRTC_Config(NBN_Server *server, NBN_WebRTC_Config config);
 
 // TODO: ice servers currently hard coded in driver js code
 #define NBN_WEBRTC_DEFAULT_CONFIG (NBN_WebRTC_Config){.enable_tls = false, .cert_path = NULL, .key_path = NULL};

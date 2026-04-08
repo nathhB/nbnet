@@ -34,6 +34,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/errno.h>
+#include <arpa/inet.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 
@@ -85,7 +86,6 @@ typedef int socklen_t;
 
 #elif defined(NBN_PLATFORM_UNIX) || defined(NBN_PLATFORM_MAC)
 
-#include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -478,9 +478,7 @@ struct NBN_Server {
 #if defined(__EMSCRIPTEN__) || defined(NBN_WEBRTC_NATIVE)
         struct {
             NBN_WebRTC_Config cfg;
-#ifdef NBN_WEBRTC_NATIVE
             int ws_server;
-#endif // NBN_WEBRTC_NATIVE
         } webrtc;
 #endif // defined(__EMSCRIPTEN__) || defined(NBN_WEBRTC_NATIVE)
     } driver_data;
@@ -600,7 +598,7 @@ static NBN_Driver nbn_udp_driver = {.id = NBN_DRIVER_UDP,
 static int WebRTC_Client_Start(NBN_Client *client, const char *host, uint16_t port);
 static void WebRTC_Client_Stop(NBN_Client *client);
 static int WebRTC_Client_RecvPackets(NBN_Client *client);
-static int WebRTC_Client_SendPacket(NBN_Client *client, NBN_Packet *packet);
+static int WebRTC_Client_SendPacket(NBN_Client *client, NBN_Packet *packet, NBN_Connection *connection);
 
 static int WebRTC_Server_Start(NBN_Server *server, uint16_t port);
 static void WebRTC_Server_Stop(NBN_Server *server);
@@ -3352,11 +3350,18 @@ extern int __js_game_client_dequeue_packet(uint8_t *);
 extern int __js_game_client_send_packet(uint8_t *, unsigned int);
 extern void __js_game_client_close(void);
 
-void NBN_WebRTC_SetConfig(NBN_WebRTC_Config config) { nbn_wrtc_cfg = config; }
+void NBN_Client_SetWebRTC_Config(NBN_Client *client, NBN_WebRTC_Config config) {
+    client->driver_data.webrtc.cfg = config;
+}
+
+void NBN_Server_SetWebRTC_Config(NBN_Server *server, NBN_WebRTC_Config config) {
+    server->driver_data.webrtc.cfg = config;
+}
 
 static int WebRTC_Server_Start(NBN_Server *server, uint16_t port) {
-    __js_game_server_init(server->endpoint.protocol_id, nbn_wrtc_cfg.enable_tls, nbn_wrtc_cfg.key_path,
-                          nbn_wrtc_cfg.cert_path);
+    NBN_WebRTC_Config cfg = server->driver_data.webrtc.cfg;
+
+    __js_game_server_init(server->endpoint.protocol_id, cfg.enable_tls, cfg.key_path, cfg.cert_path);
 
     if (__js_game_server_start(port) < 0)
         return -1;
@@ -3364,7 +3369,11 @@ static int WebRTC_Server_Start(NBN_Server *server, uint16_t port) {
     return 0;
 }
 
-static void WebRTC_Server_Stop(NBN_Server *server) { __js_game_server_stop(); }
+static void WebRTC_Server_Stop(NBN_Server *server) {
+    (void)server;
+
+    __js_game_server_stop();
+}
 
 static int WebRTC_Server_RecvPackets(NBN_Server *server) {
     static NBN_Packet packet = {0};
@@ -3373,7 +3382,7 @@ static int WebRTC_Server_RecvPackets(NBN_Server *server) {
 
     while ((len = __js_game_server_dequeue_packet(&peer_id, packet.buffer)) > 0) {
         NBN_Connection_ID conn_id = NBN_BuildConnectionHash(peer_id, NBN_DRIVER_WEBRTC_EMSCRIPTEN);
-        NBN_ConnectionHandle *handle = NBN_Server_GetConnection(conn_id);
+        NBN_ConnectionHandle *handle = NBN_Server_GetConnection(server, conn_id);
         NBN_Connection *conn = NULL;
 
         if (handle == NULL) {
@@ -3383,7 +3392,7 @@ static int WebRTC_Server_RecvPackets(NBN_Server *server) {
             conn->driver_data.webrtc.peer_id = peer_id;
             conn->driver_data.endpoint_ptr = server;
 
-            ServerDriver_OnClientConnected(conn);
+            ServerDriver_OnClientConnected(server, conn);
         } else {
             conn = HANDLE_TO_CONN(handle);
         }
@@ -3400,17 +3409,22 @@ static int WebRTC_Server_RecvPackets(NBN_Server *server) {
 }
 
 static void WebRTC_Server_CleanupConnection(NBN_Server *server, NBN_Connection *conn) {
-    NBN_Assert(conn != NULL);
+    (void)server;
 
+    NBN_Assert(conn != NULL);
     __js_game_server_close_client_peer(conn->driver_data.webrtc.peer_id);
 }
 
-static int WebRTC_Server_SendPacketTo(NBN_Endpoint *server, NBN_Packet *packet, NBN_Connection *conn) {
+static int WebRTC_Server_SendPacketTo(NBN_Server *server, NBN_Packet *packet, NBN_Connection *conn) {
+    (void)server;
+
     return __js_game_server_send_packet_to(packet->buffer, packet->size, conn->driver_data.webrtc.peer_id);
 }
 
 static int WebRTC_Client_Start(NBN_Client *client, const char *host, uint16_t port) {
-    __js_game_client_init(client->endpoint.protocol_id, nbn_wrtc_cfg.enable_tls);
+    NBN_WebRTC_Config cfg = client->driver_data.webrtc.cfg;
+
+    __js_game_client_init(client->endpoint.protocol_id, cfg.enable_tls);
 
     int res;
 
@@ -3420,7 +3434,11 @@ static int WebRTC_Client_Start(NBN_Client *client, const char *host, uint16_t po
     return 0;
 }
 
-static void WebRTC_Client_Stop(NBN_Client *client) { __js_game_client_close(); }
+static void WebRTC_Client_Stop(NBN_Client *client) {
+    (void)client;
+
+    __js_game_client_close();
+}
 
 static int WebRTC_Client_RecvPackets(NBN_Client *client) {
     static NBN_Packet packet = {0};
@@ -3438,7 +3456,10 @@ static int WebRTC_Client_RecvPackets(NBN_Client *client) {
     return 0;
 }
 
-static int WebRTC_Client_SendPacket(NBN_Endpoint *client, NBN_Packet *packet, NBN_Connection *connection) {
+static int WebRTC_Client_SendPacket(NBN_Client *client, NBN_Packet *packet, NBN_Connection *connection) {
+    (void)client;
+    (void)connection;
+
     return __js_game_client_send_packet(packet->buffer, packet->size);
 }
 
