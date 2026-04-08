@@ -68,7 +68,6 @@ typedef struct {
 } SoakOptions;
 
 int Soak_Init(int, char *[]);
-void Soak_Deinit(void);
 int Soak_ReadCommandLine(int, char *[]);
 int Soak_MainLoop(int (*Tick)(void *), void *data);
 void Soak_Stop(void);

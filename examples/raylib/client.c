@@ -62,8 +62,8 @@ Color client_colors_to_raylib_colors[] = {
     PINK    // CLI_PINK
 };
 
-static void WriteConnectionRequestData(const char *name) {
-    NBN_Writer *writer = NBN_GameClient_WriteConnectionRequestData();
+static void WriteConnectionRequestData(NBN_Client *client, const char *name) {
+    NBN_Writer *writer = NBN_Client_WriteConnectionRequestData(client);
 
     // send the name of the client as the connection request data
     NBN_Writer_WriteString(writer, name, CLIENT_NAME_MAX_LEN);
@@ -80,11 +80,11 @@ static void SpawnLocalClient(int x, int y, uint32_t client_id) {
     spawned = true;
 }
 
-static int HandleConnection(void) {
+static int HandleConnection(NBN_Client *client) {
     TraceLog(LOG_INFO, "Connected, reading connection data...");
 
     uint32_t x, y, client_id;
-    NBN_Reader *reader = NBN_GameClient_ReadServerData();
+    NBN_Reader *reader = NBN_Client_ReadServerData(client);
 
     if (NBN_Reader_ReadUInt32(reader, &x) < 0) {
         return -1;
@@ -104,8 +104,8 @@ static int HandleConnection(void) {
     return 0;
 }
 
-static void HandleDisconnection(void) {
-    int code = NBN_GameClient_GetServerCloseCode(); // Get the server code used when closing the client connection
+static void HandleDisconnection(NBN_Client *client) {
+    int code = NBN_Client_GetServerCloseCode(client); // Get the server code used when closing the client connection
 
     TraceLog(LOG_INFO, "Disconnected from server (code: %d)", code);
 
@@ -208,7 +208,7 @@ static void DestroyDisconnectedClients(void) {
     }
 }
 
-static void HandleGameStateMessage(void) {
+static void HandleGameStateMessage(NBN_Client *client) {
     if (!spawned)
         return;
 
@@ -220,7 +220,7 @@ static void HandleGameStateMessage(void) {
     static GameState recv_game_state;
 
     // Read the game state from the received GAME_STATE_MESSAGE message
-    NBN_Reader *reader = NBN_GameClient_ReadMessage();
+    NBN_Reader *reader = NBN_Client_ReadMessage(client);
 
     if (GameStateMessage_Read(reader, &recv_game_state) < 0) {
         TraceLog(LOG_ERROR, "Failed to read game state");
@@ -247,14 +247,14 @@ static void HandleGameStateMessage(void) {
     DestroyDisconnectedClients();
 }
 
-static void HandleReceivedMessage(void) {
+static void HandleReceivedMessage(NBN_Client *client) {
     // Fetch info about the last received message
-    NBN_MessageInfo msg_info = NBN_GameClient_GetMessageInfo();
+    NBN_MessageInfo msg_info = NBN_Client_GetMessageInfo(client);
 
     switch (msg_info.type) {
     // We received the latest game state from the server
     case GAME_STATE_MESSAGE:
-        HandleGameStateMessage();
+        HandleGameStateMessage(client);
         return;
     }
 
@@ -262,11 +262,11 @@ static void HandleReceivedMessage(void) {
     abort();
 }
 
-static void HandleGameClientEvent(int ev) {
+static void HandleGameClientEvent(NBN_Client *client, int ev) {
     switch (ev) {
     case NBN_CLIENT_CONNECTED:
         // We are connected to the server
-        if (HandleConnection() < 0) {
+        if (HandleConnection(client) < 0) {
             TraceLog(LOG_ERROR, "Failed to handle connection");
             abort();
         }
@@ -274,18 +274,18 @@ static void HandleGameClientEvent(int ev) {
 
     case NBN_CLIENT_DISCONNECTED:
         // The server has closed our connection
-        HandleDisconnection();
+        HandleDisconnection(client);
         break;
 
     case NBN_CLIENT_MESSAGE_RECEIVED:
         // We received a message from the server
-        HandleReceivedMessage();
+        HandleReceivedMessage(client);
         break;
     }
 }
 
-static int SendStateUpdate(void) {
-    NBN_Writer *writer = NBN_GameClient_CreateUnreliableMessage(UPDATE_STATE_MESSAGE);
+static int SendStateUpdate(NBN_Client *client) {
+    NBN_Writer *writer = NBN_Client_CreateUnreliableMessage(client, UPDATE_STATE_MESSAGE);
 
     if (!writer) {
         return -1;
@@ -296,8 +296,8 @@ static int SendStateUpdate(void) {
     return 0;
 }
 
-static int SendColorUpdate(void) {
-    NBN_Writer *writer = NBN_GameClient_CreateReliableMessage(CHANGE_COLOR_MESSAGE);
+static int SendColorUpdate(NBN_Client *client) {
+    NBN_Writer *writer = NBN_Client_CreateReliableMessage(client, CHANGE_COLOR_MESSAGE);
 
     if (!writer) {
         return -1;
@@ -310,7 +310,7 @@ static int SendColorUpdate(void) {
 
 bool color_key_pressed = false;
 
-static int Update(void) {
+static int Update(NBN_Client *client) {
     if (!spawned)
         return 0;
 
@@ -332,7 +332,7 @@ static int Update(void) {
 
         TraceLog(LOG_INFO, "Switched color, new color: %d", local_client_state.color);
 
-        if (SendColorUpdate() < 0) {
+        if (SendColorUpdate(client) < 0) {
             TraceLog(LOG_WARNING, "Failed to send color update");
 
             return -1;
@@ -350,7 +350,7 @@ static int Update(void) {
         local_client_state.val = fmax(MIN_FLOAT_VAL, local_client_state.val - 0.005);
 
     // Send the latest local client state to the server
-    if (SendStateUpdate() < 0) {
+    if (SendStateUpdate(client) < 0) {
         TraceLog(LOG_WARNING, "Failed to send client state update");
 
         return -1;
@@ -374,8 +374,8 @@ void DrawClient(ClientState *state, bool is_local) {
         DrawRectangleLinesEx((Rectangle){state->x, state->y, 50, 50}, 3, DARKBROWN);
 }
 
-void DrawHUD(void) {
-    NBN_ConnectionStats stats = NBN_GameClient_GetStats();
+void DrawHUD(NBN_Client *client) {
+    NBN_ConnectionStats stats = NBN_Client_GetStats(client);
     unsigned int ping = stats.ping * 1000;
     unsigned int packet_loss = stats.packet_loss * 100;
 
@@ -386,7 +386,7 @@ void DrawHUD(void) {
     DrawText(TextFormat("Download: %.1f Bps", stats.download_bandwidth), 450, 550, 32, MAROON);
 }
 
-void Draw(void) {
+void Draw(NBN_Client *client) {
     BeginDrawing();
     ClearBackground(LIGHTGRAY);
 
@@ -410,7 +410,7 @@ void Draw(void) {
         DrawClient(&local_client_state, true);
 
         // Finally draw the HUD
-        DrawHUD();
+        DrawHUD(client);
     } else {
         DrawText("Connecting to server...", 265, 280, 20, RED);
     }
@@ -421,7 +421,7 @@ void Draw(void) {
 static double tick_dt = 1.0 / TICK_RATE; // Tick delta time (in seconds)
 static double acc = 0;
 
-void UpdateAndDraw(void) {
+void UpdateAndDraw(NBN_Client *client) {
     // Very basic fixed timestep implementation.
     // Target FPS is either 100 (in desktop) or whatever the browser frame rate is (in web) but the simulation runs at
     // TICK_RATE ticks per second.
@@ -434,23 +434,23 @@ void UpdateAndDraw(void) {
     while (acc >= tick_dt) {
         int ev;
 
-        while ((ev = NBN_GameClient_Poll()) != NBN_CLIENT_NO_EVENT) {
+        while ((ev = NBN_Client_Poll(client)) != NBN_CLIENT_NO_EVENT) {
             if (ev < 0) {
                 TraceLog(LOG_WARNING, "An occured while polling network events. Exit");
 
                 break;
             }
 
-            HandleGameClientEvent(ev);
+            HandleGameClientEvent(client, ev);
         }
 
         if (connected && !disconnected) {
-            if (Update() < 0)
+            if (Update(client) < 0)
                 break;
         }
 
         if (!disconnected) {
-            if (NBN_GameClient_Flush() < 0) {
+            if (NBN_Client_Flush(client) < 0) {
                 TraceLog(LOG_ERROR, "An occured while flushing the send queue. Exit");
 
                 break;
@@ -460,7 +460,7 @@ void UpdateAndDraw(void) {
         acc -= tick_dt; // Consumes time
     }
 
-    Draw();
+    Draw(client);
 }
 
 int main(int argc, char *argv[]) {
@@ -494,27 +494,27 @@ int main(int argc, char *argv[]) {
 
     // Initialize the client with a protocol name, the server host and the server port
     // protocol name has to be the same as the one used by the server
-    NBN_GameClient_Init(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT);
+    NBN_Client *client = NBN_Client_Create(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT);
 
-    WriteConnectionRequestData(name);
+    WriteConnectionRequestData(client, name);
 
     // Start the client with the configuration
-    if (NBN_GameClient_Start() < 0) {
+    if (NBN_Client_Start(client) < 0) {
         TraceLog(LOG_WARNING, "Game client failed to start. Exit");
 
         return 1;
     }
 
     // Network conditions simulated variables (read from the command line, default is always 0)
-    NBN_GameClient_SetPing(GetOptions().ping);
-    NBN_GameClient_SetJitter(GetOptions().jitter);
-    NBN_GameClient_SetPacketLoss(GetOptions().packet_loss);
-    NBN_GameClient_SetPacketDuplication(GetOptions().packet_duplication);
+    NBN_Client_SetPing(client, GetOptions().ping);
+    NBN_Client_SetJitter(client, GetOptions().jitter);
+    NBN_Client_SetPacketLoss(client, GetOptions().packet_loss);
+    NBN_Client_SetPacketDuplication(client, GetOptions().packet_duplication);
 
     // Main loop
 #ifdef __EMSCRIPTEN__
     while (true) {
-        UpdateAndDraw();
+        UpdateAndDraw(client);
 
         // Since we don't set any target FPS when running in a web browser we need to sleep for the correct amount
         // of time to achieve the targetted FPS
@@ -522,12 +522,12 @@ int main(int argc, char *argv[]) {
     }
 #else
     while (!WindowShouldClose()) {
-        UpdateAndDraw();
+        UpdateAndDraw(client);
     }
 #endif
 
     // Stop the client
-    NBN_GameClient_Stop();
+    NBN_Client_Stop(client);
 
     CloseWindow();
 

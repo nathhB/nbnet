@@ -30,9 +30,9 @@ static NBN_ConnectionHandle *connection = NULL;
 static NBN_Connection_ID conn_id;
 
 // Echo the received message
-static int EchoReceivedMessage(void) {
+static int EchoReceivedMessage(NBN_Server *server) {
     // Get info about the received message
-    NBN_MessageInfo msg_info = NBN_GameServer_GetMessageInfo();
+    NBN_MessageInfo msg_info = NBN_Server_GetMessageInfo(server);
 
     assert(msg_info.type == ECHO_MESSAGE_TYPE);
 
@@ -41,7 +41,7 @@ static int EchoReceivedMessage(void) {
     assert(msg_info.sender->id == conn_id);
 
     // read message data
-    NBN_Reader *reader = NBN_GameServer_ReadMessage();
+    NBN_Reader *reader = NBN_Server_ReadMessage(server);
     unsigned int length;
     int res;
 
@@ -57,7 +57,7 @@ static int EchoReceivedMessage(void) {
              msg_info.channel_id);
 
     // create and send an echo of the received message
-    NBN_Writer *writer = NBN_GameServer_CreateReliableMessage(ECHO_MESSAGE_TYPE, connection);
+    NBN_Writer *writer = NBN_Server_CreateReliableMessage(server, ECHO_MESSAGE_TYPE, connection);
 
     if (!writer) {
         return -1;
@@ -116,9 +116,9 @@ int main(int argc, const char **argv) {
 
     // Start the server with a protocol name and a port
 
-    NBN_GameServer_Init(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT);
+    NBN_Server *server = NBN_Server_Create(ECHO_PROTOCOL_NAME, ECHO_EXAMPLE_PORT);
 
-    if (NBN_GameServer_Start() < 0) {
+    if (NBN_Server_Start(server) < 0) {
         log_error("Failed to start the server");
 
         // Error, quit the server application
@@ -137,7 +137,7 @@ int main(int argc, const char **argv) {
         NBN_DisconnectionInfo disconnect_info;
 
         // Poll for server events
-        while ((ev = NBN_GameServer_Poll()) != NBN_SERVER_NO_EVENT) {
+        while ((ev = NBN_Server_Poll(server)) != NBN_SERVER_NO_EVENT) {
             if (ev < 0) {
                 log_error("Something went wrong");
 
@@ -151,10 +151,10 @@ int main(int argc, const char **argv) {
             case NBN_SERVER_NEW_CONNECTION:
                 // Echo server work with one single client at a time
                 if (connection) {
-                    NBN_GameServer_RejectIncomingConnectionWithCode(ECHO_SERVER_BUSY_CODE);
+                    NBN_Server_RejectIncomingConnectionWithCode(server, ECHO_SERVER_BUSY_CODE);
                 } else {
-                    NBN_GameServer_AcceptIncomingConnection();
-                    connection = NBN_GameServer_GetIncomingConnection();
+                    NBN_Server_AcceptIncomingConnection(server);
+                    connection = NBN_Server_GetIncomingConnection(server);
                     conn_id = connection->id;
                 }
 
@@ -162,7 +162,7 @@ int main(int argc, const char **argv) {
 
                 // The client has disconnected
             case NBN_SERVER_DISCONNECTION:
-                disconnect_info = NBN_GameServer_GetDisconnectionInfo();
+                disconnect_info = NBN_Server_GetDisconnectionInfo(server);
 
                 assert(disconnect_info.conn_id == conn_id);
                 connection = NULL;
@@ -170,7 +170,7 @@ int main(int argc, const char **argv) {
 
                 // A message has been received from the client
             case NBN_SERVER_MESSAGE_RECEIVED:
-                if (EchoReceivedMessage() < 0) {
+                if (EchoReceivedMessage(server) < 0) {
                     log_error("Failed to echo received message");
 
                     // Error, quit the server application
@@ -185,7 +185,7 @@ int main(int argc, const char **argv) {
         }
 
         // Pack all enqueued messages as packets and send them
-        if (NBN_GameServer_Flush() < 0) {
+        if (NBN_Server_Flush(server) < 0) {
             log_error("Failed to send packets");
 
             // Error, quit the server application
@@ -198,7 +198,7 @@ int main(int argc, const char **argv) {
     }
 
     // Stop the server
-    NBN_GameServer_Stop();
+    NBN_Server_Stop(server);
 
 #ifdef NBN_WEBRTC_NATIVE
     NBN_WebRTC_C_Unregister();

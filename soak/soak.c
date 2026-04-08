@@ -65,38 +65,6 @@ static void Usage(void) {
 #endif
 }
 
-int Soak_Init(int argc, char *argv[]) {
-    srand(SOAK_SEED);
-
-    SoakOptions options = Soak_GetOptions();
-
-    log_info("Soak test initialized (Packet loss: %f, Packet duplication: %f, Ping: %f, Jitter: %f)",
-             options.packet_loss, options.packet_duplication, options.ping, options.jitter);
-
-    /* Packet simulator configuration */
-#ifdef SOAK_CLIENT
-    NBN_Client_SetPing(soak_options.ping);
-    NBN_Client_SetJitter(soak_options.jitter);
-    NBN_Client_SetPacketLoss(soak_options.packet_loss);
-    NBN_Client_SetPacketDuplication(soak_options.packet_duplication);
-#endif
-
-#ifdef SOAK_SERVER
-    NBN_Server_SetPing(soak_options.ping);
-    NBN_Server_SetJitter(soak_options.jitter);
-    NBN_Server_SetPacketLoss(soak_options.packet_loss);
-    NBN_Server_SetPacketDuplication(soak_options.packet_duplication);
-#endif
-
-    return 0;
-}
-
-void Soak_Deinit(void) {
-    log_info("Done.");
-    log_info("Memory report:\n");
-    // TODO
-}
-
 int Soak_ReadCommandLine(int argc, char *argv[]) {
     struct cag_option options[] = {
 #ifdef SOAK_CLIENT
