@@ -443,6 +443,7 @@ struct NBN_Endpoint {
     NBN_Channel_Config *channels;
     uint8_t default_reliable_channel;
     uint8_t default_unreliable_channel;
+    NBN_Packet read_packet;
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
     NBN_PacketSimulator packet_simulator;
 #endif
@@ -1330,7 +1331,7 @@ static int Connection_ProcessReceivedPacket(NBN_Endpoint *endpoint, NBN_Connecti
     for (int i = 0; i < packet->header.messages_count; i++) {
         LogDebug("Reading message number %d from packet %d", i, packet->header.seq_number);
 
-        static NBN_MessageHeader header = {0};
+        NBN_MessageHeader header = {0};
         int msg_len = Connection_ReadNextMessageHeader(&msg_reader, &header);
 
         if (msg_len < 0) {
@@ -1384,20 +1385,20 @@ static int Connection_FlushChannels(NBN_Endpoint *endpoint, NBN_Connection *conn
                                     double time) {
     LogDebug("Flushing all channels");
 
-    static NBN_Packet packet = {0};
-    static NBN_PacketEntry *packet_entry;
+    NBN_PacketEntry *packet_entry;
+    NBN_Packet *packet = &endpoint->read_packet;
 
     unsigned int sent_packet_count = 0;
     unsigned int sent_bytes = 0;
 
-    Connection_InitOutgoingPacket(connection, protocol_id, &packet, &packet_entry);
+    Connection_InitOutgoingPacket(connection, protocol_id, packet, &packet_entry);
 
     for (unsigned int i = 0; i < endpoint->channel_count; i++) {
         NBN_Channel *channel = &connection->channels[i];
 
         LogDebug("Flushing channel %d (message count: %d)", channel->id, channel->outgoing_message_count);
 
-        static NBN_Message out_msg;
+        NBN_Message out_msg = {0};
         unsigned int j = 0;
 
         // TODO: use bandwidth to determine how many packets to send at most
@@ -1407,26 +1408,26 @@ static int Connection_FlushChannels(NBN_Endpoint *endpoint, NBN_Connection *conn
             uint16_t msg_id = out_msg.header.id;
             uint16_t msg_len = out_msg.header.length;
             bool message_sent = false;
-            NBN_PacketResult ret = Packet_WriteMessage(&packet, &out_msg);
+            NBN_PacketResult ret = Packet_WriteMessage(packet, &out_msg);
 
             if (ret == NBN_PACKET_WRITE_OK) {
                 message_sent = true;
             } else if (ret == NBN_PACKET_WRITE_NO_SPACE) {
-                if (Connection_SendPacket(endpoint, connection, &packet, packet_entry, time, endpoint->is_server) < 0) {
-                    LogError("Failed to send packet %d", packet.header.seq_number);
+                if (Connection_SendPacket(endpoint, connection, packet, packet_entry, time, endpoint->is_server) < 0) {
+                    LogError("Failed to send packet %d", packet->header.seq_number);
 
                     return NBN_ERROR;
                 }
 
                 sent_packet_count++;
-                sent_bytes += packet.size;
+                sent_bytes += packet->size;
 
-                Connection_InitOutgoingPacket(connection, protocol_id, &packet, &packet_entry);
+                Connection_InitOutgoingPacket(connection, protocol_id, packet, &packet_entry);
 
-                NBN_PacketResult ret = Packet_WriteMessage(&packet, &out_msg);
+                NBN_PacketResult ret = Packet_WriteMessage(packet, &out_msg);
 
                 if (ret != NBN_PACKET_WRITE_OK) {
-                    LogError("Failed to send packet %d", packet.header.seq_number);
+                    LogError("Failed to send packet %d", packet->header.seq_number);
 
                     return NBN_ERROR;
                 }
@@ -1434,13 +1435,13 @@ static int Connection_FlushChannels(NBN_Endpoint *endpoint, NBN_Connection *conn
                 message_sent = true;
             } else if (ret == NBN_PACKET_WRITE_ERROR) {
                 LogError("Failed to write message %d of type %d to packet %d", msg_id, msg_type,
-                         packet.header.seq_number);
+                         packet->header.seq_number);
 
                 return NBN_ERROR;
             }
 
             if (message_sent) {
-                LogDebug("Message %d added to packet %d (length: %d, type: %d)", msg_id, packet.header.seq_number,
+                LogDebug("Message %d added to packet %d (length: %d, type: %d)", msg_id, packet->header.seq_number,
                          msg_len, msg_type);
 
                 Channel_UpdateMessageSendTime(channel, msg_id, time);
@@ -1454,13 +1455,13 @@ static int Connection_FlushChannels(NBN_Endpoint *endpoint, NBN_Connection *conn
         }
     }
 
-    if (Connection_SendPacket(endpoint, connection, &packet, packet_entry, time, endpoint->is_server) < 0) {
-        LogError("Failed to send packet %d to connection %lld", packet.header.seq_number, connection->handle.id);
+    if (Connection_SendPacket(endpoint, connection, packet, packet_entry, time, endpoint->is_server) < 0) {
+        LogError("Failed to send packet %d to connection %lld", packet->header.seq_number, connection->handle.id);
 
         return NBN_ERROR;
     }
 
-    sent_bytes += packet.size;
+    sent_bytes += packet->size;
     sent_packet_count++;
 
     double t = time - connection->last_flush_time;
@@ -1644,13 +1645,13 @@ static int Connection_SendPacket(NBN_Endpoint *endpoint, NBN_Connection *connect
         if (connection->is_stale)
             return 0;
 
-        return connection->driver->impl.serv_send_packet_to(endpoint, packet, connection);
+        return connection->driver->impl.serv_send_packet_to((NBN_Server *)endpoint, packet, connection);
 #endif
     } else {
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
         return PacketSimulator_EnqueuePacket(&endpoint->packet_simulator, packet, connection);
 #else
-        return connection->driver->impl.cli_send_packet(endpoint, packet, connection);
+        return connection->driver->impl.cli_send_packet((NBN_Client *)endpoint, packet, connection);
 #endif
     }
 }
@@ -2187,7 +2188,7 @@ NBN_Client_Event NBN_Client_Poll(NBN_Client *client) {
 }
 
 int NBN_Client_Flush(NBN_Client *client) {
-    return Connection_FlushChannels(&client->endpoint, client->server_connection, client->endpoint.protocol_id,
+    return Connection_FlushChannels((NBN_Endpoint *)client, client->server_connection, client->endpoint.protocol_id,
                                     client->endpoint.time);
 }
 
@@ -2604,7 +2605,7 @@ int NBN_Server_Flush(NBN_Server *server) {
 
         NBN_Assert(!(client->is_closed && client->is_stale));
 
-        if (!client->is_stale && Connection_FlushChannels(&server->endpoint, client, server->endpoint.protocol_id,
+        if (!client->is_stale && Connection_FlushChannels((NBN_Endpoint *)server, client, server->endpoint.protocol_id,
                                                           server->endpoint.time) < 0) {
             return NBN_ERROR;
         }
@@ -3195,12 +3196,12 @@ static int UDP_Server_Start(NBN_Server *server, uint16_t port) {
 static void UDP_Server_Stop(NBN_Server *server) { UDP_DeinitSocket(server->driver_data.udp.sock); }
 
 static int UDP_Server_RecvPackets(NBN_Server *server) {
-    static NBN_Packet packet = {0};
+    NBN_Packet *packet = &server->endpoint.read_packet;
     SOCKADDR_IN src_addr;
     socklen_t src_addr_len = sizeof(src_addr);
 
     while (true) {
-        int bytes = recvfrom(server->driver_data.udp.sock, (char *)packet.buffer, sizeof(packet.buffer), 0,
+        int bytes = recvfrom(server->driver_data.udp.sock, (char *)packet->buffer, sizeof(packet->buffer), 0,
                              (SOCKADDR *)&src_addr, &src_addr_len);
 
         if (bytes <= 0)
@@ -3209,7 +3210,7 @@ static int UDP_Server_RecvPackets(NBN_Server *server) {
         if (bytes < NBN_PACKET_HEADER_SIZE)
             continue;
 
-        if (Packet_InitRead(&packet, server->endpoint.protocol_id, bytes) < 0) {
+        if (Packet_InitRead(packet, server->endpoint.protocol_id, bytes) < 0) {
             LogDebug("Discarded invalid packet");
             continue;
         }
@@ -3220,9 +3221,9 @@ static int UDP_Server_RecvPackets(NBN_Server *server) {
 
         LogDebug("Received valid UDP packet from %d:%d", ip_address.host, ip_address.port);
 
-        packet.sender = UDP_FindOrCreateClientConnectionByAddress(server, ip_address);
+        packet->sender = UDP_FindOrCreateClientConnectionByAddress(server, ip_address);
 
-        ServerDriver_OnClientPacketReceived(server, &packet);
+        ServerDriver_OnClientPacketReceived(server, packet);
     }
 
     return 0;
@@ -3269,12 +3270,12 @@ static void UDP_Client_Stop(NBN_Client *client) { UDP_DeinitSocket(client->drive
 
 static int UDP_Client_RecvPackets(NBN_Client *client) {
     NBN_IPAddress server_address = client->server_connection->driver_data.udp.ip_address;
-    static NBN_Packet packet = {0};
+    NBN_Packet *packet = &client->endpoint.read_packet;
     SOCKADDR_IN src_addr;
     socklen_t src_addr_len = sizeof(src_addr);
 
     while (true) {
-        int bytes = recvfrom(client->driver_data.udp.sock, (char *)packet.buffer, sizeof(packet.buffer), 0,
+        int bytes = recvfrom(client->driver_data.udp.sock, (char *)packet->buffer, sizeof(packet->buffer), 0,
                              (SOCKADDR *)&src_addr, &src_addr_len);
 
         if (bytes <= 0)
@@ -3289,14 +3290,14 @@ static int UDP_Client_RecvPackets(NBN_Client *client) {
         if (host != server_address.host || port != server_address.port)
             continue;
 
-        if (Packet_InitRead(&packet, client->endpoint.protocol_id, bytes) < 0) {
+        if (Packet_InitRead(packet, client->endpoint.protocol_id, bytes) < 0) {
             LogDebug("Discarded invalid packet");
             continue;
         }
 
-        packet.sender = client->server_connection;
+        packet->sender = client->server_connection;
 
-        ClientDriver_OnPacketReceived(client, &packet);
+        ClientDriver_OnPacketReceived(client, packet);
     }
 
     return 0;
@@ -3376,11 +3377,11 @@ static void WebRTC_Server_Stop(NBN_Server *server) {
 }
 
 static int WebRTC_Server_RecvPackets(NBN_Server *server) {
-    static NBN_Packet packet = {0};
+    NBN_Packet *packet = &server->endpoint.read_packet;
     uint32_t peer_id;
     unsigned int len;
 
-    while ((len = __js_game_server_dequeue_packet(&peer_id, packet.buffer)) > 0) {
+    while ((len = __js_game_server_dequeue_packet(&peer_id, packet->buffer)) > 0) {
         NBN_Connection_ID conn_id = NBN_BuildConnectionHash(peer_id, NBN_DRIVER_WEBRTC_EMSCRIPTEN);
         NBN_ConnectionHandle *handle = NBN_Server_GetConnection(server, conn_id);
         NBN_Connection *conn = NULL;
@@ -3397,12 +3398,12 @@ static int WebRTC_Server_RecvPackets(NBN_Server *server) {
             conn = HANDLE_TO_CONN(handle);
         }
 
-        if (Packet_InitRead(&packet, server->endpoint.protocol_id, len) < 0)
+        if (Packet_InitRead(packet, server->endpoint.protocol_id, len) < 0)
             continue;
 
-        packet.sender = conn;
+        packet->sender = conn;
 
-        ServerDriver_OnClientPacketReceived(server, &packet);
+        ServerDriver_OnClientPacketReceived(server, packet);
     }
 
     return 0;
@@ -3441,16 +3442,16 @@ static void WebRTC_Client_Stop(NBN_Client *client) {
 }
 
 static int WebRTC_Client_RecvPackets(NBN_Client *client) {
-    static NBN_Packet packet = {0};
+    NBN_Packet *packet = &client->endpoint.read_packet;
     unsigned int len;
 
-    while ((len = __js_game_client_dequeue_packet(packet.buffer)) > 0) {
-        if (Packet_InitRead(&packet, client->endpoint.protocol_id, len) < 0)
+    while ((len = __js_game_client_dequeue_packet(packet->buffer)) > 0) {
+        if (Packet_InitRead(packet, client->endpoint.protocol_id, len) < 0)
             continue;
 
-        packet.sender = client->server_connection;
+        packet->sender = client->server_connection;
 
-        ClientDriver_OnPacketReceived(client, &packet);
+        ClientDriver_OnPacketReceived(client, packet);
     }
 
     return 0;
@@ -3833,8 +3834,8 @@ static void WebRTC_Native_Server_Stop(NBN_Server *server) {
 }
 
 static int WebRTC_Native_Server_RecvPackets(NBN_Server *server) {
-    static NBN_Packet packet = {0};
-    const int buffer_size = sizeof(packet.buffer);
+    NBN_Packet *packet = &server->endpoint.read_packet;
+    const int buffer_size = sizeof(packet->buffer);
     int size = buffer_size;
 
     for (unsigned int i = 0; i < hmlen(server->clients); i++) {
@@ -3845,14 +3846,14 @@ static int WebRTC_Native_Server_RecvPackets(NBN_Server *server) {
 
         int channel_id = conn->driver_data.webrtc.channel_id;
 
-        while (rtcReceiveMessage(channel_id, (char *)packet.buffer, &size) == RTC_ERR_SUCCESS) {
-            if (Packet_InitRead(&packet, server->endpoint.protocol_id, size) < 0)
+        while (rtcReceiveMessage(channel_id, (char *)packet->buffer, &size) == RTC_ERR_SUCCESS) {
+            if (Packet_InitRead(packet, server->endpoint.protocol_id, size) < 0)
                 continue;
 
-            packet.sender = conn;
+            packet->sender = conn;
             size = buffer_size;
 
-            ServerDriver_OnClientPacketReceived(server, &packet);
+            ServerDriver_OnClientPacketReceived(server, packet);
         }
     }
 
@@ -4018,19 +4019,19 @@ static void WebRTC_Native_Client_Stop(NBN_Client *client) {
 }
 
 static int WebRTC_Native_Client_RecvPackets(NBN_Client *client) {
-    static NBN_Packet packet = {0};
-    const int buffer_size = sizeof(packet.buffer);
+    NBN_Packet *packet = &client->endpoint.read_packet;
+    const int buffer_size = sizeof(packet->buffer);
     int size = buffer_size;
     int channel_id = client->server_connection->driver_data.webrtc.channel_id;
 
-    while (rtcReceiveMessage(channel_id, (char *)packet.buffer, &size) == RTC_ERR_SUCCESS) {
-        if (Packet_InitRead(&packet, client->endpoint.protocol_id, size) < 0)
+    while (rtcReceiveMessage(channel_id, (char *)packet->buffer, &size) == RTC_ERR_SUCCESS) {
+        if (Packet_InitRead(packet, client->endpoint.protocol_id, size) < 0)
             continue;
 
-        packet.sender = NULL;
+        packet->sender = NULL;
         size = buffer_size;
 
-        ClientDriver_OnPacketReceived(client, &packet);
+        ClientDriver_OnPacketReceived(client, packet);
     }
 
     return 0;
