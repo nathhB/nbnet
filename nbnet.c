@@ -2353,8 +2353,9 @@ NBN_Server *NBN_Server_Create(const char *protocol_name, uint16_t port) {
     NBN_Server *server = malloc(sizeof(NBN_Server));
 
     server->config = (NBN_Server_Config){.protocol_name = protocol_name, .port = port};
-
     server->server_data_writer.position = 0;
+    server->clients = NULL;
+
     hmdefault(server->clients, NULL);
 
     server->endpoint.default_reliable_channel = NBN_Server_CreateChannel(
