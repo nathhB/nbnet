@@ -67,7 +67,7 @@ typedef struct NBN_ConnectionHandle {
 } NBN_ConnectionHandle;
 
 typedef struct NBN_ConnectionStats {
-    double ping;
+    float ping;
     unsigned int total_lost_packets;
     float packet_loss;
     float upload_bandwidth;
