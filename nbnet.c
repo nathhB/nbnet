@@ -2963,7 +2963,8 @@ static bool Server_HandleMessageReceivedEvent(NBN_Server *server, NBN_Server_Eve
         last_event->type = NBN_SERVER_DISCONNECTION;
         last_event->data.disconnection = (NBN_DisconnectionInfo){sender->handle.id, sender->handle.user_data};
 
-        Server_RemoveClosedClientConnections(server);
+        // don't remove the connection yet, is_stale will take care of it later
+        // to prevent a use after free if client has outgoing messages sent after disconnect
 
         *ev = NBN_SERVER_DISCONNECTION;
         return true;
