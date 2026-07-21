@@ -26,58 +26,13 @@
 #define ECHO_PROTOCOL_NAME "echo-example"
 #define ECHO_EXAMPLE_PORT 42042
 #define ECHO_MESSAGE_TYPE 0
-#define ECHO_MESSAGE_LENGTH 255
+#define ECHO_MESSAGE_MAX_LENGTH 255
 #define ECHO_TICK_RATE 30
 
 // An arbitrary chosen code used when rejecting a client to let it know that another client is already connected
 #define ECHO_SERVER_BUSY_CODE 42
 
-// nbnet logging
-// nbnet does not implement any logging capabilities, you need to provide your own
-enum
-{
-    LOG_INFO,
-    LOG_ERROR,
-    LOG_DEBUG,
-    LOG_TRACE,
-    LOG_WARNING
-};
-
-#define NBN_LogInfo(...) Log(LOG_INFO,  __VA_ARGS__)
-#define NBN_LogError(...) Log(LOG_ERROR, __VA_ARGS__)
-#define NBN_LogDebug(...) Log(LOG_DEBUG, __VA_ARGS__)
-#define NBN_LogTrace(...) Log(LOG_TRACE, __VA_ARGS__)
-#define NBN_LogWarning(...) Log(LOG_WARNING, __VA_ARGS__)
-
-void Log(int, const char *, ...);
-
 #include "../../nbnet.h"
-
-#ifdef __EMSCRIPTEN__
-
-#include "../../net_drivers/webrtc.h"
-
-#else
-
-#include "../../net_drivers/udp.h"
-
-#ifdef NBN_WEBRTC_NATIVE
-
-#include "../../net_drivers/webrtc_c.h"
-
-#endif // NBN_WEBRTC_NATIVE
-
-#endif // __EMSCRIPTEN__
-
-typedef struct
-{
-    unsigned int length;
-    char data[ECHO_MESSAGE_LENGTH];
-} EchoMessage;
-
-EchoMessage *EchoMessage_Create(void);
-void EchoMessage_Destroy(EchoMessage *);
-int EchoMessage_Serialize(EchoMessage *, NBN_Stream *);
 
 void EchoSleep(double);
 

@@ -54,24 +54,24 @@
 #define NOKERNEL          // All KERNEL defines and routines
 #define NOUSER            // All USER defines and routines
 /*#define NONLS             // All NLS defines and routines*/
-#define NOMB              // MB_* and MessageBox()
-#define NOMEMMGR          // GMEM_*, LMEM_*, GHND, LHND, associated routines
-#define NOMETAFILE        // typedef METAFILEPICT
-#define NOMINMAX          // Macros min(a,b) and max(a,b)
-#define NOMSG             // typedef MSG and associated routines
-#define NOOPENFILE        // OpenFile(), OemToAnsi, AnsiToOem, and OF_*
-#define NOSCROLL          // SB_* and scrolling routines
-#define NOSERVICE         // All Service Controller routines, SERVICE_ equates, etc.
-#define NOSOUND           // Sound driver routines
-#define NOTEXTMETRIC      // typedef TEXTMETRIC and associated routines
-#define NOWH              // SetWindowsHook and WH_*
-#define NOWINOFFSETS      // GWL_*, GCL_*, associated routines
-#define NOCOMM            // COMM driver routines
-#define NOKANJI           // Kanji support stuff.
-#define NOHELP            // Help engine interface.
-#define NOPROFILER        // Profiler interface.
-#define NODEFERWINDOWPOS  // DeferWindowPos routines
-#define NOMCX             // Modem Configuration Extensions
+#define NOMB             // MB_* and MessageBox()
+#define NOMEMMGR         // GMEM_*, LMEM_*, GHND, LHND, associated routines
+#define NOMETAFILE       // typedef METAFILEPICT
+#define NOMINMAX         // Macros min(a,b) and max(a,b)
+#define NOMSG            // typedef MSG and associated routines
+#define NOOPENFILE       // OpenFile(), OemToAnsi, AnsiToOem, and OF_*
+#define NOSCROLL         // SB_* and scrolling routines
+#define NOSERVICE        // All Service Controller routines, SERVICE_ equates, etc.
+#define NOSOUND          // Sound driver routines
+#define NOTEXTMETRIC     // typedef TEXTMETRIC and associated routines
+#define NOWH             // SetWindowsHook and WH_*
+#define NOWINOFFSETS     // GWL_*, GCL_*, associated routines
+#define NOCOMM           // COMM driver routines
+#define NOKANJI          // Kanji support stuff.
+#define NOHELP           // Help engine interface.
+#define NOPROFILER       // Profiler interface.
+#define NODEFERWINDOWPOS // DeferWindowPos routines
+#define NOMCX            // Modem Configuration Extensions
 
 // Type required before windows.h inclusion
 typedef struct tagMSG *LPMSG;
@@ -95,25 +95,16 @@ typedef struct tagMSG *LPMSG;
 
 #include "../../nbnet.h"
 
-#ifdef __EMSCRIPTEN__
-#include "../../net_drivers/webrtc.h"
-#else
-#include "../../net_drivers/udp.h"
-
-#ifdef SOAK_WEBRTC_C_DRIVER
-#include "../../net_drivers/webrtc_c.h"
-#endif
-
-#endif // __EMSCRIPTEN__
-
 #define TICK_RATE 60 // Simulation tick rate
 
 // Window size, used to display window but also to cap the serialized position values within messages
 #define GAME_WIDTH 800
 #define GAME_HEIGHT 600
 
+#define CLIENT_NAME_MAX_LEN 16 // Client name maximum length
+
 #define MIN_FLOAT_VAL -5 // Minimum value of networked client float value
-#define MAX_FLOAT_VAL 5 // Maximum value of networked client float value
+#define MAX_FLOAT_VAL 5  // Maximum value of networked client float value
 
 // Maximum number of connected clients at a time
 #define MAX_CLIENTS 4
@@ -124,78 +115,47 @@ typedef struct tagMSG *LPMSG;
 // A code passed by the server when closing a client connection due to being full (max client count reached)
 #define SERVER_FULL_CODE 42
 
+#define CHANGE_COLOR_MESSAGE_MAX_LENGTH 4
+#define UPDATE_STATE_MESSAGE_MAX_LENGTH 20 // ClientState is 20 bytes
+#define GAME_STATE_MESSAGE_MAX_LENGTH ((20 * MAX_CLIENTS) + 4)
+
 // Message ids
-enum
-{
-    CHANGE_COLOR_MESSAGE,
-    UPDATE_STATE_MESSAGE,
-    GAME_STATE_MESSAGE
-};
-
-// Messages
-
-typedef struct
-{
-    int x;
-    int y;
-    float val;
-} UpdateStateMessage;
+enum { CHANGE_COLOR_MESSAGE, UPDATE_STATE_MESSAGE, GAME_STATE_MESSAGE };
 
 // Client colors used for ChangeColorMessage and GameStateMessage messages
-typedef enum
-{
-    CLI_RED,
-    CLI_GREEN,
-    CLI_BLUE,
-    CLI_YELLOW,
-    CLI_ORANGE,
-    CLI_PURPLE,
-    CLI_PINK
-} ClientColor;
-
-typedef struct
-{
-    ClientColor color;
-} ChangeColorMessage;
+typedef enum { CLI_RED, CLI_GREEN, CLI_BLUE, CLI_YELLOW, CLI_ORANGE, CLI_PURPLE, CLI_PINK } ClientColor;
 
 // Client state, represents a client over the network
-typedef struct
-{
+typedef struct {
     uint32_t client_id;
     int x;
     int y;
     float val;
     ClientColor color;
+    char name[CLIENT_NAME_MAX_LEN];
 } ClientState;
 
-typedef struct
-{
+// Represents the state of all clients
+typedef struct {
     unsigned int client_count;
     ClientState client_states[MAX_CLIENTS];
-} GameStateMessage;
+} GameState;
 
 // Store all options from the command line
-typedef struct
-{
+typedef struct {
     float packet_loss;
     float packet_duplication;
     float ping;
     float jitter;
 } Options;
 
-ChangeColorMessage *ChangeColorMessage_Create(void);
-void ChangeColorMessage_Destroy(ChangeColorMessage *);
-int ChangeColorMessage_Serialize(ChangeColorMessage *msg, NBN_Stream *);
-
-UpdateStateMessage *UpdateStateMessage_Create(void);
-void UpdateStateMessage_Destroy(UpdateStateMessage *);
-int UpdateStateMessage_Serialize(UpdateStateMessage *, NBN_Stream *);
-
-GameStateMessage *GameStateMessage_Create(void);
-void GameStateMessage_Destroy(GameStateMessage *);
-int GameStateMessage_Serialize(GameStateMessage *, NBN_Stream *);
-
 int ReadCommandLine(int, char *[]);
 Options GetOptions(void);
+void ChangeColorMessage_Write(NBN_Writer *writer, ClientColor color);
+int ChangeColorMessage_Read(NBN_Reader *reader, ClientColor *color);
+void UpdateClientStateMessage_Write(NBN_Writer *writer, ClientState state);
+int UpdateClientStateMessage_Read(NBN_Reader *reader, ClientState *state);
+void GameStateMessage_Write(NBN_Writer *writer, GameState *state);
+int GameStateMessage_Read(NBN_Reader *reader, GameState *state);
 
 #endif /* RAYLIB_EXAMPLE_SHARED_H */

@@ -27,73 +27,56 @@
 
 #if defined(_WIN32) || defined(_WIN64)
 
-#include <winsock2.h>
 #include <windows.h>
+#include <winsock2.h>
 
 #endif
 
-#include <stdbool.h>
 #include <limits.h>
-
-#include "logging.h"
-
-/* nbnet logging */
-#define NBN_LogInfo Soak_LogInfo
-#define NBN_LogTrace Soak_LogTrace
-#define NBN_LogDebug Soak_LogDebug
-#define NBN_LogError Soak_LogError
-#define NBN_LogWarning Soak_LogWarn
-
+#include <stdbool.h>
 #include "../nbnet.h"
 
 #define SOAK_PROTOCOL_NAME "nbnet_soak"
-#define SOAK_PORT 42043
+#define SOAK_PORT 42044
 #define SOAK_TICK_RATE 60
 #define SOAK_TICK_DT (1.0 / SOAK_TICK_RATE)
-#define SOAK_MESSAGE_MIN_DATA_LENGTH 50
-#define SOAK_MESSAGE_MAX_DATA_LENGTH 4096
-#define SOAK_BIG_MESSAGE_PERCENTAGE 25
-#define SOAK_MESSAGE 42
+#define SOAK_MESSAGE_HEADER_LENGTH 8 // 4 bytes for ID, 4 bytes for data length
+#define SOAK_MESSAGE_SMALL_MIN_DATA_LENGTH 50
+#define SOAK_MESSAGE_SMALL_MAX_DATA_LENGTH 200
+#define SOAK_MESSAGE_BIG_MIN_DATA_LENGTH 1024
+#define SOAK_MESSAGE_BIG_MAX_DATA_LENGTH 4096
+#define SOAK_MESSAGE_SMALL_MAX_LENGTH (SOAK_MESSAGE_HEADER_LENGTH + SOAK_MESSAGE_SMALL_MAX_DATA_LENGTH)
+#define SOAK_MESSAGE_BIG_MAX_LENGTH (SOAK_MESSAGE_HEADER_LENGTH + SOAK_MESSAGE_BIG_MAX_DATA_LENGTH)
+#define SOAK_BIG_MESSAGE_PERCENTAGE 0 // TODO: chunks are currently unsupported
+#define SOAK_MESSAGE_SMALL 42
+#define SOAK_MESSAGE_BIG 43 // may get chunked
 #define SOAK_SEED time(NULL)
 #define SOAK_DONE 1
-#define SOAK_MAX_CLIENTS 256
 #define SOAK_CLIENT_MAX_PENDING_MESSAGES 50 // max number of unacked messages at a time
-#define SOAK_SERVER_FULL_CODE 42
-#define SOAK_MAX_CHANNELS (NBN_MAX_CHANNELS - 3)
+#define SOAK_SERVER_FULL_CODE 1234
+#define SOAK_MAX_MESSAGE_SIZE 256
+#define SOAK_CHANNEL_COUNT 4
+#define SOAK_CHANNEL_BUFFER_SIZE 128
 
-typedef struct
-{
+typedef struct {
     unsigned int message_count;
-    unsigned int channel_count;
-    float packet_loss; /* 0 - 1 */
+    float packet_loss;        /* 0 - 1 */
     float packet_duplication; /* 0 - 1 */
-    float ping; /* in seconds */
-    float jitter; /* in seconds */
-    bool webrtc; /* use native WebRTC driver */
+    float ping;               /* in seconds */
+    float jitter;             /* in seconds */
+    bool webrtc;              /* use native WebRTC driver */
 } SoakOptions;
 
-typedef struct
-{
-    uint32_t id;
-    unsigned int data_length;
-    bool outgoing;
-    uint8_t data[SOAK_MESSAGE_MAX_DATA_LENGTH];
-} SoakMessage;
-
 int Soak_Init(int, char *[]);
-void Soak_Deinit(void);
 int Soak_ReadCommandLine(int, char *[]);
 int Soak_MainLoop(int (*Tick)(void *), void *data);
 void Soak_Stop(void);
 SoakOptions Soak_GetOptions(void);
-void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *, NBN_Message *);
 unsigned int Soak_GetCreatedOutgoingSoakMessageCount(void);
 unsigned int Soak_GetDestroyedOutgoingSoakMessageCount(void);
 unsigned int Soak_GetCreatedIncomingSoakMessageCount(void);
 unsigned int Soak_GetDestroyedIncomingSoakMessageCount(void);
-SoakMessage *SoakMessage_CreateOutgoing(void);
-SoakMessage *SoakMessage_CreateIncoming(void);
-void SoakMessage_Destroy(SoakMessage *);
-int SoakMessage_Serialize(SoakMessage *, NBN_Stream *);
+void SoakMessage_Write(NBN_Writer *, unsigned int, uint8_t *, unsigned int);
+int SoakMessage_Read(NBN_Reader *reader, unsigned int *msg_id, uint8_t *data, unsigned int *data_length);
 
 #endif // SOAK_H_INCLUDED

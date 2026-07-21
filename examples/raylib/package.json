@@ -1,8 +1,8 @@
 {
     "scripts": {
-        "server": "node --experimental-wasm-threads --experimental-wasm-bulk-memory raylib_server.js"
+        "server": "node raylib_server.js"
     },
     "dependencies": {
-        "nbnet": "file:../../net_drivers/webrtc"
+        "nbnet": "file:../../webrtc"
     }
 }

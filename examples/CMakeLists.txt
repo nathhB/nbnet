@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.5)
 project(nbnet_examples)
 
-add_subdirectory(echo)
-add_subdirectory(echo_bytes)
+option(EXAMPLES_UDP OFF)
 
-if (NOT DEFINED CPP_COMPILE)
-    # not supported in CPP
-    add_subdirectory(rpc)
-endif (NOT DEFINED CPP_COMPILE)
+if (EXAMPLES_UDP)
+    set(UDP ON)
+endif (EXAMPLES_UDP)
+
+add_subdirectory(echo)

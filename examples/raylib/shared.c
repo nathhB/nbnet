@@ -20,126 +20,138 @@
 
 */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
 #include <getopt.h>
 
 // nbnet implementation
-#define NBNET_IMPL 
+#define NBNET_IMPL
 
 #include "shared.h"
 
 // Command line options
-enum
-{
-    OPT_MESSAGES_COUNT,
-    OPT_PACKET_LOSS,
-    OPT_PACKET_DUPLICATION,
-    OPT_PING,
-    OPT_JITTER
-};
+enum { OPT_MESSAGES_COUNT, OPT_PACKET_LOSS, OPT_PACKET_DUPLICATION, OPT_PING, OPT_JITTER };
 
 static Options options = {0};
 
-ChangeColorMessage *ChangeColorMessage_Create(void)
-{
-    return malloc(sizeof(ChangeColorMessage));
+void ChangeColorMessage_Write(NBN_Writer *writer, ClientColor color) {
+    NBN_Writer_WriteUInt32(writer, (uint32_t)color);
 }
 
-void ChangeColorMessage_Destroy(ChangeColorMessage *msg)
-{
-    free(msg);
+int ChangeColorMessage_Read(NBN_Reader *reader, ClientColor *color) {
+    return NBN_Reader_ReadUInt32(reader, (uint32_t *)color);
 }
 
-int ChangeColorMessage_Serialize(ChangeColorMessage *msg, NBN_Stream *stream)
-{
-    NBN_SerializeUInt(stream, msg->color, 0, MAX_COLORS - 1);
+void UpdateClientStateMessage_Write(NBN_Writer *writer, ClientState state) {
+    NBN_Writer_WriteInt32(writer, state.x);
+    NBN_Writer_WriteInt32(writer, state.y);
+    NBN_Writer_WriteFloat(writer, state.val);
+}
+
+int UpdateClientStateMessage_Read(NBN_Reader *reader, ClientState *state) {
+    if (NBN_Reader_ReadInt32(reader, &state->x) < 0) {
+        return -1;
+    }
+
+    if (NBN_Reader_ReadInt32(reader, &state->y) < 0) {
+        return -1;
+    }
+
+    if (NBN_Reader_ReadFloat(reader, &state->val) < 0) {
+        return -1;
+    }
 
     return 0;
 }
 
-UpdateStateMessage *UpdateStateMessage_Create(void)
-{
-    return malloc(sizeof(UpdateStateMessage));
+void GameStateMessage_Write(NBN_Writer *writer, GameState *state) {
+    NBN_Writer_WriteUInt32(writer, state->client_count);
+
+    for (unsigned int i = 0; i < state->client_count; i++) {
+        ClientState cli_state = state->client_states[i];
+
+        NBN_Writer_WriteUInt32(writer, cli_state.client_id);
+        NBN_Writer_WriteUInt32(writer, (uint32_t)cli_state.color);
+        NBN_Writer_WriteInt32(writer, cli_state.x);
+        NBN_Writer_WriteInt32(writer, cli_state.y);
+        NBN_Writer_WriteFloat(writer, cli_state.val);
+        NBN_Writer_WriteString(writer, cli_state.name, CLIENT_NAME_MAX_LEN);
+    }
 }
 
-void UpdateStateMessage_Destroy(UpdateStateMessage *msg)
-{
-    free(msg);
-}
+int GameStateMessage_Read(NBN_Reader *reader, GameState *state) {
+    if (NBN_Reader_ReadUInt32(reader, &state->client_count) < 0) {
+        return -1;
+    }
 
-int UpdateStateMessage_Serialize(UpdateStateMessage *msg, NBN_Stream *stream)
-{
-    NBN_SerializeUInt(stream, msg->x, 0, GAME_WIDTH);
-    NBN_SerializeUInt(stream, msg->y, 0, GAME_HEIGHT);
-    NBN_SerializeFloat(stream, msg->val, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
+    if (state->client_count > MAX_CLIENTS) {
+        return -1;
+    }
 
-    return 0;
-}
+    for (unsigned int i = 0; i < state->client_count; i++) {
+        ClientState *cli_state = &state->client_states[i];
 
-GameStateMessage *GameStateMessage_Create(void)
-{
-    return malloc(sizeof(GameStateMessage));
-}
+        if (NBN_Reader_ReadUInt32(reader, &cli_state->client_id) < 0) {
+            return -1;
+        }
 
-void GameStateMessage_Destroy(GameStateMessage *msg)
-{
-    free(msg);
-}
+        if (NBN_Reader_ReadUInt32(reader, (uint32_t *)&cli_state->color) < 0) {
+            return -1;
+        }
 
-int GameStateMessage_Serialize(GameStateMessage *msg, NBN_Stream *stream)
-{
-    NBN_SerializeUInt(stream, msg->client_count, 0, MAX_CLIENTS);
+        if (NBN_Reader_ReadInt32(reader, &cli_state->x) < 0) {
+            return -1;
+        }
 
-    for (unsigned int i = 0; i < msg->client_count; i++)
-    {
-        NBN_SerializeUInt(stream, msg->client_states[i].client_id, 0, UINT_MAX);
-        NBN_SerializeUInt(stream, msg->client_states[i].color, 0, MAX_COLORS - 1);
-        NBN_SerializeUInt(stream, msg->client_states[i].x, 0, GAME_WIDTH);
-        NBN_SerializeUInt(stream, msg->client_states[i].y, 0, GAME_HEIGHT);
-        NBN_SerializeFloat(stream, msg->client_states[i].val, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
+        if (NBN_Reader_ReadInt32(reader, &cli_state->y) < 0) {
+            return -1;
+        }
+
+        if (NBN_Reader_ReadFloat(reader, &cli_state->val) < 0) {
+            return -1;
+        }
+
+        if (NBN_Reader_ReadString(reader, cli_state->name, CLIENT_NAME_MAX_LEN) < 0) {
+            return -1;
+        }
     }
 
     return 0;
 }
 
 // Parse the command line
-int ReadCommandLine(int argc, char *argv[])
-{
+int ReadCommandLine(int argc, char *argv[]) {
     int opt;
     int option_index;
-    struct option long_options[] = {
-        { "packet_loss", required_argument, NULL, OPT_PACKET_LOSS },
-        { "packet_duplication", required_argument, NULL, OPT_PACKET_DUPLICATION },
-        { "ping", required_argument, NULL, OPT_PING },
-        { "jitter", required_argument, NULL, OPT_JITTER }
-    };
+    struct option long_options[] = {{"packet_loss", required_argument, NULL, OPT_PACKET_LOSS},
+                                    {"packet_duplication", required_argument, NULL, OPT_PACKET_DUPLICATION},
+                                    {"ping", required_argument, NULL, OPT_PING},
+                                    {"jitter", required_argument, NULL, OPT_JITTER}};
 
-    while ((opt = getopt_long(argc, argv, "", long_options, &option_index)) != -1)
-    {
-        switch (opt)
-        {
-            case OPT_PACKET_LOSS:
-                options.packet_loss = atof(optarg);
-                break;
+    while ((opt = getopt_long(argc, argv, "", long_options, &option_index)) != -1) {
+        switch (opt) {
+        case OPT_PACKET_LOSS:
+            options.packet_loss = atof(optarg);
+            break;
 
-            case OPT_PACKET_DUPLICATION:
-                options.packet_duplication = atof(optarg);
-                break;
+        case OPT_PACKET_DUPLICATION:
+            options.packet_duplication = atof(optarg);
+            break;
 
-            case OPT_PING:
-                options.ping = atof(optarg);
-                break;
+        case OPT_PING:
+            options.ping = atof(optarg);
+            break;
 
-            case OPT_JITTER:
-                options.jitter = atof(optarg);
-                break;
+        case OPT_JITTER:
+            options.jitter = atof(optarg);
+            break;
 
-            case '?':
-                return -1;
+        case '?':
+            return -1;
 
-            default:
-                return -1;
+        default:
+            return -1;
         }
     }
 
@@ -147,7 +159,4 @@ int ReadCommandLine(int argc, char *argv[])
 }
 
 // Return the command line options
-Options GetOptions(void)
-{
-    return options;
-}
+Options GetOptions(void) { return options; }

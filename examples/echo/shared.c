@@ -20,45 +20,29 @@
 
 */
 
+#include <assert.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 
 // Sleep function
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/emscripten.h>
 #elif defined(_WIN32) || defined(_WIN64)
-#include <winsock2.h>
-#include <windows.h>
+#define WIN32_LEAN_AND_MEAN
+// prevent inclusion of winnt.h in windows.h
+#define _WINNT_
 #include <synchapi.h>
+#include <windows.h>
 #else
 #include <time.h>
 #endif
 
 #include "shared.h"
 
-EchoMessage *EchoMessage_Create(void)
-{
-    return (EchoMessage *) malloc(sizeof(EchoMessage));
-}
-
-void EchoMessage_Destroy(EchoMessage *msg)
-{
-    free(msg);
-}
-
-int EchoMessage_Serialize(EchoMessage *msg, NBN_Stream *stream)
-{
-    NBN_SerializeUInt(stream, msg->length, 0, ECHO_MESSAGE_LENGTH);
-    NBN_SerializeBytes(stream, msg->data, msg->length);
-
-    return 0;
-}
-
 // Sleep for a given amount of seconds
 // Used to limit client and server tick rate
-void EchoSleep(double sec)
-{
+void EchoSleep(double sec) {
 #if defined(__EMSCRIPTEN__)
     emscripten_sleep(sec * 1000);
 #elif defined(_WIN32) || defined(_WIN64)
@@ -69,26 +53,4 @@ void EchoSleep(double sec)
 
     nanosleep(&t, &t);
 #endif
-}
-
-static const char *log_type_strings[] = {
-    "INFO",
-    "ERROR",
-    "DEBUG",
-    "TRACE",
-    "WARNING"
-};
-
-// Basic logging function
-void Log(int type, const char *fmt, ...)
-{
-    va_list args;
-
-    va_start(args, fmt);
-
-    printf("[%s] ", log_type_strings[type]);
-    vprintf(fmt, args);
-    printf("\n");
-
-    va_end(args);
 }

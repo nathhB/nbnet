@@ -22,8 +22,12 @@
 
 */
 
-#include <stdlib.h>
+#include <assert.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
+#include "log.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
@@ -32,8 +36,8 @@
 #include <time.h>
 #endif
 
-#include "soak.h"
 #include "cargs.h"
+#include "soak.h"
 
 static bool running = true;
 static SoakOptions soak_options = {0};
@@ -42,83 +46,26 @@ static unsigned int created_incoming_soak_message_count = 0;
 static unsigned int destroyed_outgoing_soak_message_count = 0;
 static unsigned int destroyed_incoming_soak_message_count = 0;
 
-static void Usage(void)
-{
+static void Usage(void) {
 #ifdef SOAK_CLIENT
 
 #ifdef WEBRTC_NATIVE
-    printf("Usage: client --message_count=<value> --channel_count=<value> [--packet_loss=<value>] \
+    printf("Usage: client --message_count=<value> [--packet_loss=<value>] \
 [--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>] [--webrtc]\n");
 #else
-    printf("Usage: client --message_count=<value> --channel_count=<value> [--packet_loss=<value>] \
+    printf("Usage: client --message_count=<value> [--packet_loss=<value>] \
 [--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
 #endif // WEBRTC_NATIVE
 
 #endif // SOAK_CLIENT
 
 #ifdef SOAK_SERVER
-        printf("Usage: server --channel_count=<value> [--packet_loss=<value>] \
+    printf("Usage: server [--packet_loss=<value>] \
 [--packet_duplication=<value>] [--ping=<value>] [--jitter=<value>]\n");
 #endif
 }
 
-int Soak_Init(int argc, char *argv[])
-{
-    (void) argc;
-    (void) argv;
-
-    srand(SOAK_SEED);
-
-    SoakOptions options = Soak_GetOptions();
-
-    Soak_LogInfo("Soak test initialized (Packet loss: %f, Packet duplication: %f, Ping: %f, Jitter: %f)",
-            options.packet_loss, options.packet_duplication, options.ping, options.jitter);
-
-#ifdef SOAK_CLIENT 
-
-    NBN_GameClient_RegisterMessage(SOAK_MESSAGE,
-            (NBN_MessageBuilder)SoakMessage_CreateIncoming,
-            (NBN_MessageDestructor)SoakMessage_Destroy,
-            (NBN_MessageSerializer)SoakMessage_Serialize);
-
-#endif
-
-#ifdef SOAK_SERVER 
-
-    NBN_GameServer_RegisterMessage(SOAK_MESSAGE,
-            (NBN_MessageBuilder)SoakMessage_CreateIncoming,
-            (NBN_MessageDestructor)SoakMessage_Destroy,
-            (NBN_MessageSerializer)SoakMessage_Serialize);
-
-#endif
-
-    /* Packet simulator configuration */
-#ifdef SOAK_CLIENT
-    NBN_GameClient_SetPing(soak_options.ping);
-    NBN_GameClient_SetJitter(soak_options.jitter);
-    NBN_GameClient_SetPacketLoss(soak_options.packet_loss);
-    NBN_GameClient_SetPacketDuplication(soak_options.packet_duplication); 
-#endif
-
-#ifdef SOAK_SERVER
-    NBN_GameServer_SetPing(soak_options.ping);
-    NBN_GameServer_SetJitter(soak_options.jitter);
-    NBN_GameServer_SetPacketLoss(soak_options.packet_loss);
-    NBN_GameServer_SetPacketDuplication(soak_options.packet_duplication); 
-#endif
-
-    return 0;
-}
-
-void Soak_Deinit(void)
-{
-    Soak_LogInfo("Done.");
-    Soak_LogInfo("Memory report:\n");
-    // TODO
-}
-
-int Soak_ReadCommandLine(int argc, char *argv[])
-{
+int Soak_ReadCommandLine(int argc, char *argv[]) {
     struct cag_option options[] = {
 #ifdef SOAK_CLIENT
 
@@ -132,98 +79,55 @@ int Soak_ReadCommandLine(int argc, char *argv[])
 
 #endif // SOAK_CLIENT
 
-        {'c', NULL, "channel_count", "VALUE", "Number of channels (1-NBN_MAX_CHANNELS)"},
         {'l', NULL, "packet_loss", "VALUE", "Packet loss frenquency (0-1)"},
         {'d', NULL, "packet_duplication", "VALUE", "Packet duplication frequency (0-1)"},
         {'p', NULL, "ping", "VALUE", "Ping in seconds"},
-        {'j', NULL, "jitter", "VALUE", "Jitter in seconds"}
-    };
+        {'j', NULL, "jitter", "VALUE", "Jitter in seconds"}};
 
     cag_option_context context;
 
     cag_option_prepare(&context, options, CAG_ARRAY_SIZE(options), argc, argv);
 
-    while (cag_option_fetch(&context))
-    {
+    while (cag_option_fetch(&context)) {
         char option = cag_option_get(&context);
 
 #ifdef SOAK_CLIENT
-        if (option == 'm')
-        {
+        if (option == 'm') {
             const char *val = cag_option_get_value(&context);
 
-            if (val)
-            {
+            if (val) {
                 soak_options.message_count = atoi(val);
             }
-        }
-        else if (option == 'w')
-        {
+        } else if (option == 'w') {
             soak_options.webrtc = true;
         }
 #else
-        if (false) {}
+        if (false) {
+        }
 #endif
-        else if (option == 'c')
-        {
-            const char *val = cag_option_get_value(&context);
-
-            if (val)
-            {
-                soak_options.channel_count = atoi(val);
-            }
-        }
-        else if (option == 'l')
-        {
+        else if (option == 'l') {
             soak_options.packet_loss = atof(cag_option_get_value(&context));
-        }
-        else if (option == 'd')
-        {
+        } else if (option == 'd') {
             soak_options.packet_duplication = atof(cag_option_get_value(&context));
-        }
-        else if (option == 'p')
-        {
+        } else if (option == 'p') {
             soak_options.ping = atof(cag_option_get_value(&context));
-        }
-        else if (option == 'j')
-        {
+        } else if (option == 'j') {
             soak_options.jitter = atof(cag_option_get_value(&context));
         }
     }
 
-    if (soak_options.channel_count <= 0)
-    {
-        Usage();
-        return -1;
-    }
-
-    if (soak_options.channel_count > NBN_MAX_CHANNELS - NBN_LIBRARY_RESERVED_CHANNELS)
-    {
-        Soak_LogError("Channel count cannot exceed %d", NBN_MAX_CHANNELS - NBN_LIBRARY_RESERVED_CHANNELS);
-        return -1;
-    }
-
 #ifdef SOAK_CLIENT
-    if (soak_options.message_count <= 0)
-    {
+    if (soak_options.message_count <= 0) {
         Usage();
         return -1;
     }
 #endif
 
-    if (soak_options.channel_count > SOAK_MAX_CHANNELS)
-    {
-        Soak_LogError("Too many channels (max: %d)", SOAK_MAX_CHANNELS);
-        return -1;
-    }
-
     return 0;
 }
 
-int Soak_MainLoop(int (*Tick)(void *), void *data)
-{
-    while (running)
-    {
+int Soak_MainLoop(int (*Tick)(void *), void *data) {
+    while (running) {
         int ret = Tick(data);
 
         if (ret < 0) // Error
@@ -238,7 +142,7 @@ int Soak_MainLoop(int (*Tick)(void *), void *data)
         Sleep(SOAK_TICK_DT * 1000);
 #else
         long nanos = SOAK_TICK_DT * 1e9;
-        struct timespec t = { .tv_sec = nanos / 999999999, .tv_nsec = nanos % 999999999 };
+        struct timespec t = {.tv_sec = nanos / 999999999, .tv_nsec = nanos % 999999999};
 
         nanosleep(&t, &t);
 #endif
@@ -247,102 +151,35 @@ int Soak_MainLoop(int (*Tick)(void *), void *data)
     return 0;
 }
 
-void Soak_Stop(void)
-{
+void Soak_Stop(void) {
     running = false;
 
-    Soak_LogInfo("Soak test stopped");
+    log_info("Soak test stopped");
 }
 
-SoakOptions Soak_GetOptions(void)
-{
-    return soak_options;
+SoakOptions Soak_GetOptions(void) { return soak_options; }
+
+unsigned int Soak_GetCreatedOutgoingSoakMessageCount(void) { return created_outgoing_soak_message_count; }
+
+unsigned int Soak_GetDestroyedOutgoingSoakMessageCount(void) { return destroyed_outgoing_soak_message_count; }
+
+unsigned int Soak_GetCreatedIncomingSoakMessageCount(void) { return created_incoming_soak_message_count; }
+
+unsigned int Soak_GetDestroyedIncomingSoakMessageCount(void) { return destroyed_incoming_soak_message_count; }
+
+void SoakMessage_Write(NBN_Writer *writer, unsigned int msg_id, uint8_t *data, unsigned int data_length) {
+    NBN_Writer_WriteUInt32(writer, msg_id);
+    NBN_Writer_WriteUInt32(writer, data_length);
+    NBN_Writer_WriteBytes(writer, data, data_length);
 }
 
-void Soak_Debug_PrintAddedToRecvQueue(NBN_Connection *conn, NBN_Message *msg)
-{
-    (void) conn;
-    (void) msg;
-    // FIXME
-    /*if (msg->header.type == NBN_MESSAGE_CHUNK_TYPE)
-    {
-        NBN_MessageChunk *chunk = (NBN_MessageChunk *)msg->data;
-
-        Soak_LogDebug("Soak message chunk added to recv queue (chunk id: %d, chunk total: %d)",
-                chunk->id, chunk->total);
-    }
-    else
-    {
-        SoakMessage *soak_message = (SoakMessage *)msg->data;
-
-        Soak_LogDebug("Soak message added to recv queue (conn id: %d, msg id: %d, soak msg id: %d)",
-                conn->id, msg->header.id, soak_message->id);
-    }*/
-}
-
-unsigned int Soak_GetCreatedOutgoingSoakMessageCount(void)
-{
-    return created_outgoing_soak_message_count;
-}
-
-unsigned int Soak_GetDestroyedOutgoingSoakMessageCount(void)
-{
-    return destroyed_outgoing_soak_message_count;
-}
-
-unsigned int Soak_GetCreatedIncomingSoakMessageCount(void)
-{
-    return created_incoming_soak_message_count;
-}
-
-unsigned int Soak_GetDestroyedIncomingSoakMessageCount(void)
-{
-    return destroyed_incoming_soak_message_count;
-}
-
-SoakMessage *SoakMessage_CreateIncoming(void)
-{
-    SoakMessage *msg = (SoakMessage *)malloc(sizeof(SoakMessage));
-
-    msg->outgoing = false;
-
-    created_incoming_soak_message_count++;
-
-    return msg;
-}
-
-SoakMessage *SoakMessage_CreateOutgoing(void)
-{
-    SoakMessage *msg = (SoakMessage *)malloc(sizeof(SoakMessage));
-
-    msg->outgoing = true;
-
-    created_outgoing_soak_message_count++;
-
-    return msg;
-}
-
-void SoakMessage_Destroy(SoakMessage *msg)
-{
-    if (msg->outgoing)
-    {
-        destroyed_outgoing_soak_message_count++;
-        Soak_LogDebug("Destroying outgoing soak message (destroyed count: %d, created count: %d)",
-                      destroyed_outgoing_soak_message_count, created_outgoing_soak_message_count);
-    }
-    else
-    {
-        destroyed_incoming_soak_message_count++;
-    }
-
-    free(msg);
-}
-
-int SoakMessage_Serialize(SoakMessage *msg, NBN_Stream *stream)
-{
-    NBN_SerializeUInt(stream, msg->id, 0, UINT32_MAX);
-    NBN_SerializeUInt(stream, msg->data_length, 1, SOAK_MESSAGE_MAX_DATA_LENGTH);
-    NBN_SerializeBytes(stream, msg->data, msg->data_length);
+int SoakMessage_Read(NBN_Reader *reader, unsigned int *msg_id, uint8_t *data, unsigned int *data_length) {
+    if (NBN_Reader_ReadUInt32(reader, msg_id) < 0)
+        return -1;
+    if (NBN_Reader_ReadUInt32(reader, data_length) < 0)
+        return -1;
+    if (NBN_Reader_ReadBytes(reader, data, *data_length) < 0)
+        return -1;
 
     return 0;
 }

@@ -1,0 +1,869 @@
+
+> client
+> node build_web/client.js --message_count=100
+
+w:0,t:0x00000000: addRunDependency wasm-instantiate
+w:0,t:0x00000000: locateFile: client.wasm scriptDirectory: /Users/nathb/Dev/GameDev/nbnet/soak/build_web/
+w:0,t:0x00000000: asynchronously preparing wasm
+w:0,t:0x00000000: run() called, but dependencies remain, so not running
+w:0,t:0x00000000: receiveInstance
+w:0,t:0x00000000: assigning exports
+w:0,t:0x00000000: removeRunDependency wasm-instantiate
+w:0,t:0x00000000: writeStackCookie: 0x00000000
+w:0,t:0x00000000: addRunDependency loading-workers
+w:0,t:0x00000000: run() called, but dependencies remain, so not running
+w:1,t:0x00000000: addRunDependency wasm-instantiate
+w:4,t:0x00000000: addRunDependency wasm-instantiate
+w:1,t:0x00000000: receiveInstance
+w:1,t:0x00000000: assigning exports
+w:4,t:0x00000000: receiveInstance
+w:1,t:0x00000000: removeRunDependency wasm-instantiate
+w:1,t:0x00000000: initRuntime
+w:4,t:0x00000000: assigning exports
+w:4,t:0x00000000: removeRunDependency wasm-instantiate
+w:2,t:0x00000000: addRunDependency wasm-instantiate
+w:4,t:0x00000000: initRuntime
+w:2,t:0x00000000: receiveInstance
+w:2,t:0x00000000: assigning exports
+w:2,t:0x00000000: removeRunDependency wasm-instantiate
+w:2,t:0x00000000: initRuntime
+w:3,t:0x00000000: addRunDependency wasm-instantiate
+w:3,t:0x00000000: receiveInstance
+w:3,t:0x00000000: assigning exports
+w:3,t:0x00000000: removeRunDependency wasm-instantiate
+w:3,t:0x00000000: initRuntime
+w:0,t:0x00000000: removeRunDependency loading-workers
+w:0,t:0x00000000: writeStackCookie: 0x00000000
+w:0,t:0x00000000: initRuntime
+w:0,t:0x00021718: done __wasm_call_ctors
+w:0,t:0x00021718: done ATPOSTCTORS
+w:4,t:0x00000000: writeStackCookie: 0x00022bf0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:4044: Packet simulator started (Packet loss: 0.000000, Packet duplication: 0.000000, Ping: 0.000000, Jitter: 0.000000)
+2026-02-14T07:49:11.311Z [GameClient] [32minfo[39m: Connecting...
+2026-02-14T07:49:11.312Z [StandaloneSignalingClient] [32minfo[39m: 0
+2026-02-14T07:49:11.312Z [StandaloneSignalingClient] [32minfo[39m: Connecting to ws://127.0.0.1:42044...
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: proc_exit: 0
+w:0,t:0x00021718: handleException: unwinding: EXITSTATUS=0
+2026-02-14T07:49:11.339Z [StandaloneSignalingClient] [32minfo[39m: Connected
+2026-02-14T07:49:11.339Z [GameClient] [32minfo[39m: Creating server peer...
+2026-02-14T07:49:11.345Z [Peer(0)] [32minfo[39m: Offer created and set as local description
+2026-02-14T07:49:11.346Z [StandaloneSignalingClient] [32minfo[39m: Send signaling data: {
+  type: 'offer',
+  sdp: 'v=0\r\n' +
+    'o=- 5703980242004240308 2 IN IP4 127.0.0.1\r\n' +
+    's=-\r\n' +
+    't=0 0\r\n' +
+    'a=group:BUNDLE 0\r\n' +
+    'a=extmap-allow-mixed\r\n' +
+    'a=msid-semantic: WMS\r\n' +
+    'm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n' +
+    'c=IN IP4 0.0.0.0\r\n' +
+    'a=ice-ufrag:/RvV\r\n' +
+    'a=ice-pwd:IwolxOyvYLfRqGBG/XdeiUTA\r\n' +
+    'a=ice-options:trickle\r\n' +
+    'a=fingerprint:sha-256 F2:71:B9:94:53:D1:10:F4:5B:D8:4D:88:2B:54:B1:B0:68:76:0B:68:53:23:AC:1E:61:DA:4D:36:56:3A:8C:01\r\n' +
+    'a=setup:actpass\r\n' +
+    'a=mid:0\r\n' +
+    'a=sctp-port:5000\r\n' +
+    'a=max-message-size:262144\r\n'
+}
+2026-02-14T07:49:11.351Z [Peer(0)] [32minfo[39m: Ice gathering state changed: gathering
+2026-02-14T07:49:11.353Z [Peer(0)] [32minfo[39m: Got new candidate, save it to the candidates list
+2026-02-14T07:49:11.354Z [Peer(0)] [32minfo[39m: Got new candidate, save it to the candidates list
+2026-02-14T07:49:11.356Z [Peer(0)] [32minfo[39m: Got new candidate, save it to the candidates list
+2026-02-14T07:49:11.356Z [Peer(0)] [32minfo[39m: Got new candidate, save it to the candidates list
+2026-02-14T07:49:11.356Z [StandaloneSignalingClient] [32minfo[39m: Received signaling data: {"type":"answer", "sdp":"v=0\r\no=rtc 422846998 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic:WMS *\r\na=ice-options:ice2,trickle\r\na=fingerprint:sha-256 6E:3B:36:4B:60:21:6F:14:66:E4:AC:D3:96:44:41:68:32:E1:34:1D:F7:0D:EB:56:74:C7:CF:D9:C7:C0:0C:68\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\na=mid:0\r\na=sendrecv\r\na=sctp-port:5000\r\na=max-message-size:262144\r\na=setup:active\r\na=ice-ufrag:Rcrb\r\na=ice-pwd:umhyogN/fCkQnBA7G/MEK6\r\na=candidate:1 1 UDP 2116026367 2a02:842a:3620:e701:4d3:7a7e:e243:2e21 63275 typ host\r\na=candidate:2 1 UDP 2114977535 192.168.1.212 63275 typ host\r\n"}
+2026-02-14T07:49:11.356Z [Peer(0)] [32minfo[39m: Got answer
+2026-02-14T07:49:11.358Z [Peer(0)] [32minfo[39m: Remote description set, notify remote peer that we are ready to receive his ice candidates
+2026-02-14T07:49:11.358Z [StandaloneSignalingClient] [32minfo[39m: Send signaling data: { signaling: [Object] }
+2026-02-14T07:49:11.359Z [Peer(0)] [31merror[39m: Error while gathering ice candidates: 701
+2026-02-14T07:49:11.359Z [Peer(0)] [31merror[39m: Error while gathering ice candidates: 701
+2026-02-14T07:49:11.359Z [Peer(0)] [31merror[39m: Error while gathering ice candidates: 701
+2026-02-14T07:49:11.359Z [Peer(0)] [31merror[39m: Error while gathering ice candidates: 701
+2026-02-14T07:49:11.407Z [Peer(0)] [32minfo[39m: Ice gathering state changed: complete
+2026-02-14T07:49:11.408Z [Peer(0)] [32minfo[39m: All candidates gathered, waiting for the remote peer to be ready to receive them
+2026-02-14T07:49:11.414Z [Peer(0)] [32minfo[39m: unreliable data channel opened (id: 0)
+2026-02-14T07:49:11.414Z [GameClient] [32minfo[39m: Connected
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 INFO  /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1903: WebRTC_EMSCRIPTEN driver started
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1791: Enqueue message of type 252 on channel 1
+2026-02-14 08:49:11 INFO  /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1949: Started
+w:0,t:0x00021718: 08:49:11 INFO  /Users/nathb/Dev/GameDev/nbnet/soak/soak.c:73: Soak test initialized (Packet loss: 0.000000, Packet duplication: 0.000000, Ping: 0.000000, Jitter: 0.000000)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:863: Write message 0 (type: 252, length: 4) to packet 1
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1351: Message 0 added to packet 1 (length: 4, type: 252)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 1 to connection 252 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 1 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 1 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 2 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 2 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 3 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 4 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 3 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 5 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 4 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 4 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 6 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 5 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 5 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:863: Write message 0 (type: 252, length: 4) to packet 7
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1351: Message 0 added to packet 7 (length: 4, type: 252)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 7 to connection 252 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 6 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 6 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 8 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 7 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 7 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 9 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 8 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 8 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 10 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 11 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 9 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 9 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 12 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 10 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 10 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:863: Write message 0 (type: 252, length: 4) to packet 13
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1351: Message 0 added to packet 13 (length: 4, type: 252)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 13 to connection 252 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 11 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 11 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 14 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 12 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 12 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 15 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 13 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 13 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 16 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 14 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 14 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 17 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 15 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 15 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 18 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 16 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 16 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:863: Write message 0 (type: 252, length: 4) to packet 19
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1351: Message 0 added to packet 19 (length: 4, type: 252)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 19 to connection 252 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 17 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 17 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 20 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 21 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 18 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 18 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 22 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 19 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 19 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 23 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 20 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 20 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 24 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 21 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 21 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:863: Write message 0 (type: 252, length: 4) to packet 25
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1351: Message 0 added to packet 25 (length: 4, type: 252)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 25 to connection 252 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 22 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 22 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 26 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 23 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 23 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 27 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 24 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 24 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 28 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 25 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 25 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 29 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 30 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 26 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 26 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:863: Write message 0 (type: 252, length: 4) to packet 31
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1351: Message 0 added to packet 31 (length: 4, type: 252)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 31 to connection 252 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 27 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 27 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 32 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 28 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 28 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 33 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 29 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 29 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:11 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 34 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 30 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 30 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 35 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 31 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 31 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 36 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 32 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 32 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:863: Write message 0 (type: 252, length: 4) to packet 37
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1351: Message 0 added to packet 37 (length: 4, type: 252)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 37 to connection 252 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 33 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 33 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 38 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 34 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 34 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 39 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 35 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 35 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 40 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 41 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 36 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 36 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 42 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 37 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 37 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:863: Write message 0 (type: 252, length: 4) to packet 43
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1351: Message 0 added to packet 43 (length: 4, type: 252)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 43 to connection 252 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 38 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 38 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 44 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 39 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 39 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 45 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 40 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 40 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 46 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 41 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 41 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 47 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 42 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 42 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 48 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 43 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 43 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:863: Write message 0 (type: 252, length: 4) to packet 49
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1351: Message 0 added to packet 49 (length: 4, type: 252)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 49 to connection 252 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 44 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 44 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 50 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 45 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 45 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 51 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 52 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 46 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 46 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 53 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 47 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 47 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 54 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 48 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 48 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:863: Write message 0 (type: 252, length: 4) to packet 55
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1351: Message 0 added to packet 55 (length: 4, type: 252)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 55 to connection 252 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 49 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 49 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 56 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 50 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 50 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 57 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 51 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 51 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 58 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 52 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 52 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 59 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 53 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 53 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 60 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 54 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 54 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:863: Write message 0 (type: 252, length: 4) to packet 61
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1351: Message 0 added to packet 61 (length: 4, type: 252)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 61 to connection 252 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 62 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 55 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 55 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 63 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 56 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 56 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 64 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 57 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 57 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 65 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 58 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 58 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 66 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 59 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 59 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:863: Write message 0 (type: 252, length: 4) to packet 67
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1351: Message 0 added to packet 67 (length: 4, type: 252)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 67 to connection 252 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 60 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 60 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 68 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 61 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 61 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 69 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 62 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 62 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 70 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 63 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 63 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 71 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 64 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 64 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 72 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 65 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 65 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:863: Write message 0 (type: 252, length: 4) to packet 73
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1351: Message 0 added to packet 73 (length: 4, type: 252)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 73 to connection 252 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 66 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 66 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 74 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 67 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 67 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 75 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1760: Received packet 68 (conn id: 133780, ack: 0, messages count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1255: Processing received packet 68 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 76 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
+w:0,t:0x00021718: runtimeKeepalivePop -> counter=0
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1294: Flushing all channels
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 0 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 1 (message count: 1)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 2 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1306: Flushing channel 3 (message count: 0)
+2026-02-14 08:49:12 DEBUG /Users/nathb/Dev/GameDev/nbnet/nbnet.c:1519: Send packet 77 to connection 0 (messages count: 0)
+w:0,t:0x00021718: runtimeKeepalivePush -> counter=1
