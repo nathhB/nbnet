@@ -45,6 +45,7 @@
 
 #include <winsock2.h>
 #include <windows.h>
+#include <ws2tcpip.h>
 
 #elif (defined(__APPLE__) && defined(__MACH__))
 
@@ -69,6 +70,8 @@
 #include <unistd.h>
 
 #endif // _POSIX_C_SOURCE >= 199309L
+#include <netdb.h>
+#include <arpa/inet.h>
 
 #ifndef CLOCK_MONOTONIC_RAW
 #define CLOCK_MONOTONIC_RAW CLOCK_MONOTONIC
@@ -81,8 +84,6 @@
 #if defined(NBN_PLATFORM_WINDOWS)
 
 #include <winsock2.h>
-
-typedef int socklen_t;
 
 #elif defined(NBN_PLATFORM_UNIX) || defined(NBN_PLATFORM_MAC)
 
@@ -1912,6 +1913,7 @@ static int Client_ProcessReceivedMessage(NBN_Client *, NBN_Message *, NBN_Connec
 static NBN_Client_Event Client_HandleEvent(NBN_Client *);
 static NBN_Client_Event Client_HandleMessageReceivedEvent(NBN_Client *);
 static NBN_Connection *CreateServerConnection(NBN_Client *client, NBN_Driver_ID driver_id);
+static int Client_ExtractHostname(const char *input, char *out_hostname, size_t bufferlen);
 
 NBN_Client *NBN_Client_Create(const char *protocol_name, const char *host, uint16_t port) {
     NBN_Client *client = malloc(sizeof(NBN_Client));
@@ -2238,6 +2240,98 @@ int NBN_Client_GetServerCloseCode(NBN_Client *client) { return client->closed_co
 
 bool NBN_Client_IsConnected(NBN_Client *client) { return client->is_connected; }
 
+int NBN_Client_ParseHostnameToIPV4(const char *input, char *out_ipv4, socklen_t bufferlen) {
+    char hostname[256];
+
+    struct addrinfo hints;
+    struct addrinfo *result;
+    struct addrinfo *p;
+
+    int status;
+
+    // winsock needs a startup
+#ifdef _WIN32
+    WSADATA wsa;
+    int wsa_started = 0;
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+        return -1;
+    }
+
+    wsa_started = 1;
+#endif
+
+    if (!out_ipv4 || bufferlen == 0) {
+#ifdef _WIN32
+        if (wsa_started) {
+            WSACleanup();
+        }
+#endif
+        return -1;
+    }
+
+    status = Client_ExtractHostname(input, hostname, sizeof(hostname));
+
+    if (status != 0) {
+#ifdef _WIN32
+        if (wsa_started) {
+            WSACleanup();
+        }
+#endif
+        return status;
+    }
+
+    memset(&hints, 0, sizeof(hints));
+
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    status = getaddrinfo(hostname, NULL, &hints, &result);
+
+    if (status != 0) {
+#ifdef _WIN32
+        if (wsa_started) {
+            WSACleanup();
+        }
+#endif
+        return -1;
+    }
+
+    out_ipv4[0] = '\0';
+
+    for (p = result; p != NULL; p = p->ai_next) {
+        void *address = NULL;
+
+        struct sockaddr_in *addr = (struct sockaddr_in*)p->ai_addr;
+
+        address = &addr->sin_addr;
+
+        if (address != NULL) {
+            if (inet_ntop(p->ai_family, address, out_ipv4, bufferlen) != NULL) {
+                freeaddrinfo(result);
+
+#ifdef _WIN32
+                if (wsa_started) {
+                    WSACleanup();
+                }
+#endif
+
+                return 0;
+            }
+        }
+    }
+
+    freeaddrinfo(result);
+
+#ifdef _WIN32
+    if (wsa_started) {
+        WSACleanup();
+    }
+#endif
+
+    return -1;
+}
+
 static int Client_ProcessReceivedMessage(NBN_Client *client, NBN_Message *message, NBN_Connection *server_connection) {
     NBN_Assert(client->server_connection == server_connection);
 
@@ -2334,6 +2428,46 @@ static void ClientDriver_OnPacketReceived(NBN_Client *client, NBN_Packet *packet
         LogError("Received invalid packet from server");
         NBN_Abort();
     }
+}
+
+static int Client_ExtractHostname(const char *input, char *out_hostname, size_t bufferlen) {
+    const char *start = NULL;
+    const char *end = NULL;
+    size_t length = 0;
+
+    if (!input || !out_hostname || bufferlen == 0) {
+        return -1;
+    }
+
+    start = input;
+
+    if (strncmp(start, "http://", 7) == 0) {
+        start += 7;
+    } else if (strncmp(start, "https://", 8) == 0) {
+        start += 8;
+    }
+
+    end = start;
+
+    while (*end
+           && *end != '/'
+           && *end != '?'
+           && *end != '#'
+           && *end != ':'
+    ) {
+        end++;
+    }
+
+    length = (size_t)(end - start);
+
+    if (length == 0 || length + 1 > bufferlen) {
+        return -1;
+    }
+
+    memcpy(out_hostname, start, length);
+    out_hostname[length] = '\0';
+
+    return 0;
 }
 
 // END OF CLIENT
