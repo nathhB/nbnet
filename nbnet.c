@@ -1776,6 +1776,8 @@ static void Endpoint_Init(NBN_Endpoint *endpoint, uint32_t protocol_id, bool is_
 static void Endpoint_Deinit(NBN_Endpoint *endpoint) {
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
     PacketSimulator_Stop(&endpoint->packet_simulator);
+#else
+    (void)endpoint;
 #endif
 }
 
@@ -2460,7 +2462,7 @@ void NBN_Server_Stop(NBN_Server *server) {
     while (NBN_Server_Poll(server) != NBN_SERVER_NO_EVENT) {
     }
 
-    for (unsigned int i = 0; i < hmlen(server->clients); i++) {
+    for (ptrdiff_t i = 0; i < hmlen(server->clients); i++) {
         NBN_Connection *conn = server->clients[i].value;
 
         conn->driver->impl.serv_cleanup_connection(server, conn);
@@ -2513,7 +2515,7 @@ NBN_ConnectionHandle *NBN_Server_GetConnection(NBN_Server *server, NBN_Connectio
 unsigned int NBN_Server_GetClientCount(NBN_Server *server) { return hmlen(server->clients); }
 
 NBN_ConnectionHandle *NBN_Server_GetNextClient(NBN_Server *server, NBN_Client_Iterator *it) {
-    for (; *it < hmlen(server->clients);) {
+    for (; (ptrdiff_t)*it < hmlen(server->clients);) {
         NBN_Connection *conn = (NBN_Connection *)server->clients[*it].value;
 
         (*it)++;
@@ -2559,7 +2561,7 @@ NBN_Server_Event NBN_Server_Poll(NBN_Server *server) {
 
         server->stats.download_bandwidth = 0;
 
-        for (unsigned int i = 0; i < hmlen(server->clients); i++) {
+        for (ptrdiff_t i = 0; i < hmlen(server->clients); i++) {
             NBN_Connection *client = server->clients[i].value;
 
             for (unsigned int i = 0; i < endpoint->channel_count; i++) {
@@ -2604,7 +2606,7 @@ int NBN_Server_Flush(NBN_Server *server) {
 
     Server_RemoveClosedClientConnections(server);
 
-    for (unsigned int i = 0; i < hmlen(server->clients); i++) {
+    for (ptrdiff_t i = 0; i < hmlen(server->clients); i++) {
         NBN_Connection *client = server->clients[i].value;
 
         NBN_Assert(!(client->is_closed && client->is_stale));
@@ -2864,7 +2866,7 @@ static int Server_ProcessReceivedMessage(NBN_Server *server, NBN_Message *messag
 }
 
 static int Server_CloseStaleClientConnections(NBN_Server *server) {
-    for (unsigned int i = 0; i < hmlen(server->clients); i++) {
+    for (ptrdiff_t i = 0; i < hmlen(server->clients); i++) {
         NBN_Connection *client = server->clients[i].value;
 
         if (!client->is_stale && Connection_CheckIfStale(client, server->endpoint.time)) {
@@ -3843,7 +3845,7 @@ static int WebRTC_Native_Server_RecvPackets(NBN_Server *server) {
     const int buffer_size = sizeof(packet->buffer);
     int size = buffer_size;
 
-    for (unsigned int i = 0; i < hmlen(server->clients); i++) {
+    for (ptrdiff_t i = 0; i < hmlen(server->clients); i++) {
         NBN_Connection *conn = server->clients[i].value;
 
         if (conn->driver->id != NBN_DRIVER_WEBRTC_NATIVE)
