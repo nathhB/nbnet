@@ -32,6 +32,12 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 
+#if defined(_WIN32) || defined(_WIN64)
+typedef int socklen_t;
+#else
+#include <sys/socket.h>
+#endif
+
 #define NBN_ERROR -1
 
 // TODO: doc
@@ -292,6 +298,11 @@ int NBN_Client_GetServerCloseCode(NBN_Client *client);
  * @return true if connected, false otherwise
  */
 bool NBN_Client_IsConnected(NBN_Client *client);
+
+/**
+ * @ return 0 if parsed correctly, -1 otherwise
+ */
+int NBN_Client_ParseHostnameToIPV4(const char *input, char *out_ipv4, socklen_t bufferlen);
 
 /**
  * Initialize the game server with minimal configuration.
