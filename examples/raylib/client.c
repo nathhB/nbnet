@@ -463,24 +463,59 @@ void UpdateAndDraw(NBN_Client *client) {
     Draw(client);
 }
 
-int main(int argc, char *argv[]) {
-    // Read command line arguments expect when we are running in a web browser.
-    // When running in web browser we need another way to provide arguments (TODO)
-#ifdef __EMSCRIPTEN__
-    if (ReadCommandLine(argc, argv) < 0) {
-        printf("Usage: client [--packet_loss=<value>] [--packet_duplication=<value>] [--ping=<value>] \
-[--jitter=<value>]\n");
+// Returns a string from the URL, or a default
+// value if it's not set
+EM_JS(char*, get_query_param_string, (const char* key, const char* defaultValue), {
+    const params = new URLSearchParams(window.location.search);
 
-        return 1;
+    const value = params.get(UTF8ToString(key));
+
+    if (value === null) {
+        const defaultStr = UTF8ToString(defaultValue);
+        const len = lengthBytesUTF8(defaultStr) + 1;
+        const ptr = _malloc(len);
+
+        stringToUTF8(defaultStr, ptr, len);
+        return ptr;
     }
-#endif
 
+    const len = lengthBytesUTF8(value) + 1;
+    const ptr = _malloc(len);
+
+    stringToUTF8(value, ptr, len);
+
+    return ptr;
+});
+
+// Returns an integer value from the URL, or a default
+// value if it's not set (example only, not used here)
+// EM_JS(int, get_query_param_int, (const char* key, const int defaultValue), {
+//     const params = new URLSearchParams(window.location.search);
+//     const value = params.get(UTF8ToString(key));
+
+//     if (value === null) {
+//         return defaultValue;
+//     }
+
+//     const parsed = parseInt(value, 10);
+//     if (Number.isNaN(parsed)) {
+//         return defaultValue;
+//     }
+
+//     return parsed;
+// });
+
+int main(int argc, char *argv[]) {
+#ifdef __EMSCRIPTEN__
+    const char *name = get_query_param_string("name", "client");
+#else
     if (argc < 2) {
         printf("Usage: raylib_client NAME\n");
         return 1;
     }
 
     const char *name = argv[1];
+#endif
 
     memcpy(local_client_state.name, name, sizeof(local_client_state.name));
 
