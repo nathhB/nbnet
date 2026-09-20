@@ -167,18 +167,36 @@ unsigned int Soak_GetCreatedIncomingSoakMessageCount(void) { return created_inco
 
 unsigned int Soak_GetDestroyedIncomingSoakMessageCount(void) { return destroyed_incoming_soak_message_count; }
 
-void SoakMessage_Write(NBN_Writer *writer, unsigned int msg_id, uint8_t *data, unsigned int data_length) {
+void SoakMessage_WriteHeader(NBN_Writer *writer, unsigned int msg_id, unsigned int data_length) {
     NBN_Writer_WriteUInt32(writer, msg_id);
     NBN_Writer_WriteUInt32(writer, data_length);
+}
+
+void SoakMessage_Write(NBN_Writer *writer, unsigned int msg_id, uint8_t *data, unsigned int data_length) {
+    SoakMessage_WriteHeader(writer, msg_id, data_length);
     NBN_Writer_WriteBytes(writer, data, data_length);
 }
 
 int SoakMessage_Read(NBN_Reader *reader, unsigned int *msg_id, uint8_t *data, unsigned int *data_length) {
+    if (SoakMessage_ReadHeader(reader, msg_id, data_length) < 0)
+        return -1;
+    if (SoakMessage_ReadData(reader, data, *data_length) < 0)
+        return -1;
+
+    return 0;
+}
+
+int SoakMessage_ReadHeader(NBN_Reader *reader, unsigned int *msg_id, unsigned int *data_length) {
     if (NBN_Reader_ReadUInt32(reader, msg_id) < 0)
         return -1;
     if (NBN_Reader_ReadUInt32(reader, data_length) < 0)
         return -1;
-    if (NBN_Reader_ReadBytes(reader, data, *data_length) < 0)
+
+    return 0;
+}
+
+int SoakMessage_ReadData(NBN_Reader *reader, uint8_t *data, unsigned int length) {
+    if (NBN_Reader_ReadBytes(reader, data, length) < 0)
         return -1;
 
     return 0;
