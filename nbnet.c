@@ -199,7 +199,7 @@ typedef struct NBN_PacketEntry {
     uint8_t acked : 1;
     uint8_t lost : 1;
     uint8_t messages_count;
-    float send_time;
+    double send_time;
     NBN_MessageEntry messages[NBN_MAX_MESSAGES_PER_PACKET];
 } NBN_PacketEntry;
 
@@ -210,7 +210,7 @@ typedef struct NBN_Packet_Ref {
 
 typedef struct NBN_Outgoing_Message { 
     NBN_Message message;
-    float last_send_time;
+    double last_send_time;
     bool pending;
 } NBN_Outgoing_Message;
 
@@ -257,9 +257,9 @@ typedef int NBN_WebRTC_Peer_ID;
 struct NBN_Connection {
     NBN_ConnectionHandle handle;
 
-    float last_recv_packet_time;  /* Used to detect stale connections */
-    float last_flush_time;        /* Last time the send queue was flushed */
-    float last_read_packets_time; /* Last time packets were read from the network driver */
+    double last_recv_packet_time;  /* Used to detect stale connections */
+    double last_flush_time;        /* Last time the send queue was flushed */
+    double last_read_packets_time; /* Last time packets were read from the network driver */
     /* Keep track of bytes read from the socket (used for download bandwith calculation) */
     unsigned int downloaded_bytes;
     uint8_t is_accepted : 1;
@@ -362,6 +362,78 @@ static bool EventQueue_Dequeue(NBN_EventQueue *event_queue, NBN_Event *ev) {
     return true;
 }
 
+typedef struct NBN_Pool_FreeBlock {
+    struct NBN_Pool_FreeBlock *next;
+} NBN_Pool_FreeBlock;
+
+typedef struct NBN_Pool {
+    uint8_t **blocks;
+    size_t block_size;
+    unsigned int block_count;
+    unsigned int block_idx;
+    NBN_Pool_FreeBlock *free;
+} NBN_Pool;
+
+static void Pool_Grow(NBN_Pool *pool, unsigned int block_count);
+
+static void Pool_Init(NBN_Pool *pool, size_t block_size, unsigned int initial_block_count) {
+    if (block_size < sizeof(NBN_Pool_FreeBlock)) {
+        block_size = sizeof(NBN_Pool_FreeBlock);
+    }
+
+    pool->block_size = block_size;
+    pool->block_idx = 0;
+    pool->block_count = 0;
+    pool->free = NULL;
+    pool->blocks = NULL;
+
+    Pool_Grow(pool, initial_block_count);
+}
+
+static void Pool_Deinit(NBN_Pool *pool) {
+    for (unsigned int i = 0; i < pool->block_count; i++) {
+        free(pool->blocks[i]);
+    }
+
+    free(pool->blocks);
+}
+
+static void *Pool_Get(NBN_Pool *pool) {
+    if (pool->free) {
+        void *block = pool->free;
+
+        pool->free = pool->free->next;
+
+        return block;
+    }
+
+    if (pool->block_idx == pool->block_count) {
+        Pool_Grow(pool, pool->block_count * 2);
+    }
+
+    void *block = pool->blocks[pool->block_idx];
+
+    pool->block_idx++;
+
+    return block;
+}
+
+static void Pool_Return(NBN_Pool *pool, void *ptr) {
+    NBN_Pool_FreeBlock *free = pool->free;
+
+    pool->free = (NBN_Pool_FreeBlock *)ptr;
+    pool->free->next = free;
+}
+
+static void Pool_Grow(NBN_Pool *pool, unsigned int block_count) {
+    pool->blocks = (uint8_t**)realloc(pool->blocks, sizeof(uint8_t *) * block_count);
+
+    for (unsigned int i = 0; i < block_count - pool->block_count; i++)
+        pool->blocks[pool->block_idx + i] = (uint8_t*)malloc(pool->block_size);
+
+    pool->block_count = block_count;
+}
+
 // END DATA STRUCTURES
 // ===================================================
 
@@ -376,8 +448,8 @@ typedef struct NBN_PacketSimulatorEntry NBN_PacketSimulatorEntry;
 struct NBN_PacketSimulatorEntry {
     NBN_Packet packet;
     NBN_Connection *receiver;
-    float delay;
-    float enqueued_at;
+    double delay;
+    double enqueue_time;
     struct NBN_PacketSimulatorEntry *next;
     struct NBN_PacketSimulatorEntry *prev;
 };
@@ -389,22 +461,28 @@ typedef struct NBN_PacketSimulator {
     unsigned int packet_count;
 
 #ifdef NBN_PLATFORM_WINDOWS
-    HANDLE queue_mutex;
+    HANDLE mutex;
     HANDLE thread;
 #else
-    pthread_mutex_t queue_mutex;
+    pthread_mutex_t mutex;
     pthread_t thread;
 #endif
 
     bool running;
+    bool throttling;
+    double throttle_duration;
+    double throttle_start_time;
+    double last_throttle_attempt_time;
     unsigned int total_dropped_packets;
 
     /* Settings */
     float packet_loss_ratio;
-    float current_packet_loss_ratio;
     float packet_duplication_ratio;
     float ping;
     float jitter;
+    float throttle;
+    float throttle_min_time;
+    float throttle_max_time;
 } NBN_PacketSimulator;
 
 static void PacketSimulator_Init(NBN_PacketSimulator *, NBN_Endpoint *);
@@ -421,11 +499,10 @@ typedef struct NBN_Channel_Config {
     unsigned int buffer_size;
 } NBN_Channel_Config;
 
-struct NBN_Endpoint {
-    NBN_EventQueue event_queue;
+struct NBN_Endpoint { 
     uint32_t protocol_id;
     bool is_server;
-    float time;
+    double time;
     uint8_t server_initial_data_buffer[NBN_SERVER_INITIAL_DATA_MAX_SIZE];
     uint8_t connection_request_data_buffer[NBN_CONNECTION_REQUEST_DATA_MAX_SIZE];
     unsigned int client_connection_request_data_len;
@@ -435,6 +512,8 @@ struct NBN_Endpoint {
     uint8_t default_reliable_channel;
     uint8_t default_unreliable_channel;
     unsigned int pending_received_packet_count;
+    NBN_EventQueue event_queue;
+    NBN_Pool packet_pool;
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
     NBN_PacketSimulator packet_simulator;
 #endif
@@ -1062,7 +1141,7 @@ static void Channel_Init(NBN_Channel *channel, uint8_t id, NBN_Channel_Config cf
     }
 }
 
-static void Channel_UpdateMessageSendTime(NBN_Channel *channel, uint16_t msg_id, float time) {
+static void Channel_UpdateMessageSendTime(NBN_Channel *channel, uint16_t msg_id, double time) {
     NBN_Outgoing_Message *out_msg = &channel->outgoing_messages_buffer[msg_id % channel->buffer_size];
 
     NBN_Assert(msg_id == out_msg->message.header.id);
@@ -1215,7 +1294,7 @@ static NBN_Message *Channel_GetNextReceivedMessage(NBN_Channel *channel) {
     }
 }
 
-static bool Channel_GetNextOutgoingMessage(NBN_Channel *channel, NBN_Message **res_msg, float time) {
+static bool Channel_GetNextOutgoingMessage(NBN_Channel *channel, NBN_Message **res_msg, double time) {
     if (channel->mode == NBN_CHANNEL_UNRELIABLE) {
         NBN_Outgoing_Message *out_msg = &channel->outgoing_messages_buffer[channel->next_outgoing_message_slot];
 
@@ -1279,13 +1358,11 @@ static int Channel_OnOutgoingMessageAcked(NBN_Channel *channel, NBN_Endpoint *en
 
     LogDebug("Received ack for message %d on channel %d", msg_id, channel->id);
 
-    if (!out_msg->pending) {
+    if (!out_msg->pending || out_msg->message.header.id != msg_id) {
         // message was already acked
 
         return 0;
     }
-
-    NBN_Assert(out_msg->message.header.id == msg_id);
 
     out_msg->pending = false;
 
@@ -1333,25 +1410,24 @@ static int Channel_OnOutgoingMessageAcked(NBN_Channel *channel, NBN_Endpoint *en
 
 static void Connection_Destroy(NBN_Connection *);
 static uint32_t Connection_BuildPacketAckBits(NBN_Connection *);
-static int Connection_DecodePacketHeader(NBN_Connection *, NBN_Endpoint *, NBN_Packet *, float);
-static int Connection_AckPacket(NBN_Connection *, NBN_Endpoint *endpoint, uint16_t, float);
+static int Connection_DecodePacketHeader(NBN_Connection *, NBN_Endpoint *, NBN_Packet *, double);
+static int Connection_AckPacket(NBN_Connection *, NBN_Endpoint *endpoint, uint16_t, double);
 static void Connection_InitOutgoingPacket(NBN_Connection *, uint32_t, NBN_Packet *, NBN_PacketEntry **);
 static NBN_PacketEntry *Connection_InsertOutgoingPacketEntry(NBN_Connection *, uint16_t);
 static bool Connection_InsertReceivedPacketEntry(NBN_Connection *, uint16_t);
 static NBN_PacketEntry *Connection_FindSendPacketEntry(NBN_Connection *, uint16_t);
 static bool Connection_IsPacketReceived(NBN_Connection *, uint16_t);
-static int Connection_SendPacket(NBN_Endpoint *, NBN_Connection *, NBN_Packet *, NBN_PacketEntry *, float, bool);
+static int Connection_SendPacket(NBN_Endpoint *, NBN_Connection *, NBN_Packet *, NBN_PacketEntry *, double, bool);
 static int Connection_ReadNextMessageHeader(NBN_Reader *, NBN_MessageHeader *);
-static void Connection_UpdateAveragePing(NBN_Connection *, float);
+static void Connection_UpdateAveragePing(NBN_Connection *, double);
 static void Connection_UpdateAveragePacketLoss(NBN_Connection *, uint16_t);
-static void Connection_UpdateAverageUploadBandwidth(NBN_Connection *, float);
-static void Connection_UpdateAverageDownloadBandwidth(NBN_Connection *, float);
-static int Connection_ProcessReceivedPacket(NBN_Endpoint *, NBN_Connection *, NBN_Packet *, float);
-static int Connection_FlushChannels(NBN_Endpoint *, NBN_Connection *, uint32_t, float);
-static bool Connection_CheckIfStale(NBN_Connection *, float);
+static void Connection_UpdateAverageUploadBandwidth(NBN_Connection *, double);
+static void Connection_UpdateAverageDownloadBandwidth(NBN_Connection *, double);
+static int Connection_ProcessReceivedPacket(NBN_Endpoint *, NBN_Connection *, NBN_Packet *, double);
+static int Connection_FlushChannels(NBN_Endpoint *, NBN_Connection *, uint32_t, double);
+static bool Connection_CheckIfStale(NBN_Connection *, double);
 
-static int Connection_ProcessReceivedPacket(NBN_Endpoint *endpoint, NBN_Connection *connection, NBN_Packet *packet,
-                                            float time) {
+static int Connection_ProcessReceivedPacket(NBN_Endpoint *endpoint, NBN_Connection *connection, NBN_Packet *packet, double time) {
     if (Connection_DecodePacketHeader(connection, endpoint, packet, time) < 0) {
         LogError("Failed to decode packet %d header", packet->header.seq_number);
 
@@ -1421,8 +1497,7 @@ static int Connection_ProcessReceivedPacket(NBN_Endpoint *endpoint, NBN_Connecti
     return 0;
 }
 
-static int Connection_FlushChannels(NBN_Endpoint *endpoint, NBN_Connection *connection, uint32_t protocol_id,
-                                    float time) {
+static int Connection_FlushChannels(NBN_Endpoint *endpoint, NBN_Connection *connection, uint32_t protocol_id, double time) {
     LogDebug("Flushing all channels");
 
     NBN_PacketEntry *packet_entry;
@@ -1503,7 +1578,7 @@ static int Connection_FlushChannels(NBN_Endpoint *endpoint, NBN_Connection *conn
 
     sent_bytes += packet.size;
 
-    float t = time - connection->last_flush_time;
+    double t = time - connection->last_flush_time;
 
     if (t > 0)
         Connection_UpdateAverageUploadBandwidth(connection, sent_bytes / t);
@@ -1513,7 +1588,7 @@ static int Connection_FlushChannels(NBN_Endpoint *endpoint, NBN_Connection *conn
     return 0;
 }
 
-static bool Connection_CheckIfStale(NBN_Connection *connection, float time) {
+static bool Connection_CheckIfStale(NBN_Connection *connection, double time) {
 #if defined(NBN_DEBUG) && defined(NBN_DISABLE_STALE_CONNECTION_DETECTION)
     /* When testing under bad network conditions (in soak test for instance), we don't want to deal
        with stale connections */
@@ -1523,7 +1598,7 @@ static bool Connection_CheckIfStale(NBN_Connection *connection, float time) {
 #endif
 }
 
-static int Connection_DecodePacketHeader(NBN_Connection *connection, NBN_Endpoint *endpoint, NBN_Packet *packet, float time) {
+static int Connection_DecodePacketHeader(NBN_Connection *connection, NBN_Endpoint *endpoint, NBN_Packet *packet, double time) {
     if (Connection_AckPacket(connection, endpoint, packet->header.ack, time) < 0) {
         LogError("Failed to ack packet %d", packet->header.seq_number);
 
@@ -1575,7 +1650,7 @@ static uint32_t Connection_BuildPacketAckBits(NBN_Connection *connection) {
     return ack_bits;
 }
 
-static int Connection_AckPacket(NBN_Connection *connection, NBN_Endpoint *endpoint, uint16_t ack_packet_seq_number, float time) {
+static int Connection_AckPacket(NBN_Connection *connection, NBN_Endpoint *endpoint, uint16_t ack_packet_seq_number, double time) {
     NBN_PacketEntry *packet_entry = Connection_FindSendPacketEntry(connection, ack_packet_seq_number);
 
     if (packet_entry && !packet_entry->acked) {
@@ -1661,7 +1736,7 @@ static bool Connection_IsPacketReceived(NBN_Connection *connection, uint16_t pac
 }
 
 static int Connection_SendPacket(NBN_Endpoint *endpoint, NBN_Connection *connection, NBN_Packet *packet,
-                                 NBN_PacketEntry *packet_entry, float time, bool is_server) {
+                                 NBN_PacketEntry *packet_entry, double time, bool is_server) {
     LogDebug("Send packet %d to connection %lld (messages count: %d)", packet->header.seq_number, connection->handle.id,
              packet->header.messages_count);
 
@@ -1721,7 +1796,7 @@ static int Connection_ReadNextMessageHeader(NBN_Reader *reader, NBN_MessageHeade
     return header->length;
 }
 
-static void Connection_UpdateAveragePing(NBN_Connection *connection, float ping) {
+static void Connection_UpdateAveragePing(NBN_Connection *connection, double ping) {
     /* exponential smoothing with a factor of 0.05 */
     connection->stats.ping = connection->stats.ping + .05f * (ping - connection->stats.ping);
 }
@@ -1750,14 +1825,14 @@ static void Connection_UpdateAveragePacketLoss(NBN_Connection *connection, uint1
     connection->stats.packet_loss = connection->stats.packet_loss + .1f * (packet_loss - connection->stats.packet_loss);
 }
 
-static void Connection_UpdateAverageUploadBandwidth(NBN_Connection *connection, float bytes_per_sec) {
+static void Connection_UpdateAverageUploadBandwidth(NBN_Connection *connection, double bytes_per_sec) {
     /* exponential smoothing with a factor of 0.1 */
     connection->stats.upload_bandwidth =
         connection->stats.upload_bandwidth + .1f * (bytes_per_sec - connection->stats.upload_bandwidth);
 }
 
-static void Connection_UpdateAverageDownloadBandwidth(NBN_Connection *connection, float time) {
-    float t = time - connection->last_read_packets_time;
+static void Connection_UpdateAverageDownloadBandwidth(NBN_Connection *connection, double time) {
+    double t = time - connection->last_read_packets_time;
 
     if (t == 0)
         return;
@@ -1799,6 +1874,7 @@ static void Endpoint_Init(NBN_Endpoint *endpoint, uint32_t protocol_id, bool is_
     memcpy(endpoint->channels, channels, sizeof(NBN_Channel_Config) * channel_count);
 
     EventQueue_Init(&endpoint->event_queue);
+    Pool_Init(&endpoint->packet_pool, sizeof(NBN_Packet), 8);
 
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
     PacketSimulator_Init(&endpoint->packet_simulator, endpoint);
@@ -1811,9 +1887,9 @@ static void Endpoint_Init(NBN_Endpoint *endpoint, uint32_t protocol_id, bool is_
 static void Endpoint_Deinit(NBN_Endpoint *endpoint) {
 #if defined(NBN_DEBUG) && defined(NBN_USE_PACKET_SIMULATOR)
     PacketSimulator_Stop(&endpoint->packet_simulator);
-#else
-    (void)endpoint;
 #endif
+
+    Pool_Deinit(&endpoint->packet_pool);
 }
 
 static NBN_Connection *Endpoint_CreateConnection(NBN_Endpoint *endpoint, NBN_Connection_ID id,
@@ -1885,11 +1961,11 @@ static uint32_t Endpoint_BuildProtocolId(const char *protocol_name) {
 }
 
 static int Endpoint_ProcessReceivedPacket(NBN_Endpoint *endpoint, uint8_t *buffer, unsigned int length, NBN_Connection *sender) {
-    NBN_Packet *packet = malloc(sizeof(NBN_Packet));
+    NBN_Packet *packet = Pool_Get(&endpoint->packet_pool);
 
     if (Packet_InitRead(packet, endpoint->protocol_id, buffer, length, sender) < 0) {
         LogDebug("Discarded invalid packet");
-        free(packet);
+        Pool_Return(&endpoint->packet_pool, packet);
 
         return 0;
     }
@@ -1899,7 +1975,7 @@ static int Endpoint_ProcessReceivedPacket(NBN_Endpoint *endpoint, uint8_t *buffe
 
     if (Connection_ProcessReceivedPacket(endpoint, sender, packet, endpoint->time) < 0) {
         LogError("Error when processing packet");
-        free(packet);
+        Pool_Return(&endpoint->packet_pool, packet);
 
         return NBN_ERROR;
     }
@@ -1907,7 +1983,7 @@ static int Endpoint_ProcessReceivedPacket(NBN_Endpoint *endpoint, uint8_t *buffe
     // NOTE: if the packet contained no messages (no references), dispose of it immediately
 
     if (packet->ref_count == 0) {
-        free(packet);
+        Pool_Return(&endpoint->packet_pool, packet);
     } else {
         endpoint->pending_received_packet_count++;
     }
@@ -1939,11 +2015,11 @@ static int Endpoint_CreateOutgoingMessage(NBN_Endpoint *endpoint, NBN_Connection
     return 0;
 }
 
-static void Endpoint_UpdateTime(NBN_Endpoint *endpoint) {
+static double GetTime() {
 #if defined(NBN_PLATFORM_WINDOWS)
-    endpoint->time = GetTickCount64() / 1000.0;
+    return GetTickCount64() / 1000.0;
 #elif defined(__EMSCRIPTEN__)
-    endpoint->time = emscripten_get_now() / 1000;
+    return emscripten_get_now() / 1000;
 #else
     static struct timespec tp;
 
@@ -1952,8 +2028,16 @@ static void Endpoint_UpdateTime(NBN_Endpoint *endpoint) {
         NBN_Abort();
     }
 
-    endpoint->time = tp.tv_sec + (tp.tv_nsec / (double)1e9);
+    double res = (double)tp.tv_sec + ((double)tp.tv_nsec / (double)1e9);
+
+    // LogDebug("GetTime %f %ld (res = %f, f_res = %f)", tp.tv_sec, tp.tv_nsec, res, f_res);
+
+    return res;
 #endif // NBN_PLATFORM_WINDOWS
+}
+
+static void Endpoint_UpdateTime(NBN_Endpoint *endpoint) {
+    endpoint->time = GetTime();
 }
 
 static void ReleaseMessage(NBN_Endpoint *endpoint, NBN_Message *message) {
@@ -1973,7 +2057,7 @@ static void ReleaseMessage(NBN_Endpoint *endpoint, NBN_Message *message) {
         endpoint->pending_received_packet_count--;
         LogDebug("Packet %d is not longer referenced, release (pending: %d)",
                  packet->header.seq_number, endpoint->pending_received_packet_count);
-        free(packet);
+        Pool_Return(&endpoint->packet_pool, packet);
     }
 }
 
@@ -4280,49 +4364,68 @@ static void *PacketSimulator_Routine(void *);
 #endif
 
 void NBN_Client_SetPing(NBN_Client *client, float v) { client->endpoint.packet_simulator.ping = v; }
+
 void NBN_Client_SetJitter(NBN_Client *client, float v) { client->endpoint.packet_simulator.jitter = v; }
+
 void NBN_Client_SetPacketLoss(NBN_Client *client, float v) { client->endpoint.packet_simulator.packet_loss_ratio = v; }
+
 void NBN_Client_SetPacketDuplication(NBN_Client *client, float v) {
     client->endpoint.packet_simulator.packet_duplication_ratio = v;
 }
 
+void NBN_Client_SetThrottle(NBN_Client *client, float freq, float min_time, float max_time) {
+    client->endpoint.packet_simulator.throttle = freq;
+    client->endpoint.packet_simulator.throttle_min_time = min_time;
+    client->endpoint.packet_simulator.throttle_max_time = max_time;
+}
+
 void NBN_Server_SetPing(NBN_Server *server, float v) { server->endpoint.packet_simulator.ping = v; }
+
 void NBN_Server_SetJitter(NBN_Server *server, float v) { server->endpoint.packet_simulator.jitter = v; }
+
 void NBN_Server_SetPacketLoss(NBN_Server *server, float v) { server->endpoint.packet_simulator.packet_loss_ratio = v; }
+
 void NBN_Server_SetPacketDuplication(NBN_Server *server, float v) {
     server->endpoint.packet_simulator.packet_duplication_ratio = v;
+}
+
+void NBN_Server_SetThrottle(NBN_Server *server, float freq, float min_time, float max_time) {
+    server->endpoint.packet_simulator.throttle = freq;
+    server->endpoint.packet_simulator.throttle_min_time = min_time;
+    server->endpoint.packet_simulator.throttle_max_time = max_time;
 }
 
 static void PacketSimulator_Init(NBN_PacketSimulator *packet_simulator, NBN_Endpoint *endpoint) {
     packet_simulator->endpoint = endpoint;
     packet_simulator->running = false;
+    packet_simulator->throttling = false;
+    packet_simulator->last_throttle_attempt_time = 0;
+    packet_simulator->throttle_duration = 0;
+    packet_simulator->throttle_min_time = 0;
+    packet_simulator->throttle_max_time = 0;
     packet_simulator->ping = 0;
     packet_simulator->jitter = 0;
     packet_simulator->packet_loss_ratio = 0;
     packet_simulator->total_dropped_packets = 0;
     packet_simulator->packet_duplication_ratio = 0;
+    packet_simulator->throttle = 0;
     packet_simulator->head_packet = NULL;
     packet_simulator->tail_packet = NULL;
     packet_simulator->packet_count = 0;
 
 #ifdef NBN_PLATFORM_WINDOWS
-    packet_simulator->queue_mutex = CreateMutex(NULL, FALSE, NULL);
+    packet_simulator->mutex = CreateMutex(NULL, FALSE, NULL);
 #else
-    packet_simulator->queue_mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+    packet_simulator->mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 #endif
 }
 
-static int PacketSimulator_EnqueuePacket(NBN_PacketSimulator *packet_simulator, NBN_Packet *packet,
-                                         NBN_Connection *receiver) {
+static int PacketSimulator_EnqueuePacket(NBN_PacketSimulator *packet_simulator, NBN_Packet *packet, NBN_Connection *receiver) {
 #ifdef NBN_PLATFORM_WINDOWS
-    WaitForSingleObject(packet_simulator->queue_mutex, INFINITE);
+    WaitForSingleObject(packet_simulator->mutex, INFINITE);
 #else
-    pthread_mutex_lock(&packet_simulator->queue_mutex);
+    pthread_mutex_lock(&packet_simulator->mutex);
 #endif
-
-    /* Compute jitter in range [ -jitter, +jitter ].
-     * Jitter is converted from seconds to milliseconds for the random operation below.
-     */
 
     int jitter = packet_simulator->jitter * 1000;
 
@@ -4332,7 +4435,7 @@ static int PacketSimulator_EnqueuePacket(NBN_PacketSimulator *packet_simulator, 
 
     entry->delay = packet_simulator->ping + (float)jitter / 1000; /* and converted back to seconds */
     entry->receiver = receiver;
-    entry->enqueued_at = packet_simulator->endpoint->time;
+    entry->enqueue_time = GetTime();
 
     memcpy(&entry->packet, packet, sizeof(NBN_Packet));
 
@@ -4342,8 +4445,7 @@ static int PacketSimulator_EnqueuePacket(NBN_PacketSimulator *packet_simulator, 
 
         packet_simulator->tail_packet->next = entry;
         packet_simulator->tail_packet = entry;
-    } else // the list is empty
-    {
+    } else {
         entry->prev = NULL;
         entry->next = NULL;
 
@@ -4354,9 +4456,9 @@ static int PacketSimulator_EnqueuePacket(NBN_PacketSimulator *packet_simulator, 
     packet_simulator->packet_count++;
 
 #ifdef NBN_PLATFORM_WINDOWS
-    ReleaseMutex(packet_simulator->queue_mutex);
+    ReleaseMutex(packet_simulator->mutex);
 #else
-    pthread_mutex_unlock(&packet_simulator->queue_mutex);
+    pthread_mutex_unlock(&packet_simulator->mutex);
 #endif
 
     return 0;
@@ -4391,34 +4493,75 @@ static void *PacketSimulator_Routine(void *arg)
     NBN_PacketSimulator *packet_simulator = (NBN_PacketSimulator *)arg;
 
     while (packet_simulator->running) {
+        double current_time = GetTime();
+        bool was_throttling = false;
+
+        if (packet_simulator->throttling) {
+            double dt = current_time - packet_simulator->throttle_start_time;
+
+            if (dt <= packet_simulator->throttle_duration) {
+                continue;
+            } else {
+                packet_simulator->throttling = false;
+                packet_simulator->last_throttle_attempt_time = current_time;
+
+                was_throttling = true;
+            }
+        } else {
+            // TODO: configurable throttle interval?
+
+            if (current_time - packet_simulator->last_throttle_attempt_time >= 3) {
+                // NBN_Assert(packet_simulator->throttle_min_time > 0);
+                // NBN_Assert(packet_simulator->throttle_max_time > packet_simulator->throttle_min_time);
+
+                if (RAND_RATIO <= packet_simulator->throttle) {
+                    int min_time_ms = packet_simulator->throttle_min_time * 1000;
+                    int max_time_ms = packet_simulator->throttle_max_time * 1000;
+                    int duration_ms = min_time_ms + (rand() % (max_time_ms - min_time_ms));
+                    double duration = (double)duration_ms / 1000;
+
+                    LogDebug("Start throttling for %.2f seconds", duration);
+
+                    packet_simulator->throttle_start_time = current_time;
+                    packet_simulator->throttle_duration = duration;
+                    packet_simulator->throttling = true;
+                }
+
+                packet_simulator->last_throttle_attempt_time = current_time;
+            }
+        }
+
 #ifdef NBN_PLATFORM_WINDOWS
-        WaitForSingleObject(packet_simulator->queue_mutex, INFINITE);
+        WaitForSingleObject(packet_simulator->mutex, INFINITE);
 #else
-        pthread_mutex_lock(&packet_simulator->queue_mutex);
+        pthread_mutex_lock(&packet_simulator->mutex);
 #endif
 
-        NBN_PacketSimulatorEntry *entry = packet_simulator->head_packet;
+        int throttled_packets = 0;
 
+        NBN_PacketSimulatorEntry *entry = packet_simulator->head_packet;
         while (entry) {
             NBN_PacketSimulatorEntry *next = entry->next;
 
-            if (packet_simulator->endpoint->time - entry->enqueued_at < entry->delay) {
+            if (current_time - entry->enqueue_time < entry->delay) {
                 entry = next;
 
                 continue;
             }
 
             PacketSimulator_SendPacket(packet_simulator, &entry->packet, entry->receiver);
+            if (was_throttling) throttled_packets++;
 
             for (unsigned int i = 0; i < PacketSimulator_GetRandomDuplicatePacketCount(packet_simulator); i++) {
                 LogDebug("Duplicate packet %d (count: %d)", entry->packet.header.seq_number, i + 1);
 
                 PacketSimulator_SendPacket(packet_simulator, &entry->packet, entry->receiver);
+                if (was_throttling) throttled_packets++;
             }
 
             // remove the entry from the packet list
-            if (entry == packet_simulator->head_packet) // it's the head of the list
-            {
+
+            if (entry == packet_simulator->head_packet) {
                 NBN_PacketSimulatorEntry *new_head = entry->next;
 
                 if (new_head)
@@ -4427,14 +4570,12 @@ static void *PacketSimulator_Routine(void *arg)
                     packet_simulator->tail_packet = NULL;
 
                 packet_simulator->head_packet = new_head;
-            } else if (entry == packet_simulator->tail_packet) // it's the tail of the list
-            {
+            } else if (entry == packet_simulator->tail_packet) {
                 NBN_PacketSimulatorEntry *new_tail = entry->prev;
 
                 new_tail->next = NULL;
                 packet_simulator->tail_packet = new_tail;
-            } else // it's in the middle of the list
-            {
+            } else {
                 entry->prev->next = entry->next;
                 entry->next->prev = entry->prev;
             }
@@ -4447,10 +4588,14 @@ static void *PacketSimulator_Routine(void *arg)
             entry = next;
         }
 
+        if (was_throttling) {
+            LogDebug("Done throttling, throttled packets: %d", throttled_packets);
+        }
+
 #ifdef NBN_PLATFORM_WINDOWS
-        ReleaseMutex(packet_simulator->queue_mutex);
+        ReleaseMutex(packet_simulator->mutex);
 #else
-        pthread_mutex_unlock(&packet_simulator->queue_mutex);
+        pthread_mutex_unlock(&packet_simulator->mutex);
 #endif
     }
 

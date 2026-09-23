@@ -196,8 +196,6 @@ static int HandleReceivedSoakMessage(Soak_Client_State *state, NBN_Message *msg)
     entry->free = true;
     channel->last_recved_message_id = msg_id;
 
-    SoakOptions options = Soak_GetOptions();
-
     log_info("Received soak message (length: %d, %d/%d) on channel %d", data_length, msg_id, channel->message_count,
              channel_id);
 
@@ -314,8 +312,9 @@ int main(int argc, char *argv[]) {
 
     SoakOptions options = Soak_GetOptions();
 
-    log_info("Starting soak test client... (Packet loss: %f, Packet duplication: %f, Ping: %f, Jitter: %f)",
-             options.packet_loss, options.packet_duplication, options.ping, options.jitter);
+    log_info("Starting soak test client (Packet loss: %f, Packet duplication: %f, Ping: %f, Jitter: %f, \
+Throttle: %f, Throttle window: [%f, %f])", options.packet_loss, options.packet_duplication, options.ping,
+             options.jitter, options.throttle, options.throttle_min_time, options.throttle_max_time);
 
     NBN_Client *client = NBN_Client_Create(SOAK_PROTOCOL_NAME, "127.0.0.1", SOAK_PORT);
 
@@ -341,6 +340,7 @@ int main(int argc, char *argv[]) {
     NBN_Client_SetJitter(client, options.jitter);
     NBN_Client_SetPacketLoss(client, options.packet_loss);
     NBN_Client_SetPacketDuplication(client, options.packet_duplication);
+    NBN_Client_SetThrottle(client, options.throttle, options.throttle_min_time, options.throttle_max_time);
 
     unsigned int message_count = options.message_count;
     unsigned int message_per_channel = message_count / SOAK_CHANNEL_COUNT;

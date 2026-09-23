@@ -60,11 +60,14 @@
 
 typedef struct {
     unsigned int message_count;
-    float packet_loss;        /* 0 - 1 */
-    float packet_duplication; /* 0 - 1 */
-    float ping;               /* in seconds */
-    float jitter;             /* in seconds */
-    bool webrtc;              /* use native WebRTC driver */
+    float packet_loss;        // 0 - 1
+    float packet_duplication; // 0 - 1
+    float ping;               // in seconds
+    float jitter;             // in seconds
+    float throttle;           // 0 - 1
+    float throttle_min_time;  // in seconds
+    float throttle_max_time;  // in seconds
+    bool webrtc;              // use native WebRTC driver
 } SoakOptions;
 
 int Soak_Init(int, char *[]);

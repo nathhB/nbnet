@@ -82,8 +82,10 @@ int Soak_ReadCommandLine(int argc, char *argv[]) {
         {'l', NULL, "packet_loss", "VALUE", "Packet loss frenquency (0-1)"},
         {'d', NULL, "packet_duplication", "VALUE", "Packet duplication frequency (0-1)"},
         {'p', NULL, "ping", "VALUE", "Ping in seconds"},
-        {'j', NULL, "jitter", "VALUE", "Jitter in seconds"}};
-
+        {'j', NULL, "jitter", "VALUE", "Jitter in seconds"},
+        {'t', NULL, "throttle", "VALUE", "Throttle frequency (0-1)"},
+        {'a', NULL, "throttle_min_time", "VALUE", "Throttle minimum duration (in ms)"},
+        {'A', NULL, "throttle_max_time", "VALUE", "Throttle maximum duration (in ms)"}};
     cag_option_context context;
 
     cag_option_prepare(&context, options, CAG_ARRAY_SIZE(options), argc, argv);
@@ -113,6 +115,12 @@ int Soak_ReadCommandLine(int argc, char *argv[]) {
             soak_options.ping = atof(cag_option_get_value(&context));
         } else if (option == 'j') {
             soak_options.jitter = atof(cag_option_get_value(&context));
+        } else if (option == 't') {
+            soak_options.throttle = atof(cag_option_get_value(&context));
+        } else if (option == 'a') {
+            soak_options.throttle_min_time = atof(cag_option_get_value(&context));
+        } else if (option == 'A') {
+            soak_options.throttle_max_time = atof(cag_option_get_value(&context));
         }
     }
 

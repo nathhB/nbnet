@@ -501,11 +501,13 @@ void NBN_Client_SetPing(NBN_Client *client, float v);
 void NBN_Client_SetJitter(NBN_Client *client, float v);
 void NBN_Client_SetPacketLoss(NBN_Client *client, float v);
 void NBN_Client_SetPacketDuplication(NBN_Client *client, float v);
+void NBN_Client_SetThrottle(NBN_Client *client, float freq, float min_time, float max_time);
 
 void NBN_Server_SetPing(NBN_Server *server, float v);
 void NBN_Server_SetJitter(NBN_Server *server, float v);
 void NBN_Server_SetPacketLoss(NBN_Server *server, float v);
 void NBN_Server_SetPacketDuplication(NBN_Server *server, float v);
+void NBN_Server_SetThrottle(NBN_Server *server, float freq, float min_time, float max_time);
 
 #else
 

@@ -299,8 +299,9 @@ int main(int argc, char *argv[]) {
 
     SoakOptions options = Soak_GetOptions();
 
-    log_info("Starting soak test server... (Packet loss: %f, Packet duplication: %f, Ping: %f, Jitter: %f)",
-             options.packet_loss, options.packet_duplication, options.ping, options.jitter);
+    log_info("Starting soak test server (Packet loss: %f, Packet duplication: %f, Ping: %f, Jitter: %f, \
+Throttle: %f, Throttle window: [%f, %f])", options.packet_loss, options.packet_duplication, options.ping,
+             options.jitter, options.throttle, options.throttle_min_time, options.throttle_max_time);
 
     NBN_Server *server = NBN_Server_Create(SOAK_PROTOCOL_NAME, SOAK_PORT);
 
@@ -322,6 +323,7 @@ int main(int argc, char *argv[]) {
     NBN_Server_SetJitter(server, options.jitter);
     NBN_Server_SetPacketLoss(server, options.packet_loss);
     NBN_Server_SetPacketDuplication(server, options.packet_duplication);
+    NBN_Server_SetThrottle(server, options.throttle, options.throttle_min_time, options.throttle_max_time);
 
     int ret = Soak_MainLoop(Tick, server);
 
