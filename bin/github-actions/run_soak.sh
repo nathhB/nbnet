@@ -4,7 +4,9 @@ PACKET_LOSS=0.3
 PACKET_DUPLICATION=0.2
 PING=0.15
 JITTER=0.1
-CHANNEL_COUNT=3
+THROTTLE=0.3
+THROTTLE_MIN_TIME=0.05
+THROTTLE_MAX_TIME=0.3
 MESSAGE_COUNT=5000
 NODE_CMD="$EMSDK_NODE"
 
@@ -14,10 +16,14 @@ run_client() {
 
   if [ "$client_mode" = "WEBRTC_EMSCRIPTEN" ]; then
     # WASM WebRTC client
-    $NODE_CMD build_web/client.js --message_count=$MESSAGE_COUNT --channel_count=$CHANNEL_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION --ping=$PING --jitter=$JITTER &>soak_cli_out
+    $NODE_CMD build_web/client.js --message_count=$MESSAGE_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION \
+      --ping=$PING --jitter=$JITTER --throttle=$THROTTLE --throttle_min_time=THROTTLE_MIN_TIME \
+      --throttle_max_time=THROTTLE_MAX_TIME &>soak_cli_out
   elif [ "$client_mode" = "UDP" ]; then
     # UDP client
-    ./build/client --message_count=$MESSAGE_COUNT --channel_count=$CHANNEL_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION --ping=$PING --jitter=$JITTER &>soak_cli_out
+    ./build/client --message_count=$MESSAGE_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION \
+      --ping=$PING --jitter=$JITTER --throttle=$THROTTLE --throttle_max_time=THROTTLE_MAX_TIME \
+      --throttle_max_time=THROTTLE_MAX_TIME &>soak_cli_out
   else
     echo "Unknown client mode"
     return 1
