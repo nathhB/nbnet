@@ -31,7 +31,16 @@
 #include "shared.h"
 
 // Command line options
-enum { OPT_MESSAGES_COUNT, OPT_PACKET_LOSS, OPT_PACKET_DUPLICATION, OPT_PING, OPT_JITTER };
+enum {
+    OPT_MESSAGES_COUNT,
+    OPT_PACKET_LOSS,
+    OPT_PACKET_DUPLICATION,
+    OPT_PING,
+    OPT_JITTER,
+    OPT_THROTTLE,
+    OPT_THROTTLE_MIN_TIME,
+    OPT_THROTTLE_MAX_TIME
+};
 
 static Options options = {0};
 
@@ -127,31 +136,46 @@ int ReadCommandLine(int argc, char *argv[]) {
     struct option long_options[] = {{"packet_loss", required_argument, NULL, OPT_PACKET_LOSS},
                                     {"packet_duplication", required_argument, NULL, OPT_PACKET_DUPLICATION},
                                     {"ping", required_argument, NULL, OPT_PING},
-                                    {"jitter", required_argument, NULL, OPT_JITTER}};
+                                    {"jitter", required_argument, NULL, OPT_JITTER},
+                                    {"throttle", required_argument, NULL, OPT_THROTTLE},
+                                    {"throttle_min_time", required_argument, NULL, OPT_THROTTLE_MIN_TIME},
+                                    {"throttle_max_time", required_argument, NULL, OPT_THROTTLE_MAX_TIME}};
 
     while ((opt = getopt_long(argc, argv, "", long_options, &option_index)) != -1) {
         switch (opt) {
-        case OPT_PACKET_LOSS:
-            options.packet_loss = atof(optarg);
-            break;
+            case OPT_PACKET_LOSS:
+                options.packet_loss = atof(optarg);
+                break;
 
-        case OPT_PACKET_DUPLICATION:
-            options.packet_duplication = atof(optarg);
-            break;
+            case OPT_PACKET_DUPLICATION:
+                options.packet_duplication = atof(optarg);
+                break;
 
-        case OPT_PING:
-            options.ping = atof(optarg);
-            break;
+            case OPT_PING:
+                options.ping = atof(optarg);
+                break;
 
-        case OPT_JITTER:
-            options.jitter = atof(optarg);
-            break;
+            case OPT_JITTER:
+                options.jitter = atof(optarg);
+                break;
 
-        case '?':
-            return -1;
+            case OPT_THROTTLE:
+                options.throttle = atof(optarg);
+                break;
 
-        default:
-            return -1;
+            case OPT_THROTTLE_MIN_TIME:
+                options.throttle_min_time = atof(optarg);
+                break;
+
+            case OPT_THROTTLE_MAX_TIME:
+                options.throttle_max_time = atof(optarg);
+                break;
+
+            case '?':
+                return -1;
+
+            default:
+                return -1;
         }
     }
 

@@ -70,7 +70,7 @@ static void AcceptConnection(NBN_Server *server, Vector2 spawn, NBN_ConnectionHa
     NBN_Server_AcceptIncomingConnection(server);
 }
 
-static int HandleNewConnection(NBN_Server *server) {
+static void HandleNewConnection(NBN_Server *server) {
     TraceLog(LOG_INFO, "New connection");
 
     // If the server is full
@@ -79,7 +79,7 @@ static int HandleNewConnection(NBN_Server *server) {
         TraceLog(LOG_INFO, "Connection rejected");
         NBN_Server_RejectIncomingConnectionWithCode(server, SERVER_FULL_CODE);
 
-        return 0;
+        return;
     }
 
     // Otherwise...
@@ -87,10 +87,10 @@ static int HandleNewConnection(NBN_Server *server) {
     NBN_ConnectionHandle *conn = NBN_Server_GetIncomingConnection(server);
 
     // Read the connection request data transmitted by the client
-    NBN_Reader *reader = NBN_Server_ReadConnectionRequestData(server);
+    NBN_Reader reader = NBN_Server_ReadConnectionRequestData(server);
     char name[CLIENT_NAME_MAX_LEN];
 
-    if (NBN_Reader_ReadString(reader, name, sizeof(name)) < 0) {
+    if (NBN_Reader_ReadString(&reader, name, sizeof(name)) < 0) {
         TraceLog(LOG_ERROR, "Failed to read client name");
         abort();
     }
@@ -126,8 +126,6 @@ static int HandleNewConnection(NBN_Server *server) {
     memcpy(client->state.name, name, sizeof(client->state.name));
 
     client_count++;
-
-    return 0;
 }
 
 static void DestroyClient(Client *client) {
@@ -155,64 +153,48 @@ static void HandleClientDisconnection(NBN_Server *server) {
     client_count--;
 }
 
-static int HandleUpdateStateMessage(NBN_Server *server, Client *sender) {
+static int HandleUpdateStateMessage(NBN_Message *msg, Client *sender) {
     // Update the state of the client with the data from the received UPDATE_STATE_MESSAGE message
-    NBN_Reader *reader = NBN_Server_ReadMessage(server);
+    NBN_Reader reader = NBN_ReadMessage(msg);
 
-    return UpdateClientStateMessage_Read(reader, &sender->state);
+    return UpdateClientStateMessage_Read(&reader, &sender->state);
 }
 
-static int HandleChangeColorMessage(NBN_Server *server, Client *sender) {
+static int HandleChangeColorMessage(NBN_Message *msg, Client *sender) {
     // Update the client color
-    NBN_Reader *reader = NBN_Server_ReadMessage(server);
+    NBN_Reader reader = NBN_ReadMessage(msg);
 
-    return ChangeColorMessage_Read(reader, &sender->state.color);
+    return ChangeColorMessage_Read(&reader, &sender->state.color);
 }
 
 static int HandleReceivedMessage(NBN_Server *server) {
-    // Fetch info about the last received message
-    NBN_MessageInfo msg_info = NBN_Server_GetMessageInfo(server);
-    assert(msg_info.sender != NULL);
-    Client *sender = msg_info.sender->user_data;
+    NBN_Message *msg = NBN_Server_GetMessage(server);
+    assert(msg->connection != NULL);
+    Client *sender = msg->connection->user_data;
     assert(sender != NULL);
 
-    switch (msg_info.type) {
-    case UPDATE_STATE_MESSAGE:
-        // The server received a client state update
-        return HandleUpdateStateMessage(server, sender);
+    int ret = -1;
 
-    case CHANGE_COLOR_MESSAGE:
-        // The server received a client switch color action
-        return HandleChangeColorMessage(server, sender);
+    switch (msg->header.type) {
+        case UPDATE_STATE_MESSAGE:
+            // The server received a client state update
+            ret = HandleUpdateStateMessage(msg, sender);
+            break;
+
+        case CHANGE_COLOR_MESSAGE:
+            // The server received a client switch color action
+            ret = HandleChangeColorMessage(msg, sender);
+            break;
+
+        default:
+            TraceLog(LOG_ERROR, "Received an unexpected message: %d", msg->header.type);
+            ret = -1;
     }
 
-    // Received an unexpected message
-    return -1;
-}
+    // notify nbnet that we are done processing this incoming message
+    NBN_Server_ReleaseMessage(server, msg);
 
-static int HandleGameServerEvent(NBN_Server *server, int ev) {
-    switch (ev) {
-    case NBN_SERVER_NEW_CONNECTION:
-        // A new client has requested a connection
-        if (HandleNewConnection(server) < 0)
-            return -1;
-        break;
-
-    case NBN_SERVER_DISCONNECTION:
-        // A previously connected client has disconnected
-        HandleClientDisconnection(server);
-        break;
-
-    case NBN_SERVER_MESSAGE_RECEIVED:
-        // A message from a client has been received
-        if (HandleReceivedMessage(server) < 0) {
-            // TODO: kick client
-            return -1;
-        }
-        break;
-    }
-
-    return 0;
+    return ret;
 }
 
 // Broadcasts the latest game state to all connected clients
@@ -247,8 +229,14 @@ static int BroadcastGameState(NBN_Server *server) {
 
     // Broadcast GAME_STATE_MESSAGE to all clients
     while ((cli = NBN_Server_GetNextClient(server, &it)) != NULL) {
-        NBN_Writer *writer = NBN_Server_CreateUnreliableMessage(server, GAME_STATE_MESSAGE, cli);
-        GameStateMessage_Write(writer, &game_state);
+        uint8_t *buffer = malloc(MESSAGE_BUFFER_SIZE);
+        NBN_Writer writer = NBN_Writer_Create(buffer, MESSAGE_BUFFER_SIZE);
+        GameStateMessage_Write(&writer, &game_state);
+        int ret = NBN_Server_CreateUnreliableMessage(server, GAME_STATE_MESSAGE, buffer, writer.position, cli);
+
+        if (ret < 0) {
+            return -1;
+        }
     }
 
     return 0;
@@ -271,7 +259,7 @@ int main(int argc, char *argv[]) {
     // Read command line arguments
     if (ReadCommandLine(argc, argv)) {
         printf("Usage: server [--packet_loss=<value>] [--packet_duplication=<value>] [--ping=<value>] \
-                [--jitter=<value>]\n");
+                [--jitter=<value>] [--throttle=<value>] [--throttle_min_time=<value>] [--throttle_max_time=<value>]\n");
 
         return 1;
     }
@@ -291,10 +279,13 @@ int main(int argc, char *argv[]) {
     }
 
     // Network conditions simulated variables (read from the command line, default is always 0)
-    NBN_Server_SetPing(server, GetOptions().ping);
-    NBN_Server_SetJitter(server, GetOptions().jitter);
-    NBN_Server_SetPacketLoss(server, GetOptions().packet_loss);
-    NBN_Server_SetPacketDuplication(server, GetOptions().packet_duplication);
+    Options options = GetOptions();
+
+    NBN_Server_SetPing(server, options.ping);
+    NBN_Server_SetJitter(server, options.jitter);
+    NBN_Server_SetPacketLoss(server, options.packet_loss);
+    NBN_Server_SetPacketDuplication(server, options.packet_duplication);
+    NBN_Server_SetThrottle(server, options.throttle, options.throttle_min_time, options.throttle_max_time);
 
     float tick_dt = 1.f / TICK_RATE; // Tick delta time
 
@@ -302,15 +293,38 @@ int main(int argc, char *argv[]) {
         int ev;
 
         // Poll for server events
-        while ((ev = NBN_Server_Poll(server)) != NBN_SERVER_NO_EVENT) {
+        while ((ev = NBN_Server_Poll(server)) != EV_NONE) {
             if (ev < 0) {
                 TraceLog(LOG_ERROR, "An occured while polling network events. Exit");
 
                 break;
             }
 
-            if (HandleGameServerEvent(server, ev) < 0)
-                break;
+            switch (ev) {
+                case EV_CONNECTED:
+                    // A new client has requested a connection
+                    HandleNewConnection(server);
+                    break;
+
+                case EV_DISCONNECTED:
+                    // A client has disconnected
+                    HandleClientDisconnection(server);
+                    break;
+
+                case EV_MESSAGE_RECEIVED:
+                    // A message from a client has been received
+                    if (HandleReceivedMessage(server) < 0) {
+                        // TODO: kick client
+                        break;
+                    }
+                    break;
+
+                case EV_OUTGOING_MESSAGE_PROCESSED: {
+                    NBN_Message *msg = NBN_Server_GetMessage(server);
+                    free(msg->data);
+                    break;
+                }
+            }
         }
 
         if (BroadcastGameState(server) < 0) {

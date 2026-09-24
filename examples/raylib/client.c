@@ -84,17 +84,17 @@ static int HandleConnection(NBN_Client *client) {
     TraceLog(LOG_INFO, "Connected, reading connection data...");
 
     uint32_t x, y, client_id;
-    NBN_Reader *reader = NBN_Client_ReadServerData(client);
+    NBN_Reader reader = NBN_Client_ReadServerData(client);
 
-    if (NBN_Reader_ReadUInt32(reader, &x) < 0) {
+    if (NBN_Reader_ReadUInt32(&reader, &x) < 0) {
         return -1;
     }
 
-    if (NBN_Reader_ReadUInt32(reader, &y) < 0) {
+    if (NBN_Reader_ReadUInt32(&reader, &y) < 0) {
         return -1;
     }
 
-    if (NBN_Reader_ReadUInt32(reader, &client_id) < 0) {
+    if (NBN_Reader_ReadUInt32(&reader, &client_id) < 0) {
         return -1;
     }
 
@@ -208,7 +208,7 @@ static void DestroyDisconnectedClients(void) {
     }
 }
 
-static void HandleGameStateMessage(NBN_Client *client) {
+static void HandleGameStateMessage(NBN_Message *msg) {
     if (!spawned)
         return;
 
@@ -220,9 +220,9 @@ static void HandleGameStateMessage(NBN_Client *client) {
     static GameState recv_game_state;
 
     // Read the game state from the received GAME_STATE_MESSAGE message
-    NBN_Reader *reader = NBN_Client_ReadMessage(client);
+    NBN_Reader reader = NBN_ReadMessage(msg);
 
-    if (GameStateMessage_Read(reader, &recv_game_state) < 0) {
+    if (GameStateMessage_Read(&reader, &recv_game_state) < 0) {
         TraceLog(LOG_ERROR, "Failed to read game state");
         abort();
     }
@@ -248,64 +248,38 @@ static void HandleGameStateMessage(NBN_Client *client) {
 }
 
 static void HandleReceivedMessage(NBN_Client *client) {
-    // Fetch info about the last received message
-    NBN_MessageInfo msg_info = NBN_Client_GetMessageInfo(client);
+    NBN_Message *msg = NBN_Client_GetMessage(client);
 
-    switch (msg_info.type) {
-    // We received the latest game state from the server
-    case GAME_STATE_MESSAGE:
-        HandleGameStateMessage(client);
-        return;
-    }
+    switch (msg->header.type) {
+        case GAME_STATE_MESSAGE:
+            HandleGameStateMessage(msg);
+            break;
 
-    TraceLog(LOG_ERROR, "Received unexpected message");
-    abort();
-}
-
-static void HandleGameClientEvent(NBN_Client *client, int ev) {
-    switch (ev) {
-    case NBN_CLIENT_CONNECTED:
-        // We are connected to the server
-        if (HandleConnection(client) < 0) {
-            TraceLog(LOG_ERROR, "Failed to handle connection");
+        default:
+            TraceLog(LOG_ERROR, "Received unexpected message");
             abort();
-        }
-        break;
+    } 
 
-    case NBN_CLIENT_DISCONNECTED:
-        // The server has closed our connection
-        HandleDisconnection(client);
-        break;
-
-    case NBN_CLIENT_MESSAGE_RECEIVED:
-        // We received a message from the server
-        HandleReceivedMessage(client);
-        break;
-    }
+    // notify nbnet that we are done processing this incoming message
+    NBN_Client_ReleaseMessage(client, msg);
 }
 
 static int SendStateUpdate(NBN_Client *client) {
-    NBN_Writer *writer = NBN_Client_CreateUnreliableMessage(client, UPDATE_STATE_MESSAGE);
+    uint8_t *buffer = malloc(MESSAGE_BUFFER_SIZE);
 
-    if (!writer) {
-        return -1;
-    }
+    NBN_Writer writer = NBN_Writer_Create(buffer, MESSAGE_BUFFER_SIZE);
+    UpdateClientStateMessage_Write(&writer, local_client_state);
 
-    UpdateClientStateMessage_Write(writer, local_client_state);
-
-    return 0;
+    return NBN_Client_CreateUnreliableMessage(client, UPDATE_STATE_MESSAGE, buffer, writer.position);
 }
 
 static int SendColorUpdate(NBN_Client *client) {
-    NBN_Writer *writer = NBN_Client_CreateReliableMessage(client, CHANGE_COLOR_MESSAGE);
+    uint8_t *buffer = malloc(MESSAGE_BUFFER_SIZE);
 
-    if (!writer) {
-        return -1;
-    }
+    NBN_Writer writer = NBN_Writer_Create(buffer, MESSAGE_BUFFER_SIZE);
+    ChangeColorMessage_Write(&writer, local_client_state.color);
 
-    ChangeColorMessage_Write(writer, local_client_state.color);
-
-    return 0;
+    return NBN_Client_CreateReliableMessage(client, CHANGE_COLOR_MESSAGE, buffer, writer.position);
 }
 
 bool color_key_pressed = false;
@@ -434,14 +408,38 @@ void UpdateAndDraw(NBN_Client *client) {
     while (acc >= tick_dt) {
         int ev;
 
-        while ((ev = NBN_Client_Poll(client)) != NBN_CLIENT_NO_EVENT) {
+        while ((ev = NBN_Client_Poll(client)) != EV_NONE) {
             if (ev < 0) {
                 TraceLog(LOG_WARNING, "An occured while polling network events. Exit");
 
                 break;
             }
 
-            HandleGameClientEvent(client, ev);
+            switch (ev) {
+                case EV_CONNECTED:
+                    // We are connected to the server
+                    if (HandleConnection(client) < 0) {
+                        TraceLog(LOG_ERROR, "Failed to handle connection");
+                        abort();
+                    }
+                    break;
+
+                case EV_DISCONNECTED:
+                    // The server has closed our connection
+                    HandleDisconnection(client);
+                    break;
+
+                case EV_MESSAGE_RECEIVED:
+                    // We received a message from the server
+                    HandleReceivedMessage(client);
+                    break;
+
+                case EV_OUTGOING_MESSAGE_PROCESSED: {
+                    NBN_Message *msg = NBN_Client_GetMessage(client);
+                    free(msg->data);
+                    break;
+                }
+            }
         }
 
         if (connected && !disconnected) {
@@ -462,6 +460,8 @@ void UpdateAndDraw(NBN_Client *client) {
 
     Draw(client);
 }
+
+#ifdef __EMSCRIPTEN__
 
 // Returns a string from the URL, or a default
 // value if it's not set
@@ -504,6 +504,8 @@ EM_JS(char*, get_query_param_string, (const char* key, const char* defaultValue)
 
 //     return parsed;
 // });
+
+#endif // __EMSCRIPTEN__
 
 int main(int argc, char *argv[]) {
 #ifdef __EMSCRIPTEN__

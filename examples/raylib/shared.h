@@ -118,6 +118,7 @@ typedef struct tagMSG *LPMSG;
 #define CHANGE_COLOR_MESSAGE_MAX_LENGTH 4
 #define UPDATE_STATE_MESSAGE_MAX_LENGTH 20 // ClientState is 20 bytes
 #define GAME_STATE_MESSAGE_MAX_LENGTH ((20 * MAX_CLIENTS) + 4)
+#define MESSAGE_BUFFER_SIZE 256
 
 // Message ids
 enum { CHANGE_COLOR_MESSAGE, UPDATE_STATE_MESSAGE, GAME_STATE_MESSAGE };
@@ -147,6 +148,9 @@ typedef struct {
     float packet_duplication;
     float ping;
     float jitter;
+    float throttle;
+    float throttle_min_time;
+    float throttle_max_time;
 } Options;
 
 int ReadCommandLine(int, char *[]);

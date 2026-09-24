@@ -519,11 +519,13 @@ void NBN_Server_SetThrottle(NBN_Server *server, float freq, float min_time, floa
 #define NBN_Client_SetJitter(client, v) NBN_PacketSimulator_Disabled
 #define NBN_Client_SetPacketLoss(client, v) NBN_PacketSimulator_Disabled
 #define NBN_Client_SetPacketDuplication(client, v) NBN_PacketSimulator_Disabled
+#define NBN_Client_SetThrottle(client, a, b, c) NBN_PacketSimulator_Disabled
 
 #define NBN_Server_SetPing(server, v) NBN_PacketSimulator_Disabled
 #define NBN_Server_SetJitter(server, v) NBN_PacketSimulator_Disabled
 #define NBN_Server_SetPacketLoss(server, v) NBN_PacketSimulator_Disabled
 #define NBN_Server_SetPacketDuplication(server, v) NBN_PacketSimulator_Disabled
+#define NBN_Server_SetThrottle(server, a, b, c) NBN_PacketSimulator_Disabled
 
 #endif /* NBN_DEBUG && NBN_USE_PACKET_SIMULATOR */
 
