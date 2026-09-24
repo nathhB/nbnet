@@ -4402,6 +4402,7 @@ static void PacketSimulator_Init(NBN_PacketSimulator *packet_simulator, NBN_Endp
     packet_simulator->running = false;
     packet_simulator->throttling = false;
     packet_simulator->last_throttle_attempt_time = 0;
+    packet_simulator->throttle = 0;
     packet_simulator->throttle_duration = 0;
     packet_simulator->throttle_min_time = 0;
     packet_simulator->throttle_max_time = 0;
@@ -4410,7 +4411,6 @@ static void PacketSimulator_Init(NBN_PacketSimulator *packet_simulator, NBN_Endp
     packet_simulator->packet_loss_ratio = 0;
     packet_simulator->total_dropped_packets = 0;
     packet_simulator->packet_duplication_ratio = 0;
-    packet_simulator->throttle = 0;
     packet_simulator->head_packet = NULL;
     packet_simulator->tail_packet = NULL;
     packet_simulator->packet_count = 0;
@@ -4512,24 +4512,26 @@ static void *PacketSimulator_Routine(void *arg)
         } else {
             // TODO: configurable throttle interval?
 
-            if (current_time - packet_simulator->last_throttle_attempt_time >= 3) {
-                // NBN_Assert(packet_simulator->throttle_min_time > 0);
-                // NBN_Assert(packet_simulator->throttle_max_time > packet_simulator->throttle_min_time);
+            if (packet_simulator->throttle > 0) {
+                if (current_time - packet_simulator->last_throttle_attempt_time >= 3) {
+                    NBN_Assert(packet_simulator->throttle_min_time > 0);
+                    NBN_Assert(packet_simulator->throttle_max_time >= packet_simulator->throttle_min_time);
 
-                if (RAND_RATIO <= packet_simulator->throttle) {
-                    int min_time_ms = packet_simulator->throttle_min_time * 1000;
-                    int max_time_ms = packet_simulator->throttle_max_time * 1000;
-                    int duration_ms = min_time_ms + (rand() % (max_time_ms - min_time_ms));
-                    double duration = (double)duration_ms / 1000;
+                    if (RAND_RATIO <= packet_simulator->throttle) {
+                        int min_time_ms = packet_simulator->throttle_min_time * 1000;
+                        int max_time_ms = packet_simulator->throttle_max_time * 1000;
+                        int duration_ms = min_time_ms + (rand() % (max_time_ms - min_time_ms));
+                        double duration = (double)duration_ms / 1000;
 
-                    LogDebug("Start throttling for %.2f seconds", duration);
+                        LogDebug("Start throttling for %.2f seconds", duration);
 
-                    packet_simulator->throttle_start_time = current_time;
-                    packet_simulator->throttle_duration = duration;
-                    packet_simulator->throttling = true;
+                        packet_simulator->throttle_start_time = current_time;
+                        packet_simulator->throttle_duration = duration;
+                        packet_simulator->throttling = true;
+                    }
+
+                    packet_simulator->last_throttle_attempt_time = current_time;
                 }
-
-                packet_simulator->last_throttle_attempt_time = current_time;
             }
         }
 
