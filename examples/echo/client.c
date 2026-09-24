@@ -57,7 +57,7 @@ void OnDisconnected(NBN_Client *client) {
 
 void OnMessageReceived(NBN_Client *client) {
     // Get info about the received message
-    NBN_Message *msg = NBN_Client_GetReceivedMessage(client);
+    NBN_Message *msg = NBN_Client_GetMessage(client);
 
     assert(msg->header.type == ECHO_MESSAGE_TYPE);
 
@@ -75,7 +75,7 @@ void OnMessageReceived(NBN_Client *client) {
 
     log_info("Received echo: '%s' (length: %d, channel: %d)", msg_str, msg->header.length, msg->header.channel_id);
 
-    NBN_Client_ReleaseReceivedMessage(client, msg);
+    NBN_Client_ReleaseMessage(client, msg);
 }
 
 int SendEcho(NBN_Client *client, const char *msg) {
@@ -147,7 +147,7 @@ int main(int argc, char *argv[]) {
         int ev;
 
         // Poll for client events
-        while ((ev = NBN_Client_Poll(client)) != NBN_CLIENT_NO_EVENT) {
+        while ((ev = NBN_Client_Poll(client)) != EV_NONE) {
             if (ev < 0) {
                 log_error("An error occured while polling client events. Exit");
 
@@ -157,20 +157,27 @@ int main(int argc, char *argv[]) {
             }
 
             switch (ev) {
-            // Client is connected to the server
-            case NBN_CLIENT_CONNECTED:
-                OnConnected();
-                break;
+                // Client is connected to the server
+                case EV_CONNECTED:
+                    OnConnected();
+                    break;
 
                 // Client has disconnected from the server
-            case NBN_CLIENT_DISCONNECTED:
-                OnDisconnected(client);
-                break;
+                case EV_DISCONNECTED:
+                    OnDisconnected(client);
+                    break;
 
                 // A message has been received from the server
-            case NBN_CLIENT_MESSAGE_RECEIVED:
-                OnMessageReceived(client);
-                break;
+                case EV_MESSAGE_RECEIVED:
+                    OnMessageReceived(client);
+                    break;
+
+                case EV_OUTGOING_MESSAGE_PROCESSED: {
+                    NBN_Message *msg = NBN_Client_GetMessage(client);
+
+                    free(msg->data);
+                    break;
+                }
             }
         }
 

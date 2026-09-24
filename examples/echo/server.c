@@ -33,13 +33,13 @@ static NBN_Connection_ID conn_id;
 // Echo the received message
 static int EchoReceivedMessage(NBN_Server *server) {
     // Get info about the received message
-    NBN_Message *msg = NBN_Server_GetReceivedMessage(server);
+    NBN_Message *msg = NBN_Server_GetMessage(server);
 
     assert(msg->header.type == ECHO_MESSAGE_TYPE);
 
-    log_info("Received message of type %d from %lld", msg->header.type, msg->sender->id);
+    log_info("Received message of type %d from %lld", msg->header.type, msg->connection->id);
 
-    assert(msg->sender->id == conn_id);
+    assert(msg->connection->id == conn_id);
 
     // read message data
     NBN_Reader reader = NBN_ReadMessage(msg);
@@ -57,7 +57,7 @@ static int EchoReceivedMessage(NBN_Server *server) {
     log_info("Received message: '%s', send echo (length: %d, channel: %d)", msg_str, msg->header.length,
              msg->header.channel_id);
 
-    NBN_Server_ReleaseReceivedMessage(server, msg);
+    NBN_Server_ReleaseMessage(server, msg);
 
     // create and send an echo of the received message
 
@@ -146,7 +146,7 @@ int main(int argc, const char **argv) {
         NBN_DisconnectionInfo disconnect_info;
 
         // Poll for server events
-        while ((ev = NBN_Server_Poll(server)) != NBN_SERVER_NO_EVENT) {
+        while ((ev = NBN_Server_Poll(server)) != EV_NONE) {
             if (ev < 0) {
                 log_error("Something went wrong");
 
@@ -156,36 +156,43 @@ int main(int argc, const char **argv) {
             }
 
             switch (ev) {
-            // New connection request...
-            case NBN_SERVER_NEW_CONNECTION:
-                // Echo server work with one single client at a time
-                if (connection) {
-                    NBN_Server_RejectIncomingConnectionWithCode(server, ECHO_SERVER_BUSY_CODE);
-                } else {
-                    NBN_Server_AcceptIncomingConnection(server);
-                    connection = NBN_Server_GetIncomingConnection(server);
-                    conn_id = connection->id;
-                }
+                // New connection request...
+                case EV_CONNECTED:
+                    // Echo server work with one single client at a time
+                    if (connection) {
+                        NBN_Server_RejectIncomingConnectionWithCode(server, ECHO_SERVER_BUSY_CODE);
+                    } else {
+                        NBN_Server_AcceptIncomingConnection(server);
+                        connection = NBN_Server_GetIncomingConnection(server);
+                        conn_id = connection->id;
+                    }
 
-                break;
+                    break;
 
                 // The client has disconnected
-            case NBN_SERVER_DISCONNECTION:
-                disconnect_info = NBN_Server_GetDisconnectionInfo(server);
+                case EV_DISCONNECTED:
+                    disconnect_info = NBN_Server_GetDisconnectionInfo(server);
 
-                assert(disconnect_info.conn_id == conn_id);
-                connection = NULL;
-                break;
+                    assert(disconnect_info.conn_id == conn_id);
+                    connection = NULL;
+                    break;
 
                 // A message has been received from the client
-            case NBN_SERVER_MESSAGE_RECEIVED:
-                if (EchoReceivedMessage(server) < 0) {
-                    log_error("Failed to echo received message");
+                case EV_MESSAGE_RECEIVED:
+                    if (EchoReceivedMessage(server) < 0) {
+                        log_error("Failed to echo received message");
 
-                    // Error, quit the server application
-                    error = true;
+                        // Error, quit the server application
+                        error = true;
+                    }
+                    break;
+
+                case EV_OUTGOING_MESSAGE_PROCESSED: {
+                    NBN_Message *msg = NBN_Server_GetMessage(server);
+
+                    free(msg->data);
+                    break;
                 }
-                break;
             }
         }
 
