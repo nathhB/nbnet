@@ -58,8 +58,8 @@ typedef struct {
 
 typedef struct {
     bool error;
-    bool is_closed;
     SoakChannel *channels;
+    unsigned int allocated_message_buffer_count;
 } SoakClient;
 
 static void HandleNewConnection(NBN_Server *server) {
@@ -69,7 +69,6 @@ static void HandleNewConnection(NBN_Server *server) {
     SoakClient *soak_client = (SoakClient *)malloc(sizeof(SoakClient));
 
     soak_client->error = false;
-    soak_client->is_closed = false;
     soak_client->channels = (SoakChannel *)malloc(sizeof(SoakChannel) * SOAK_CHANNEL_COUNT);
 
     for (unsigned int c = 0; c < SOAK_CHANNEL_COUNT; c++) {
@@ -97,7 +96,8 @@ static void HandleClientDisconnection(NBN_DisconnectionInfo info) {
 
     assert(soak_client != NULL);
 
-    log_info("Client has disconnected (ID: %lld)", info.conn_id);
+    log_info("Client has disconnected (ID: %lld, leaked messages: %d)",
+             info.conn_id, soak_client->allocated_message_buffer_count); 
 
     free(soak_client->channels);
     free(soak_client);
@@ -108,13 +108,9 @@ static void EchoReceivedSoakMessages(NBN_Server *server) {
     NBN_ConnectionHandle *conn;
 
     while ((conn = NBN_Server_GetNextClient(server, &it))) {
-
         SoakClient *soak_client = (SoakClient *)conn->user_data;
 
         assert(soak_client != NULL);
-
-        if (soak_client->is_closed)
-            continue;
 
         for (unsigned int c = 0; c < SOAK_CHANNEL_COUNT; c++) {
             SoakChannel *channel = &soak_client->channels[c];
@@ -123,10 +119,17 @@ static void EchoReceivedSoakMessages(NBN_Server *server) {
             // make sure that we don't exceed channel capacity
             while (channel->echo_queue.count > 0 && --send_count >= 0) {
                 Soak_MessageEntry *msg_entry = &channel->echo_queue.messages[channel->echo_queue.head];
-                NBN_Writer *writer =
-                    NBN_Server_CreateMessage(server, SOAK_MESSAGE_SMALL, channel->id, conn); // TODO: support big
 
-                if (!writer) {
+                // TODO: support big
+
+                NBN_Writer writer = NBN_Writer_Create(msg_entry->data, SOAK_MESSAGE_SMALL_MAX_LENGTH);
+                SoakMessage_WriteHeader(&writer, msg_entry->msg_id, msg_entry->length);
+
+                unsigned int header_length = writer.position;
+                unsigned int msg_length = header_length + msg_entry->length;
+                int ret = NBN_Server_CreateMessage(server, SOAK_MESSAGE_SMALL, channel->id, msg_entry->data, msg_length, conn);
+
+                if (ret < 0) {
                     log_error("Failed to send soak message to client %llu, closing client", conn->id);
 
                     if (NBN_Server_CloseClient(server, conn) < 0) {
@@ -134,11 +137,8 @@ static void EchoReceivedSoakMessages(NBN_Server *server) {
                         abort();
                     }
 
-                    soak_client->is_closed = true;
                     return;
-                }
-
-                SoakMessage_Write(writer, msg_entry->msg_id, msg_entry->data, msg_entry->length);
+                } 
 
                 log_info("Send soak message %d's echo (length: %d) to client %llu", msg_entry->msg_id,
                          msg_entry->length, conn->id);
@@ -147,41 +147,57 @@ static void EchoReceivedSoakMessages(NBN_Server *server) {
 
                 channel->echo_queue.head = (channel->echo_queue.head + 1) % SOAK_CLIENT_MAX_PENDING_MESSAGES;
                 channel->echo_queue.count--;
+
+                soak_client->allocated_message_buffer_count++;
             }
         }
     }
 }
 
-static int HandleReceivedSoakMessage(NBN_Reader *reader, NBN_ConnectionHandle *sender, uint8_t channel_id) {
-    SoakClient *soak_client = (SoakClient *)sender->user_data;
+static int HandleReceivedSoakMessage(NBN_Message *msg) {
+    SoakClient *soak_client = (SoakClient *)msg->connection->user_data;
 
     assert(soak_client != NULL);
 
     if (soak_client->error)
         return 0;
 
+    uint8_t channel_id = msg->header.channel_id;
     SoakChannel *channel = &soak_client->channels[channel_id - 2];
+
     unsigned int msg_id;
     unsigned int data_length;
     static uint8_t recv_buffer[SOAK_MESSAGE_BIG_MAX_DATA_LENGTH];
 
-    if (SoakMessage_Read(reader, &msg_id, recv_buffer, &data_length) < 0) {
-        log_error("Failed to read soak message");
+    NBN_Reader reader = NBN_ReadMessage(msg);
+
+    if (SoakMessage_ReadHeader(&reader, &msg_id, &data_length) < 0) {
+        log_error("Failed to read soak message header");
 
         return -1;
     }
 
+    assert(reader.position == SOAK_MESSAGE_HEADER_LENGTH);
+
+    log_info("Received soak message %d (length: %d) from client %llu on channel %d",
+             msg_id, data_length, msg->connection->id, channel_id);
+
+    if (SoakMessage_ReadData(&reader, recv_buffer, data_length) < 0) {
+        log_error("Failed to read soak message data");
+
+        return -1;
+    }
+
+    assert(reader.position == msg->header.length);
+
     if (msg_id != channel->last_recved_message_id + 1) {
         log_error("Expected to receive message %d but received message %d (from client: %d)",
-                  channel->last_recved_message_id + 1, msg_id, sender);
+                  channel->last_recved_message_id + 1, msg_id, msg->connection);
 
         soak_client->error = true;
 
         return -1;
-    }
-
-    log_info("Received soak message %d (length: %d) from client %llu on channel %d", msg_id, data_length, sender->id,
-             channel_id);
+    } 
 
     channel->recved_messages_count++;
     channel->last_recved_message_id = msg_id;
@@ -191,9 +207,9 @@ static int HandleReceivedSoakMessage(NBN_Reader *reader, NBN_ConnectionHandle *s
     assert(channel->echo_queue.count < SOAK_CLIENT_MAX_PENDING_MESSAGES);
     assert(msg_entry->length == 0);
 
-    log_info("Enqueue soak message %d's echo for client %llu on channel %d", msg_id, sender->id, channel_id);
+    log_info("Enqueue soak message %d's echo for client %llu on channel %d", msg_id, msg->connection->id, channel_id);
 
-    memcpy(msg_entry->data, recv_buffer, data_length);
+    memcpy(msg_entry->data + SOAK_MESSAGE_HEADER_LENGTH, recv_buffer, data_length);
     msg_entry->msg_id = msg_id;
     msg_entry->length = data_length;
     msg_entry->channel_id = channel_id;
@@ -205,57 +221,63 @@ static int HandleReceivedSoakMessage(NBN_Reader *reader, NBN_ConnectionHandle *s
 }
 
 static void HandleReceivedMessage(NBN_Server *server) {
-    NBN_MessageInfo msg_info = NBN_Server_GetMessageInfo(server);
-    NBN_Reader *reader = NBN_Server_ReadMessage(server);
-    SoakClient *soak_client = (SoakClient *)msg_info.sender->user_data;
+    NBN_Message *msg = NBN_Server_GetMessage(server);
 
-    switch (msg_info.type) {
-    case SOAK_MESSAGE_SMALL:
-        if (HandleReceivedSoakMessage(reader, msg_info.sender, msg_info.channel_id) < 0) {
-            if (NBN_Server_CloseClient(server, msg_info.sender) < 0) {
-                log_error("Failed to close client %llu", msg_info.sender->id);
-                abort();
+    switch (msg->header.type) {
+        case SOAK_MESSAGE_SMALL:
+            if (HandleReceivedSoakMessage(msg) < 0) {
+                if (NBN_Server_CloseClient(server, msg->connection) < 0) {
+                    log_error("Failed to close client %llu", msg->connection->id);
+                    abort();
+                }
             }
-
-            soak_client->is_closed = true;
-        }
-        break;
+            break;
 
         // TODO: support big messages
 
-    default:
-        log_error("Received unexpected message (type: %d, channel_id: %d)", msg_info.type, msg_info.channel_id);
+        default:
+            log_error("Received unexpected message (type: %d, channel_id: %d)", msg->header.type, msg->header.channel_id);
 
-        if (NBN_Server_CloseClient(server, msg_info.sender) < 0) {
-            log_error("Failed to close client %llu", msg_info.sender->id);
-            abort();
-        }
+            if (NBN_Server_CloseClient(server, msg->connection) < 0) {
+                log_error("Failed to close client %llu", msg->connection->id);
+                abort();
+            }
 
-        soak_client->is_closed = true;
-        break;
+            break;
     }
+
+    NBN_Server_ReleaseMessage(server, msg);
 }
 
 static int Tick(void *data) {
     NBN_Server *server = (NBN_Server *)data;
     int ev;
 
-    while ((ev = NBN_Server_Poll(server)) != NBN_SERVER_NO_EVENT) {
+    while ((ev = NBN_Server_Poll(server)) != EV_NONE) {
         if (ev < 0)
             return -1;
 
         switch (ev) {
-        case NBN_SERVER_NEW_CONNECTION:
-            HandleNewConnection(server);
-            break;
+            case EV_CONNECTED:
+                HandleNewConnection(server);
+                break;
 
-        case NBN_SERVER_DISCONNECTION:
-            HandleClientDisconnection(NBN_Server_GetDisconnectionInfo(server));
-            break;
+            case EV_DISCONNECTED:
+                HandleClientDisconnection(NBN_Server_GetDisconnectionInfo(server));
+                break;
 
-        case NBN_SERVER_MESSAGE_RECEIVED:
-            HandleReceivedMessage(server);
-            break;
+            case EV_MESSAGE_RECEIVED:
+                HandleReceivedMessage(server);
+                break;
+
+            case EV_OUTGOING_MESSAGE_PROCESSED: {
+                NBN_Message *msg = NBN_Server_GetMessage(server);
+                assert(msg->type == NBN_OUTGOING_MESSAGE);
+                assert(msg->connection != NULL);
+                SoakClient *soak_client = (SoakClient *)msg->connection->user_data;
+                soak_client->allocated_message_buffer_count--;
+                break;
+            }
         }
     }
 
@@ -283,14 +305,15 @@ int main(int argc, char *argv[]) {
 
     SoakOptions options = Soak_GetOptions();
 
-    log_info("Starting soak test server... (Packet loss: %f, Packet duplication: %f, Ping: %f, Jitter: %f)",
-             options.packet_loss, options.packet_duplication, options.ping, options.jitter);
+    log_info("Starting soak test server (Packet loss: %f, Packet duplication: %f, Ping: %f, Jitter: %f, \
+Throttle: %f, Throttle window: [%f, %f])", options.packet_loss, options.packet_duplication, options.ping,
+             options.jitter, options.throttle, options.throttle_min_time, options.throttle_max_time);
 
     NBN_Server *server = NBN_Server_Create(SOAK_PROTOCOL_NAME, SOAK_PORT);
 
     for (uint8_t c = 0; c < SOAK_CHANNEL_COUNT; c++) {
         uint8_t channel_id =
-            NBN_Server_CreateChannel(server, NBN_CHANNEL_RELIABLE, SOAK_CHANNEL_BUFFER_SIZE, SOAK_MAX_MESSAGE_SIZE);
+            NBN_Server_CreateChannel(server, NBN_CHANNEL_RELIABLE, SOAK_CHANNEL_BUFFER_SIZE);
 
         // channels 0 and 1 are the default nbnet channels
         assert(channel_id == 2 + c);
@@ -306,6 +329,7 @@ int main(int argc, char *argv[]) {
     NBN_Server_SetJitter(server, options.jitter);
     NBN_Server_SetPacketLoss(server, options.packet_loss);
     NBN_Server_SetPacketDuplication(server, options.packet_duplication);
+    NBN_Server_SetThrottle(server, options.throttle, options.throttle_min_time, options.throttle_max_time);
 
     int ret = Soak_MainLoop(Tick, server);
 

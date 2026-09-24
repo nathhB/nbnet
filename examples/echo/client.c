@@ -23,6 +23,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <assert.h>
 
 // Has to be defined in exactly *one* source file before including the nbnet header
@@ -56,36 +57,42 @@ void OnDisconnected(NBN_Client *client) {
 
 void OnMessageReceived(NBN_Client *client) {
     // Get info about the received message
-    NBN_MessageInfo msg_info = NBN_Client_GetMessageInfo(client);
+    NBN_Message *msg = NBN_Client_GetReceivedMessage(client);
 
-    assert(msg_info.type == ECHO_MESSAGE_TYPE);
+    assert(msg->header.type == ECHO_MESSAGE_TYPE);
 
-    NBN_Reader *reader = NBN_Client_ReadMessage(client);
+    NBN_Reader reader = NBN_ReadMessage(msg);
     unsigned int length;
     int res;
 
-    res = NBN_Reader_ReadUInt32(reader, &length);
+    res = NBN_Reader_ReadUInt32(&reader, &length);
     assert(res == 0);
     static char msg_str[ECHO_MESSAGE_MAX_LENGTH];
 
-    res = NBN_Reader_ReadBytes(reader, (uint8_t *)msg_str, length);
+    res = NBN_Reader_ReadBytes(&reader, (uint8_t *)msg_str, length);
     assert(res == 0);
     msg_str[length] = 0;
 
-    log_info("Received echo: %s (length: %d, channel: %d)", msg_str, msg_info.length, msg_info.channel_id);
+    log_info("Received echo: '%s' (length: %d, channel: %d)", msg_str, msg->header.length, msg->header.channel_id);
+
+    NBN_Client_ReleaseReceivedMessage(client, msg);
 }
 
 int SendEcho(NBN_Client *client, const char *msg) {
-    NBN_Writer *writer = NBN_Client_CreateReliableMessage(client, ECHO_MESSAGE_TYPE);
-
-    if (!writer) {
-        return -1;
-    }
-
     unsigned int length = strlen(msg);
+    uint8_t *buffer = malloc(ECHO_MESSAGE_MAX_LENGTH);
+    NBN_Writer writer = NBN_Writer_Create(buffer, ECHO_MESSAGE_MAX_LENGTH);
 
-    NBN_Writer_WriteUInt32(writer, length);
-    NBN_Writer_WriteBytes(writer, (uint8_t *)msg, length);
+    NBN_Writer_WriteUInt32(&writer, length);
+    NBN_Writer_WriteBytes(&writer, (uint8_t *)msg, length);
+
+    int res = NBN_Client_CreateReliableMessage(client, ECHO_MESSAGE_TYPE, buffer, writer.position);
+
+    if (res < 0) {
+        log_error("Failed to send message");
+
+        return -1;
+    } 
 
     return 0;
 }

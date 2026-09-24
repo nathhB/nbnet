@@ -60,11 +60,14 @@
 
 typedef struct {
     unsigned int message_count;
-    float packet_loss;        /* 0 - 1 */
-    float packet_duplication; /* 0 - 1 */
-    float ping;               /* in seconds */
-    float jitter;             /* in seconds */
-    bool webrtc;              /* use native WebRTC driver */
+    float packet_loss;        // 0 - 1
+    float packet_duplication; // 0 - 1
+    float ping;               // in seconds
+    float jitter;             // in seconds
+    float throttle;           // 0 - 1
+    float throttle_min_time;  // in seconds
+    float throttle_max_time;  // in seconds
+    bool webrtc;              // use native WebRTC driver
 } SoakOptions;
 
 int Soak_Init(int, char *[]);
@@ -77,6 +80,8 @@ unsigned int Soak_GetDestroyedOutgoingSoakMessageCount(void);
 unsigned int Soak_GetCreatedIncomingSoakMessageCount(void);
 unsigned int Soak_GetDestroyedIncomingSoakMessageCount(void);
 void SoakMessage_Write(NBN_Writer *, unsigned int, uint8_t *, unsigned int);
-int SoakMessage_Read(NBN_Reader *reader, unsigned int *msg_id, uint8_t *data, unsigned int *data_length);
+void SoakMessage_WriteHeader(NBN_Writer *writer, unsigned int msg_id, unsigned int data_length);
+int SoakMessage_ReadHeader(NBN_Reader *reader, unsigned int *msg_id, unsigned int *data_length);
+int SoakMessage_ReadData(NBN_Reader *reader, uint8_t *data, unsigned int length);
 
 #endif // SOAK_H_INCLUDED

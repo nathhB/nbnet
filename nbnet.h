@@ -80,70 +80,44 @@ typedef struct NBN_ConnectionStats {
     float download_bandwidth;
 } NBN_ConnectionStats;
 
-/**
- * Information about a received message.
- */
-typedef struct NBN_MessageInfo {
-    /**
-     * Type of the message
-     */
-    uint8_t type;
-
-    /**
-     * Channel the message was received on
-     */
-    uint8_t channel_id;
-
-    /**
-     * Pointer to the internal message data buffer
-     */
-    uint8_t *data;
-
-    /*
-     * Length of the message data in bytes
-     */
+// IMPORTANT: make sure you update NBN_MESSAGE_HEADER_SIZE if you modify NBN_MessageHeader struct
+// TODO: doc
+typedef struct NBN_MessageHeader {
+    uint16_t id;
     uint16_t length;
+    uint8_t type;
+    uint8_t channel_id;
+} NBN_MessageHeader;
 
-    /**
-     * A handle to the connection that sent the message.
-     *
-     * On the client, it will always be NULL as all messages are received from the server.
-     */
-    NBN_ConnectionHandle *sender;
-} NBN_MessageInfo;
+typedef enum NBN_Message_Type {
+    NBN_INCOMING_MESSAGE,
+    NBN_OUTGOING_MESSAGE
+} NBN_Message_Type;
+
+// TODO: doc
+typedef struct NBN_Message {
+    NBN_Message_Type type;
+    NBN_MessageHeader header;
+    NBN_ConnectionHandle *connection;
+    uint8_t *data;
+} NBN_Message;
 
 // TODO: doc
 typedef enum NBN_Channel_Mode { NBN_CHANNEL_UNRELIABLE, NBN_CHANNEL_RELIABLE } NBN_Channel_Mode;
 
-typedef enum NBN_Client_Event {
-    NBN_CLIENT_ERROR = NBN_ERROR,
+typedef enum NBN_Event_Type {
+    EV_ERROR = NBN_ERROR,
 
-    NBN_CLIENT_NO_EVENT = 0,
+    EV_NONE = 0,
 
-    /* Client is connected to server */
-    NBN_CLIENT_CONNECTED,
+    EV_CONNECTED,
 
-    /* Client is disconnected from the server */
-    NBN_CLIENT_DISCONNECTED,
+    EV_DISCONNECTED,
 
-    /* Client has received a message from the server */
-    NBN_CLIENT_MESSAGE_RECEIVED
-} NBN_Client_Event;
+    EV_MESSAGE_RECEIVED,
 
-typedef enum NBN_Server_Event {
-    NBN_SERVER_ERROR = NBN_ERROR,
-
-    NBN_SERVER_NO_EVENT = 0,
-
-    /* A new client has connected */
-    NBN_SERVER_NEW_CONNECTION,
-
-    /* A client has disconnected */
-    NBN_SERVER_DISCONNECTION,
-
-    /* A message has been received from a client */
-    NBN_SERVER_MESSAGE_RECEIVED
-} NBN_Server_Event;
+    EV_OUTGOING_MESSAGE_PROCESSED
+} NBN_Event_Type;
 
 typedef struct NBN_ServerStats {
     float upload_bandwidth;   /* Total upload bandwith of the game server */
@@ -173,6 +147,7 @@ typedef enum NBN_LogLevel { NBN_LOG_ERROR, NBN_LOG_INFO, NBN_LOG_WARNING, NBN_LO
 
 void NBN_SetLogLevel(NBN_LogLevel);
 
+NBN_Writer NBN_Writer_Create(uint8_t *buffer, unsigned int length);
 void NBN_Writer_Init(NBN_Writer *writer, uint8_t *buffer, unsigned int length);
 void NBN_Writer_WriteInt8(NBN_Writer *writer, int8_t value);
 void NBN_Writer_WriteInt16(NBN_Writer *writer, int16_t value);
@@ -201,6 +176,8 @@ int NBN_Reader_ReadBool(NBN_Reader *reader, bool *value);
 int NBN_Reader_ReadBytes(NBN_Reader *reader, uint8_t *bytes, unsigned int length);
 int NBN_Reader_ReadString(NBN_Reader *reader, char *str, unsigned int max_len);
 
+NBN_Reader NBN_ReadMessage(NBN_Message *message);
+
 /**
  * Initialize the game client with minimal configuration.
  *
@@ -212,8 +189,7 @@ int NBN_Reader_ReadString(NBN_Reader *reader, char *str, unsigned int max_len);
 NBN_Client *NBN_Client_Create(const char *protocol_name, const char *host, uint16_t port);
 
 // TODO: doc
-uint8_t NBN_Client_CreateChannel(NBN_Client *client, NBN_Channel_Mode mode, unsigned int buffer_size,
-                                 unsigned int max_message_len);
+uint8_t NBN_Client_CreateChannel(NBN_Client *client, NBN_Channel_Mode mode, unsigned int buffer_size);
 
 // TODO: doc
 unsigned int NBN_Client_GetChannelCurrentCapacity(NBN_Client *client, uint8_t channel_id);
@@ -235,7 +211,7 @@ int NBN_Client_Start(NBN_Client *client);
 void NBN_Client_Stop(NBN_Client *client);
 
 // TODO: doc
-NBN_Reader *NBN_Client_ReadServerData(NBN_Client *client);
+NBN_Reader NBN_Client_ReadServerData(NBN_Client *client);
 
 /**
  * Poll game client events.
@@ -244,7 +220,7 @@ NBN_Reader *NBN_Client_ReadServerData(NBN_Client *client);
  *
  * @return The code of the polled event or NBN_NO_EVENT when there is no more events.
  */
-NBN_Client_Event NBN_Client_Poll(NBN_Client *client);
+NBN_Event_Type NBN_Client_Poll(NBN_Client *client);
 
 /**
  * Pack all enqueued messages into packets and send them.
@@ -257,26 +233,26 @@ NBN_Client_Event NBN_Client_Poll(NBN_Client *client);
 int NBN_Client_Flush(NBN_Client *client);
 
 // TODO: doc
-NBN_Writer *NBN_Client_CreateMessage(NBN_Client *client, uint8_t type, uint8_t channel_id);
+int NBN_Client_CreateMessage(NBN_Client *client, uint8_t type, uint8_t channel_id, uint8_t *data, unsigned int length);
 
 // TODO: doc
-NBN_Writer *NBN_Client_CreateReliableMessage(NBN_Client *client, uint8_t type);
+int NBN_Client_CreateReliableMessage(NBN_Client *client, uint8_t type, uint8_t *data, unsigned int length);
 
 // TODO: doc
-NBN_Writer *NBN_Client_CreateUnreliableMessage(NBN_Client *client, uint8_t type);
-
-// TODO: doc
-NBN_Reader *NBN_Client_ReadMessage(NBN_Client *client);
+int NBN_Client_CreateUnreliableMessage(NBN_Client *client, uint8_t type, uint8_t *data, unsigned int length);
 
 /**
- * Retrieve the info about the last received message.
+ * Retrieve the last received message.
  *
  * Call this function when receiveing a NBN_MESSAGE_RECEIVED event to access
  * information about the message.
  *
  * @return A structure containing information about the received message
  */
-NBN_MessageInfo NBN_Client_GetMessageInfo(NBN_Client *client);
+NBN_Message *NBN_Client_GetMessage(NBN_Client *client);
+
+// TODO: doc
+void NBN_Client_ReleaseMessage(NBN_Client *client, NBN_Message *message);
 
 /**
  * Retrieve network stats about the game client.
@@ -314,8 +290,7 @@ int NBN_Client_ParseHostnameToIPV4(const char *input, char *out_ipv4, socklen_t 
 NBN_Server *NBN_Server_Create(const char *protocol_name, uint16_t port);
 
 // TODO: doc
-uint8_t NBN_Server_CreateChannel(NBN_Server *server, NBN_Channel_Mode mode, unsigned int buffer_size,
-                                 unsigned int max_message_len);
+uint8_t NBN_Server_CreateChannel(NBN_Server *server, NBN_Channel_Mode mode, unsigned int buffer_size);
 
 // TODO: doc
 unsigned int NBN_Server_GetChannelCurrentCapacity(NBN_Server *server, uint8_t channel_id, NBN_ConnectionHandle *conn);
@@ -347,7 +322,7 @@ NBN_ConnectionHandle *NBN_Server_GetNextClient(NBN_Server *server, NBN_Client_It
  *
  * @return The code of the polled event or NBN_NO_EVENT when there is no more events.
  */
-NBN_Server_Event NBN_Server_Poll(NBN_Server *server);
+NBN_Event_Type NBN_Server_Poll(NBN_Server *server);
 
 /**
  * Pack all enqueued messages into packets and send them.
@@ -381,17 +356,16 @@ int NBN_Server_CloseClient(NBN_Server *server, NBN_ConnectionHandle *conn);
 int NBN_Server_CloseClientWithCode(NBN_Server *server, NBN_ConnectionHandle *conn, int code);
 
 // TODO: doc
-NBN_Writer *NBN_Server_CreateMessage(NBN_Server *server, uint8_t type, uint8_t channel_id,
-                                     NBN_ConnectionHandle *receiver);
+int NBN_Server_CreateMessage(NBN_Server *server, uint8_t type, uint8_t channel_id, uint8_t *data, unsigned int length,
+        NBN_ConnectionHandle *receiver);
 
 // TODO: doc
-NBN_Writer *NBN_Server_CreateReliableMessage(NBN_Server *server, uint8_t type, NBN_ConnectionHandle *receiver);
+int NBN_Server_CreateReliableMessage(NBN_Server *server, uint8_t type, uint8_t *data, unsigned int length,
+        NBN_ConnectionHandle *receiver);
 
 // TODO: doc
-NBN_Writer *NBN_Server_CreateUnreliableMessage(NBN_Server *server, uint8_t type, NBN_ConnectionHandle *receiver);
-
-// TODO: doc
-NBN_Reader *NBN_Server_ReadMessage(NBN_Server *server);
+int NBN_Server_CreateUnreliableMessage(NBN_Server *server, uint8_t type, uint8_t *data, unsigned int length, 
+        NBN_ConnectionHandle *receiver);
 
 // TODO: doc
 NBN_Writer *NBN_Server_WriteConnectionData(NBN_Server *server);
@@ -430,7 +404,7 @@ int NBN_Server_RejectIncomingConnection(NBN_Server *server);
 NBN_ConnectionHandle *NBN_Server_GetIncomingConnection(NBN_Server *server);
 
 // TODO: doc
-NBN_Reader *NBN_Server_ReadConnectionRequestData(NBN_Server *server);
+NBN_Reader NBN_Server_ReadConnectionRequestData(NBN_Server *server);
 
 /**
  * Return the information about the last disconnected client.
@@ -443,14 +417,17 @@ NBN_Reader *NBN_Server_ReadConnectionRequestData(NBN_Server *server);
 NBN_DisconnectionInfo NBN_Server_GetDisconnectionInfo(NBN_Server *server);
 
 /**
- * Retrieve the info about the last received message.
+ * Retrieve the last received message.
  *
  * Call this function when receiving a NBN_CLIENT_MESSAGE_RECEIVED event to access
  * information about the message.
  *
  * @return A structure containing information about the received message
  */
-NBN_MessageInfo NBN_Server_GetMessageInfo(NBN_Server *server);
+NBN_Message *NBN_Server_GetMessage(NBN_Server *server);
+
+// TODO: doc
+void NBN_Server_ReleaseMessage(NBN_Server *server, NBN_Message *message);
 
 /**
  * Retrieve network stats about the game server.
@@ -524,11 +501,13 @@ void NBN_Client_SetPing(NBN_Client *client, float v);
 void NBN_Client_SetJitter(NBN_Client *client, float v);
 void NBN_Client_SetPacketLoss(NBN_Client *client, float v);
 void NBN_Client_SetPacketDuplication(NBN_Client *client, float v);
+void NBN_Client_SetThrottle(NBN_Client *client, float freq, float min_time, float max_time);
 
 void NBN_Server_SetPing(NBN_Server *server, float v);
 void NBN_Server_SetJitter(NBN_Server *server, float v);
 void NBN_Server_SetPacketLoss(NBN_Server *server, float v);
 void NBN_Server_SetPacketDuplication(NBN_Server *server, float v);
+void NBN_Server_SetThrottle(NBN_Server *server, float freq, float min_time, float max_time);
 
 #else
 

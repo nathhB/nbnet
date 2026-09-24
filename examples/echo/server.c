@@ -22,6 +22,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 #include "shared.h"
 #include "log.h"
@@ -32,39 +33,47 @@ static NBN_Connection_ID conn_id;
 // Echo the received message
 static int EchoReceivedMessage(NBN_Server *server) {
     // Get info about the received message
-    NBN_MessageInfo msg_info = NBN_Server_GetMessageInfo(server);
+    NBN_Message *msg = NBN_Server_GetReceivedMessage(server);
 
-    assert(msg_info.type == ECHO_MESSAGE_TYPE);
+    assert(msg->header.type == ECHO_MESSAGE_TYPE);
 
-    log_info("Received message of type %d from %lld", msg_info.type, msg_info.sender->id);
+    log_info("Received message of type %d from %lld", msg->header.type, msg->sender->id);
 
-    assert(msg_info.sender->id == conn_id);
+    assert(msg->sender->id == conn_id);
 
     // read message data
-    NBN_Reader *reader = NBN_Server_ReadMessage(server);
+    NBN_Reader reader = NBN_ReadMessage(msg);
     unsigned int length;
     int res;
 
-    res = NBN_Reader_ReadUInt32(reader, &length);
+    res = NBN_Reader_ReadUInt32(&reader, &length);
     assert(res == 0);
     static char msg_str[ECHO_MESSAGE_MAX_LENGTH];
 
-    res = NBN_Reader_ReadBytes(reader, (uint8_t *)msg_str, length);
+    res = NBN_Reader_ReadBytes(&reader, (uint8_t *)msg_str, length);
     assert(res == 0);
     msg_str[length] = 0;
 
-    log_info("Received message: %s, send echo (length: %d, channel: %d)", msg_str, msg_info.length,
-             msg_info.channel_id);
+    log_info("Received message: '%s', send echo (length: %d, channel: %d)", msg_str, msg->header.length,
+             msg->header.channel_id);
+
+    NBN_Server_ReleaseReceivedMessage(server, msg);
 
     // create and send an echo of the received message
-    NBN_Writer *writer = NBN_Server_CreateReliableMessage(server, ECHO_MESSAGE_TYPE, connection);
 
-    if (!writer) {
+    uint8_t *buffer = malloc(ECHO_MESSAGE_MAX_LENGTH);
+    NBN_Writer writer = NBN_Writer_Create(buffer, ECHO_MESSAGE_MAX_LENGTH);
+
+    NBN_Writer_WriteUInt32(&writer, length);
+    NBN_Writer_WriteBytes(&writer, (uint8_t *)msg_str, length);
+
+    res = NBN_Server_CreateReliableMessage(server, ECHO_MESSAGE_TYPE, buffer, writer.position, connection);
+
+    if (res < 0) {
+        log_error("Failed to send message");
+
         return -1;
     }
-
-    NBN_Writer_WriteUInt32(writer, length);
-    NBN_Writer_WriteBytes(writer, (uint8_t *)msg_str, length);
 
     return 0;
 }
