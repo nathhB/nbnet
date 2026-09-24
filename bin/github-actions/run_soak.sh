@@ -17,13 +17,13 @@ run_client() {
   if [ "$client_mode" = "WEBRTC_EMSCRIPTEN" ]; then
     # WASM WebRTC client
     $NODE_CMD build_web/client.js --message_count=$MESSAGE_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION \
-      --ping=$PING --jitter=$JITTER --throttle=$THROTTLE --throttle_min_time=THROTTLE_MIN_TIME \
+      --ping=$PING --jitter=$JITTER --throttle=$THROTTLE --throttle_min_time=$THROTTLE_MIN_TIME \
       --throttle_max_time=THROTTLE_MAX_TIME &>soak_cli_out
   elif [ "$client_mode" = "UDP" ]; then
     # UDP client
     ./build/client --message_count=$MESSAGE_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION \
-      --ping=$PING --jitter=$JITTER --throttle=$THROTTLE --throttle_max_time=THROTTLE_MAX_TIME \
-      --throttle_max_time=THROTTLE_MAX_TIME &>soak_cli_out
+      --ping=$PING --jitter=$JITTER --throttle=$THROTTLE --throttle_min_time=$THROTTLE_MIN_TIME \
+      --throttle_max_time=$THROTTLE_MAX_TIME &>soak_cli_out
   else
     echo "Unknown client mode"
     return 1
@@ -61,9 +61,13 @@ cd soak
 echo "Starting soak server..."
 
 if [ -n "$WEBRTC" ]; then
-  $NODE_CMD build_web/server.js --channel_count=$CHANNEL_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION --ping=$PING --jitter=$JITTER &>soak_serv_out &
+  $NODE_CMD build_web/server.js --channel_count=$CHANNEL_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION \
+    --ping=$PING --jitter=$JITTER --throttle=$THROTTLE --throttle_min_time=$THROTTLE_MIN_TIME \
+    --throttle_max_time=$THROTTLE_MAX_TIME &>soak_serv_out &
 else
-  ./build/server --channel_count=$CHANNEL_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION --ping=$PING --jitter=$JITTER &>soak_serv_out &
+  ./build/server --channel_count=$CHANNEL_COUNT --packet_loss=$PACKET_LOSS --packet_duplication=$PACKET_DUPLICATION \
+    --throttle=$THROTTLE --throttle_min_time=$THROTTLE_MIN_TIME --throttle_max_time=$THROTTLE_MAX_TIME \
+    --ping=$PING --jitter=$JITTER &>soak_serv_out &
 fi
 
 if [ $? -eq 0 ]; then
