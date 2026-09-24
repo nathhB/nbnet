@@ -671,7 +671,7 @@ static int WebRTC_Client_SendPacket(NBN_Client *client, NBN_Packet *packet, NBN_
 
 static int WebRTC_Server_Start(NBN_Server *server, uint16_t port);
 static void WebRTC_Server_Stop(NBN_Server *server);
-static int WebRTC_Server_RecvPackets(NBN_Server *server, NBN_Packet *packet);
+static int WebRTC_Server_RecvPackets(NBN_Server *server);
 static int WebRTC_Server_SendPacketTo(NBN_Server *server, NBN_Packet *packet, NBN_Connection *connection);
 static void WebRTC_Server_CleanupConnection(NBN_Server *server, NBN_Connection *connection);
 
