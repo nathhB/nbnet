@@ -1212,7 +1212,8 @@ static bool Channel_AddReceivedMessage(NBN_Channel *channel, NBN_MessageHeader *
     return true;
 }
 
-static int Channel_AddOutgoingMessage(NBN_Channel *channel, uint8_t type, uint8_t *data, unsigned int length) {
+static int Channel_AddOutgoingMessage(NBN_Channel *channel, uint8_t type, NBN_Connection *receiver,
+                                      uint8_t *data, unsigned int length) {
     NBN_Assert(channel->mode == NBN_CHANNEL_UNRELIABLE || channel->mode == NBN_CHANNEL_RELIABLE);
 
     uint16_t msg_id = channel->next_outgoing_message_id;
@@ -1241,6 +1242,7 @@ static int Channel_AddOutgoingMessage(NBN_Channel *channel, uint8_t type, uint8_
     out_msg->message.header.type = type;
     out_msg->message.header.length = length;
     out_msg->message.data = data;
+    out_msg->message.connection = (NBN_ConnectionHandle *)receiver;
     out_msg->pending = true;
 
     channel->next_outgoing_message_id++;
@@ -1994,17 +1996,17 @@ static int Endpoint_ProcessReceivedPacket(NBN_Endpoint *endpoint, uint8_t *buffe
     return 0;
 }
 
-static int Endpoint_CreateOutgoingMessage(NBN_Endpoint *endpoint, NBN_Connection *connection, uint8_t type,
+static int Endpoint_CreateOutgoingMessage(NBN_Endpoint *endpoint, NBN_Connection *receiver, uint8_t type,
                                           uint8_t channel_id, uint8_t *data, unsigned int length) {
     NBN_Assert(channel_id < endpoint->channel_count);
-    NBN_Assert(!connection->is_closed || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE);
-    NBN_Assert(!connection->is_stale);
+    NBN_Assert(!receiver->is_closed || type == NBN_CLIENT_CLOSED_MESSAGE_TYPE);
+    NBN_Assert(!receiver->is_stale);
     NBN_Assert(length < NBN_PACKET_MAX_DATA_SIZE);
 
     LogDebug("Create outgoing message of type %d on channel %d", type, channel_id);
 
-    NBN_Channel *channel = &connection->channels[channel_id];
-    int res = Channel_AddOutgoingMessage(channel, type, data, length);
+    NBN_Channel *channel = &receiver->channels[channel_id];
+    int res = Channel_AddOutgoingMessage(channel, type, receiver, data, length);
 
     if (res < 0) {
         LogError("Failed to enqueue outgoing message of type %d on channel %d", type, channel_id);
@@ -2336,7 +2338,7 @@ NBN_Event_Type NBN_Client_Poll(NBN_Client *client) {
                 while ((msg = Channel_GetNextReceivedMessage(channel)) != NULL) {
                     LogDebug("Got message %d of type %d from channel %d", msg->header.id, msg->header.type, channel->id);
 
-                    msg->sender = (NBN_ConnectionHandle *)server_conn;
+                    msg->connection = (NBN_ConnectionHandle *)server_conn;
 
                     if (Client_ProcessReceivedMessage(client, msg) < 0) {
                         LogError("Failed to process received message");
@@ -2872,7 +2874,7 @@ NBN_Event_Type NBN_Server_Poll(NBN_Server *server) {
                     NBN_Message *msg;
 
                     while ((msg = Channel_GetNextReceivedMessage(channel)) != NULL) {
-                        msg->sender = (NBN_ConnectionHandle *)client;
+                        msg->connection = (NBN_ConnectionHandle *)client;
 
                         LogDebug("Received message (type: %d, id: %d, length: %d) from client %lld",
                                  msg->header.type, msg->header.id, msg->header.length, client->handle.id);
@@ -3259,7 +3261,7 @@ static bool Server_HandleEvent(NBN_Server *server, NBN_Event_Type *ev) {
 
 static bool Server_HandleMessageReceivedEvent(NBN_Server *server, NBN_Message *message, NBN_Event_Type *ev) {
     NBN_Event *last_event = &server->last_event;
-    NBN_Connection *sender = HANDLE_TO_CONN(message->sender);
+    NBN_Connection *sender = HANDLE_TO_CONN(message->connection);
     NBN_Endpoint *endpoint = &server->endpoint;
 
     if (sender->is_closed || sender->is_stale) {

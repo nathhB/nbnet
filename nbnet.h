@@ -98,8 +98,8 @@ typedef enum NBN_Message_Type {
 typedef struct NBN_Message {
     NBN_Message_Type type;
     NBN_MessageHeader header;
+    NBN_ConnectionHandle *connection;
     uint8_t *data;
-    NBN_ConnectionHandle *sender;
 } NBN_Message;
 
 // TODO: doc

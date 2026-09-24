@@ -53,12 +53,12 @@ typedef struct {
 
 typedef struct {
     unsigned int done_channel_count;
-    int allocated_message_buffer_count;
+    unsigned int allocated_message_buffer_count;
     SoakChannel *channels;
     NBN_Client *client;
 } Soak_Client_State;
 
-static void GenerateRandomBytes(uint8_t *data, unsigned int length) {
+static void WriteRandomBytes(uint8_t *data, unsigned int length) {
     for (unsigned int i = 0; i < length; i++)
         data[i] = rand() % 255 + 1;
 }
@@ -112,25 +112,24 @@ static int SendSoakMessages(Soak_Client_State *state, SoakChannel *channel, uint
 
             assert(entry->free);
 
-            GenerateRandomBytes(entry->data, data_length);
-
             entry->length = data_length;
             entry->free = false;
             entry->channel_id = channel_id;
 
             // TODO: support big messages
 
-            uint8_t *buffer = malloc(SOAK_MESSAGE_SMALL_MAX_LENGTH);
-            NBN_Writer writer = NBN_Writer_Create(buffer, SOAK_MESSAGE_SMALL_MAX_LENGTH);
-            SoakMessage_Write(&writer, msg_id, entry->data, entry->length);
+            NBN_Writer writer = NBN_Writer_Create(entry->data, sizeof(entry->data));
+            SoakMessage_WriteHeader(&writer, msg_id, entry->length);
+            unsigned int header_length = writer.position;
+            assert(header_length == SOAK_MESSAGE_HEADER_LENGTH);
+            WriteRandomBytes(entry->data + header_length, data_length);
 
             log_info("Send soak message (id: %d, data length: %d)", msg_id, data_length);
 
-            int ret = NBN_Client_CreateMessage(client, SOAK_MESSAGE_SMALL, channel->id, buffer, writer.position);
+            unsigned msg_length = header_length + data_length;
+            int ret = NBN_Client_CreateMessage(client, SOAK_MESSAGE_SMALL, channel->id, entry->data, msg_length);
 
             if (ret < 0) {
-                free(buffer);
-
                 return -1;
             }
 
@@ -186,7 +185,9 @@ static int HandleReceivedSoakMessage(Soak_Client_State *state, NBN_Message *msg)
         return -1;
     }
 
-    if (memcmp(recv_buffer, entry->data, data_length) != 0) {
+    uint8_t *data = entry->data + SOAK_MESSAGE_HEADER_LENGTH;
+
+    if (memcmp(recv_buffer, data, data_length) != 0) {
         log_error("Received invalid data for message %d (data length: %d, channel_id: %d)", msg_id, data_length,
                   channel_id);
 
@@ -276,7 +277,6 @@ static int Tick(void *data) {
                           msg->header.channel_id, msg->header.id, msg_id);
 
                 assert(state->allocated_message_buffer_count > 0);
-                free(msg->data);
                 state->allocated_message_buffer_count--;
                 break;
             }
