@@ -265,7 +265,7 @@ static void HandleReceivedMessage(NBN_Client *client) {
 }
 
 static int SendStateUpdate(NBN_Client *client) {
-    uint8_t *buffer = malloc(MESSAGE_BUFFER_SIZE);
+    uint8_t *buffer = (uint8_t *)malloc(MESSAGE_BUFFER_SIZE);
 
     NBN_Writer writer = NBN_Writer_Create(buffer, MESSAGE_BUFFER_SIZE);
     UpdateClientStateMessage_Write(&writer, local_client_state);
@@ -274,7 +274,7 @@ static int SendStateUpdate(NBN_Client *client) {
 }
 
 static int SendColorUpdate(NBN_Client *client) {
-    uint8_t *buffer = malloc(MESSAGE_BUFFER_SIZE);
+    uint8_t *buffer = (uint8_t *)malloc(MESSAGE_BUFFER_SIZE);
 
     NBN_Writer writer = NBN_Writer_Create(buffer, MESSAGE_BUFFER_SIZE);
     ChangeColorMessage_Write(&writer, local_client_state.color);

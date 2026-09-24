@@ -229,7 +229,7 @@ static int BroadcastGameState(NBN_Server *server) {
 
     // Broadcast GAME_STATE_MESSAGE to all clients
     while ((cli = NBN_Server_GetNextClient(server, &it)) != NULL) {
-        uint8_t *buffer = malloc(MESSAGE_BUFFER_SIZE);
+        uint8_t *buffer = (uint8_t *)malloc(MESSAGE_BUFFER_SIZE);
         NBN_Writer writer = NBN_Writer_Create(buffer, MESSAGE_BUFFER_SIZE);
         GameStateMessage_Write(&writer, &game_state);
         int ret = NBN_Server_CreateUnreliableMessage(server, GAME_STATE_MESSAGE, buffer, writer.position, cli);

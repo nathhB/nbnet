@@ -61,7 +61,7 @@ static int EchoReceivedMessage(NBN_Server *server) {
 
     // create and send an echo of the received message
 
-    uint8_t *buffer = malloc(ECHO_MESSAGE_MAX_LENGTH);
+    uint8_t *buffer = (uint8_t *)malloc(ECHO_MESSAGE_MAX_LENGTH);
     NBN_Writer writer = NBN_Writer_Create(buffer, ECHO_MESSAGE_MAX_LENGTH);
 
     NBN_Writer_WriteUInt32(&writer, length);

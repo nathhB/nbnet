@@ -80,7 +80,7 @@ void OnMessageReceived(NBN_Client *client) {
 
 int SendEcho(NBN_Client *client, const char *msg) {
     unsigned int length = strlen(msg);
-    uint8_t *buffer = malloc(ECHO_MESSAGE_MAX_LENGTH);
+    uint8_t *buffer = (uint8_t *)malloc(ECHO_MESSAGE_MAX_LENGTH);
     NBN_Writer writer = NBN_Writer_Create(buffer, ECHO_MESSAGE_MAX_LENGTH);
 
     NBN_Writer_WriteUInt32(&writer, length);
