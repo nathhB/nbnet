@@ -3469,6 +3469,37 @@ static NBN_Connection *UDP_FindOrCreateClientConnectionByAddress(NBN_Server *ser
     return conn;
 }
 
+#ifdef NBN_PLATFORM_WINDOWS
+
+// strsep does not exist for Windows
+
+static char *strsep(char **stringp, const char *delim) {
+    if (*stringp == NULL) {
+        return NULL;
+    }
+
+    char *start = strpbrk(*stringp, delim);
+
+    if (start == NULL) {
+        char *res = *stringp;
+        *stringp = NULL;
+
+        return res;
+    }
+
+    *start = '\0';
+    char *res = *stringp;
+    *stringp = start + 1;
+
+    if (*stringp == '\0') {
+        return NULL;
+    }
+
+    return res;
+}
+
+#endif // NBN_PLATFORM_WINDOWS
+
 #define MAX_IP_ADDR_LEN 15
 
 static void UDP_ParseIpAddress(const char *str, uint16_t port, NBN_IPAddress *address) {
