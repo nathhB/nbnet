@@ -3403,12 +3403,12 @@ static SOCKET UDP_InitSocket(void) {
 #if defined(NBN_PLATFORM_WINDOWS)
     DWORD non_blocking = 1;
 
-    if (ioctlsocket(nbn_udp_sock, FIONBIO, &non_blocking) != 0) {
+    if (ioctlsocket(sock, FIONBIO, &non_blocking) != 0) {
         LogError("ioctlsocket() failed: %s", UDP_GetLastErrorMessage());
 
         return NBN_ERROR;
     }
-#elif defined(NBN_PLATFORM_MAC) || defined(NBN_PLATFORM_UNIX)
+#else
     int non_blocking = 1;
 
     if (fcntl(sock, F_SETFL, O_NONBLOCK, non_blocking) < 0) {
