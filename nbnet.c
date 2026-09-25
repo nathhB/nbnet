@@ -3471,26 +3471,28 @@ static NBN_Connection *UDP_FindOrCreateClientConnectionByAddress(NBN_Server *ser
 
 #define MAX_IP_ADDR_LEN 15
 
-static void UDP_ParseIpAddress(const char *host, uint16_t port, NBN_IPAddress *address) {
+static void UDP_ParseIpAddress(const char *str, uint16_t port, NBN_IPAddress *address) {
     uint8_t arr[4];
-    char *dup_host = strndup(host, MAX_IP_ADDR_LEN + 1);
+    char buffer[MAX_IP_ADDR_LEN + 1] = {0};
+    size_t n = strnlen(str, MAX_IP_ADDR_LEN);
+
+    memcpy(buffer, str, n);
+
+    char *dup_str = (char *)buffer;
 
     char *s;
     int i = 0;
-
-    while ((s = strsep(&dup_host, ".")) != NULL && i < 4) {
+    while ((s = strsep(&dup_str, ".")) != NULL && i < 4) {
         char *end = NULL;
         int v = strtol(s, &end, 10);
 
         if (*end != '\0' || v < 0 || v > 255) {
-            LogError("Invalid IP address: %s", host);
+            LogError("Invalid IP address: %s", str);
             NBN_Abort();
         }
 
         arr[i++] = (uint8_t)v;
     }
-
-    free(dup_host);
 
     address->host = (arr[0] << 24) | (arr[1] << 16) | (arr[2] << 8) | arr[3];
     address->port = port;
