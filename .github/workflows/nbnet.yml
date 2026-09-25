@@ -52,9 +52,6 @@ jobs:
           cd tests
           cmake -G "NMake Makefiles" .
           nmake
-      # FIXME: string_tests hangs forever
-      # - name: Run tests
-      # run: ctest
 
   soak-test-linux-c:
     runs-on: ubuntu-latest
@@ -67,7 +64,7 @@ jobs:
           cd soak
           mkdir build
           cd build
-          cmake -DCMAKE_BUILD_TYPE=Debug ..
+          cmake -DCMAKE_BUILD_TYPE=Debug -DUDP=ON ..
           make
       - name: Run soak test
         run: timeout 240 ./bin/github-actions/run_soak.sh
@@ -83,7 +80,7 @@ jobs:
           cd soak
           mkdir build
           cd build
-          cmake -DCMAKE_BUILD_TYPE=Debug -DCPP_COMPILE=ON ..
+          cmake -DCMAKE_BUILD_TYPE=Debug -DUDP=ON -DCPP_COMPILE=ON ..
           make
       - name: Run soak test
         run: timeout 240 ./bin/github-actions/run_soak.sh
@@ -101,7 +98,7 @@ jobs:
           npm update
           npm install -g node-pre-gyp
           npm install -g node-gyp
-          cd net_drivers/webrtc
+          cd webrtc
           npm install --build-from-resource
       - name: Compile soak test
         run: ./bin/github-actions/build_soak_web.sh
@@ -123,7 +120,7 @@ jobs:
           cd soak
           mkdir build
           cd build
-          cmake -DCMAKE_BUILD_TYPE=Debug ..
+          cmake -DCMAKE_BUILD_TYPE=Debug -DUDP=ON ..
           make
       - name: Run soak test
         run: gtimeout 240 ./bin/github-actions/run_soak.sh
@@ -139,7 +136,7 @@ jobs:
           cd soak
           mkdir build
           cd build
-          cmake -DCMAKE_BUILD_TYPE=Debug -DCPP_COMPILE=ON ..
+          cmake -DCMAKE_BUILD_TYPE=Debug -DUDP=ON -DCPP_COMPILE=ON ..
           make
       - name: Run soak test
         run: gtimeout 240 ./bin/github-actions/run_soak.sh
@@ -157,7 +154,7 @@ jobs:
           npm update
           npm install -g node-pre-gyp
           npm install -g node-gyp
-          cd net_drivers/webrtc
+          cd webrtc
           npm install --build-from-resource
       - name: Compile soak test
         run: ./bin/github-actions/build_soak_web.sh 
@@ -178,7 +175,7 @@ jobs:
           cd soak
           mkdir build
           cd build
-          cmake -G "NMake Makefiles" ..
+          cmake -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Debug -DUDP=ON ..
           nmake
       - name: Run soak test
         run: ./bin/github-actions/run_soak.sh
@@ -198,14 +195,16 @@ jobs:
           npm update
           npm install -g node-pre-gyp
           npm install -g node-gyp
-          cd net_drivers/webrtc
+          cd webrtc
           npm install --build-from-resource
       - name: Compile soak test (native)
         run: |
           cd soak
           mkdir build
           cd build
-          cmake -DLIBDATACHANNEL_LIBRARY_PATH=${{ github.workspace }}/libdatachannel/build/libdatachannel.so -DLIBDATACHANNEL_INCLUDE_PATH=${{ github.workspace }}/libdatachannel/include -DWEBRTC_NATIVE=ON ..
+          cmake -DLIBDATACHANNEL_LIBRARY_PATH=${{ github.workspace }}/libdatachannel/build/libdatachannel.so \
+            -DLIBDATACHANNEL_INCLUDE_PATH=${{ github.workspace }}/libdatachannel/include \
+          -DWEBRTC_NATIVE=ON -DUDP=ON -DCMAKE_BUILD_TYPE=Debug ..
           make
       - name: Compile soak test (web)
         run: ./bin/github-actions/build_soak_web.sh 
@@ -216,7 +215,7 @@ jobs:
           cd ..
           WEBRTC_NATIVE=1 timeout 240 ./bin/github-actions/run_soak.sh
 
-  compile-examples-linux-c:
+  compile-examples-udp-linux-c:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -225,10 +224,10 @@ jobs:
       - name: Compile examples
         run: |
           cd examples
-          cmake .
+          cmake -DEXAMPLES_UDP=ON .
           make
 
-  compile-examples-linux-cpp:
+  compile-examples-udp-linux-cpp:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -237,10 +236,10 @@ jobs:
       - name: Compile examples
         run: |
           cd examples
-          cmake -DCPP_COMPILE=ON .
+          cmake -DEXAMPLES_UDP=ON -DCPP_COMPILE=ON .
           make
 
-  compile-examples-osx-c:
+  compile-examples-udp-osx-c:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -249,10 +248,10 @@ jobs:
       - name: Compile examples
         run: |
           cd examples
-          cmake .
+          cmake -DEXAMPLES_UDP=ON .
           make
 
-  compile-examples-osx-cpp:
+  compile-examples-udp-osx-cpp:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -261,10 +260,10 @@ jobs:
       - name: Compile examples
         run: |
           cd examples
-          cmake -DCPP_COMPILE=ON .
+          cmake -DEXAMPLES_UDP=ON -DCPP_COMPILE=ON .
           make
 
-  compile-examples-windows-c:
+  compile-examples-udp-windows-c:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
@@ -272,10 +271,10 @@ jobs:
       - name: Compile examples
         run: |
           cd examples
-          cmake -G "NMake Makefiles" .
+          cmake -G "NMake Makefiles" -DEXAMPLES_UDP=ON .
           nmake
 
-  compile-examples-windows-cpp:
+  compile-examples-udp-windows-cpp:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
@@ -283,5 +282,5 @@ jobs:
       - name: Compile examples
         run: |
           cd examples
-          cmake -G "NMake Makefiles" -DCPP_COMPILE=ON .
+          cmake -G "NMake Makefiles" -DEXAMPLES_UDP=ON -DCPP_COMPILE=ON .
           nmake

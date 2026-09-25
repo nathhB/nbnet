@@ -66,7 +66,7 @@ mergeInto(LibraryManager.library, {
     },
 
     __js_game_server_send_packet_to: function (packetPtr, packetSize, peerId) {
-        const data = new Uint8Array(Module.HEAPU8.subarray(packetPtr, packetPtr + packetSize))
+        const data = new Uint8Array(HEAPU8.subarray(packetPtr, packetPtr + packetSize))
 
         this.gameServer.send(data, peerId)
     },
@@ -128,7 +128,7 @@ mergeInto(LibraryManager.library, {
     },
 
     __js_game_client_send_packet: function (packetPtr, packetSize) {
-        const data = new Uint8Array(Module.HEAPU8.subarray(packetPtr, packetPtr + packetSize))
+        const data = new Uint8Array(HEAPU8.subarray(packetPtr, packetPtr + packetSize))
 
         this.gameClient.send(data)
     },
