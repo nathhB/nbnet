@@ -33,15 +33,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/errno.h>
-#include <arpa/inet.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 
 #define NBN_PLATFORM_WINDOWS
 #define WIN32_LEAN_AND_MEAN
-// prevent inclusion of winnt.h in windows.h
-#define _WINNT_
 
 #include <winsock2.h>
 #include <windows.h>
@@ -91,7 +87,9 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/errno.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR -1

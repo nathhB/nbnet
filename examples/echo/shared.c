@@ -30,9 +30,6 @@
 #include <emscripten/emscripten.h>
 #elif defined(_WIN32) || defined(_WIN64)
 #define WIN32_LEAN_AND_MEAN
-// prevent inclusion of winnt.h in windows.h
-#define _WINNT_
-#include <synchapi.h>
 #include <windows.h>
 #else
 #include <time.h>
