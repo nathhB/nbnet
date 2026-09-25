@@ -25,13 +25,6 @@
 #ifndef SOAK_H_INCLUDED
 #define SOAK_H_INCLUDED
 
-#if defined(_WIN32) || defined(_WIN64)
-
-#include <windows.h>
-#include <winsock2.h>
-
-#endif
-
 #include <limits.h>
 #include <stdbool.h>
 #include "../nbnet.h"
