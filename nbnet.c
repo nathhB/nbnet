@@ -313,14 +313,59 @@ typedef struct NBN_Event {
  * ====== DATA STRUCTURES ======
  */
 
-typedef struct NBN_ConnectionListNode NBN_ConnectionListNode;
+typedef struct NBN_Dynamic_Array {
+	unsigned int capacity;
+	unsigned int count;
+	unsigned int elem_size;
+	void *items;
+} NBN_Dynamic_Array;
 
-/* Linked list of connections */
-struct NBN_ConnectionListNode {
-    NBN_Connection *conn;
-    NBN_ConnectionListNode *next;
-    NBN_ConnectionListNode *prev;
-};
+static void NBN_Dynamic_Array_Grow(NBN_Dynamic_Array *arr, unsigned int new_capacity) {
+	arr->items = realloc(arr->items, new_capacity * arr->elem_size);
+	arr->capacity = new_capacity;
+}
+
+static void NBN_Dynamic_Array_Init(NBN_Dynamic_Array *arr, unsigned int capacity, unsigned int elem_size) {
+	arr->count = 0;
+	arr->capacity = capacity;
+	arr->elem_size = elem_size;
+	arr->items = NULL;
+
+	NBN_Dynamic_Array_Grow(arr, capacity);
+}
+
+void NBN_Dynamic_Array_Deinit(NBN_Dynamic_Array *arr) {
+	free(arr->items);
+	arr->items = NULL;
+}
+
+static void NBN_Dynamic_Array_Add(NBN_Dynamic_Array *arr, void *item) {
+	if (arr->count == arr->capacity) {
+		NBN_Dynamic_Array_Grow(arr, arr->capacity * 2);
+	}
+
+	void *ptr = arr->items + (arr->count * arr->elem_size);
+
+	memcpy(ptr, item, arr->elem_size);
+	arr->count++;
+}
+
+static void *NBN_Dynamic_Array_GetAt(NBN_Dynamic_Array *arr, int index) {
+	if (index < 0 || index >= arr->count) {
+		return NULL;
+	}
+
+	return arr->items + (index * arr->elem_size);
+}
+
+static void NBN_Dynamic_Array_DeleteAt(NBN_Dynamic_Array *arr, int index) {
+	void *last_item = arr->items + ((arr->count - 1) * arr->elem_size);
+	void *ptr = arr->items + (index * arr->elem_size);
+
+	memcpy(ptr, last_item, arr->elem_size);
+
+	arr->count--;
+}
 
 typedef struct NBN_EventQueue {
     NBN_Event events[NBN_EVENT_QUEUE_CAPACITY];
@@ -353,7 +398,7 @@ static bool EventQueue_Dequeue(NBN_EventQueue *event_queue, NBN_Event *ev) {
     if (EventQueue_IsEmpty(event_queue))
         return false;
 
-    memcpy(ev, &event_queue->events[event_queue->head], sizeof(NBN_Event));
+    *ev = event_queue->events[event_queue->head];
     event_queue->head = (event_queue->head + 1) % NBN_EVENT_QUEUE_CAPACITY;
     event_queue->count--;
 
@@ -531,7 +576,7 @@ struct NBN_Server {
         NBN_Connection_ID key;
         NBN_Connection *value;
     } *clients;
-    NBN_ConnectionListNode *closed_clients_head;
+    NBN_Dynamic_Array closed_clients;
     NBN_ServerStats stats;
     NBN_Event last_event;
     NBN_Writer server_data_writer;
@@ -2651,10 +2696,9 @@ static int Client_ExtractHostname(const char *input, char *out_hostname, size_t 
 
 static void Server_AddClient(NBN_Server *, NBN_Connection *);
 static int Server_CloseClientWithCode(NBN_Server *, NBN_Connection *, int, bool);
-static void Server_AddClientToClosedList(NBN_Server *, NBN_Connection *);
 static int Server_ProcessReceivedMessage(NBN_Server *, NBN_Message *);
 static int Server_CloseStaleClientConnections(NBN_Server *);
-static void Server_RemoveClosedClientConnections(NBN_Server *);
+static void Server_DestroyClosedClientConnections(NBN_Server *);
 static bool Server_HandleEvent(NBN_Server *, NBN_Event_Type *);
 static bool Server_HandleMessageReceivedEvent(NBN_Server *, NBN_Message *, NBN_Event_Type *);
 
@@ -2674,6 +2718,8 @@ NBN_Server *NBN_Server_Create(const char *protocol_name, uint16_t port) {
     server->driver_data.webrtc.ws_server = -1;
     server->driver_data.webrtc.cfg = NBN_WEBRTC_DEFAULT_CONFIG;
 #endif // defined(__EMSCRIPTEN__) || defined(NBN_WEBRTC_NATIVE)
+
+    NBN_Dynamic_Array_Init(&server->closed_clients, 8, sizeof(NBN_Connection *));
 
     return server;
 }
@@ -2744,8 +2790,6 @@ int NBN_Server_Start(NBN_Server *server) {
 
     Endpoint_Init(&server->endpoint, protocol_id, true, config.channels, config.channel_count);
 
-    server->closed_clients_head = NULL;
-
     int driver_count = StartServerDrivers(server, port);
 
     if (driver_count < 1) {
@@ -2784,18 +2828,7 @@ void NBN_Server_Stop(NBN_Server *server) {
     nbn_webrtc_em_driver.impl.serv_stop(server);
 #endif // __EMSCRIPTEN__
 
-    // Free closed clients list
-    NBN_ConnectionListNode *current = server->closed_clients_head;
-
-    while (current) {
-        NBN_ConnectionListNode *next = current->next;
-
-        free(current);
-
-        current = next;
-    }
-
-    server->closed_clients_head = NULL;
+    NBN_Dynamic_Array_Deinit(&server->closed_clients);
     Endpoint_Deinit(&server->endpoint);
     free(server);
 
@@ -2893,7 +2926,7 @@ NBN_Event_Type NBN_Server_Poll(NBN_Server *server) {
             client->last_read_packets_time = endpoint->time;
         }
 
-        Server_RemoveClosedClientConnections(server);
+        Server_DestroyClosedClientConnections(server);
     }
 
     NBN_Event_Type ev;
@@ -2910,7 +2943,7 @@ NBN_Event_Type NBN_Server_Poll(NBN_Server *server) {
 int NBN_Server_Flush(NBN_Server *server) {
     server->stats.upload_bandwidth = 0;
 
-    Server_RemoveClosedClientConnections(server);
+    Server_DestroyClosedClientConnections(server);
 
     for (ptrdiff_t i = 0; i < hmlen(server->clients); i++) {
         NBN_Connection *client = server->clients[i].value;
@@ -3095,16 +3128,20 @@ static int Server_CloseClientWithCode(NBN_Server *server, NBN_Connection *client
     if (client->is_stale) {
         LogDebug("Closing stale connection %lld", client->handle.id);
 
-        Server_AddClientToClosedList(server, client);
-        client->is_closed = true;
+        if (!client->is_closed) {
+            NBN_Dynamic_Array_Add(&server->closed_clients, client);
+            client->is_closed = true;
+        }
 
         return 0;
     }
 
     LogDebug("Closing active connection %lld (will send a disconnection message)", client->handle.id);
 
-    Server_AddClientToClosedList(server, client);
-    client->is_closed = true;
+    if (!client->is_closed) {
+        NBN_Dynamic_Array_Add(&server->closed_clients, client);
+        client->is_closed = true;
+    }
 
     if (!disconnection) {
         LogDebug("Send close message for client %lld (code: %d)", client->handle.id, code);
@@ -3123,32 +3160,6 @@ static int Server_CloseClientWithCode(NBN_Server *server, NBN_Connection *client
     }
 
     return 0;
-}
-
-static void Server_AddClientToClosedList(NBN_Server *server, NBN_Connection *client) {
-    if (client->is_closed)
-        return;
-
-    // TODO: do we need to use a linked list, maybe use stb dynamic array?
-    NBN_ConnectionListNode *node = (NBN_ConnectionListNode *)malloc(sizeof(NBN_ConnectionListNode));
-
-    node->conn = client;
-    node->next = NULL;
-
-    if (server->closed_clients_head == NULL) {
-        // list is empty
-        server->closed_clients_head = node;
-        node->prev = NULL;
-    } else {
-        // list is not empty, add node at the end
-        NBN_ConnectionListNode *tail = server->closed_clients_head;
-
-        while (tail->next != NULL)
-            tail = tail->next;
-
-        node->prev = tail;
-        tail->next = node;
-    }
 }
 
 static int Server_ProcessReceivedMessage(NBN_Server *server, NBN_Message *message) {
@@ -3179,54 +3190,38 @@ static int Server_CloseStaleClientConnections(NBN_Server *server) {
     return 0;
 }
 
-static void Server_RemoveClosedClientConnections(NBN_Server *server) {
-    NBN_ConnectionListNode *current = server->closed_clients_head;
+static void Server_DestroyClosedClientConnections(NBN_Server *server) {
+    // loop until there is no more connections to destroy
+    while (true) {
+        unsigned int delete_index = -1;
 
-    while (current) {
-        NBN_ConnectionListNode *prev = current->prev;
-        NBN_ConnectionListNode *next = current->next;
-        NBN_Connection *client = current->conn;
+        for (unsigned int i = 0; i < server->closed_clients.count; i++) {
+            NBN_Connection *client = (NBN_Connection *)NBN_Dynamic_Array_GetAt(&server->closed_clients, i);
 
-        NBN_Assert(client->handle.id > 0);
+            NBN_Assert(client->handle.id > 0);
 
-        if (client->is_stale) {
-            LogDebug("Remove closed client connection (ID: %lld)", client->handle.id);
+            if (client->is_stale) {
+                LogDebug("Remove closed client connection (ID: %lld)", client->handle.id);
 
-            // Notify the driver to clean up the connection
-            client->driver->impl.serv_cleanup_connection(server, client);
+                client->driver->impl.serv_cleanup_connection(server, client);
 
-            int ret = hmdel(server->clients, client->handle.id);
-            NBN_Assert(ret == 1);
+                int ret = hmdel(server->clients, client->handle.id);
+                NBN_Assert(ret == 1);
 
-            // Destroy the connection
-
-            Connection_Destroy(client);
-
-            // Remove the connection from the closed clients list
-
-            free(current);
-
-            if (current == server->closed_clients_head) {
-                // delete the head of the list
-                NBN_ConnectionListNode *new_head = next;
-
-                if (new_head) {
-                    new_head->prev = NULL;
-                }
-
-                server->closed_clients_head = new_head;
-            } else {
-                // delete a node in the middle of the list
-                prev->next = next;
-
-                if (next)
-                    next->prev = prev;
+                Connection_Destroy(client);
+                delete_index = i;
+                break;
             }
         }
 
-        current = next;
+        if (delete_index < 0) {
+            break;
+        }
+
+        NBN_Dynamic_Array_DeleteAt(&server->closed_clients, delete_index);
     }
 }
+
 
 static bool Server_HandleEvent(NBN_Server *server, NBN_Event_Type *ev) {
     if (server->last_event.type == EV_MESSAGE_RECEIVED) {
