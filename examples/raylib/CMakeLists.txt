@@ -4,14 +4,10 @@ project(raylib_example C)
 
 set(raylib_DIR cmake)
 
-set(CLIENT_SOURCES client.c shared.c)
-set(SERVER_SOURCES server.c shared.c)
+set(CLIENT_SOURCES client.c shared.c ../../nbnet.c)
+set(SERVER_SOURCES server.c shared.c ../../nbnet.c)
 
-add_compile_options(-Wall -Wno-unknown-pragmas -Wno-type-limits -std=c99)
-
-if(CMAKE_COMPILER_IS_GNUCXX)
-    add_compile_options(-Wextra -Wpedantic)
-endif (CMAKE_COMPILER_IS_GNUCXX)
+add_compile_options(-Wall -Wextra -std=c99 -Wno-gnu-zero-variadic-macro-arguments)
 
 add_executable(raylib_client ${CLIENT_SOURCES})
 add_executable(raylib_server ${SERVER_SOURCES})
@@ -35,11 +31,20 @@ target_compile_definitions(raylib_client PUBLIC NBN_DEBUG)
 target_compile_definitions(raylib_server PUBLIC NBN_DEBUG)
 target_compile_definitions(raylib_server PUBLIC NBN_RAYLIB_SERVER)
 
-target_compile_definitions(raylib_client PUBLIC _GNU_SOURCE)
-target_compile_definitions(raylib_server PUBLIC _GNU_SOURCE)
+if (UDP)
+  # can't compile UDP driver with emscripten
+  if (EMSCRIPTEN)
+    message(SEND_ERROR "Can't compile UDP driver with emscripten")
+  endif (EMSCRIPTEN)
+
+  message("Compiling with UDP driver")
+
+  target_compile_definitions(raylib_server PUBLIC NBN_UDP)
+  target_compile_definitions(raylib_client PUBLIC NBN_UDP)
+endif (UDP)
 
 # compile with C WebRTC driver
-if (WEBRTC_C_DRIVER)
+if (WEBRTC_NATIVE)
   # can't compile WebRTC native driver with emscripten
   if (EMSCRIPTEN)
     message(SEND_ERROR "Can't compile WebRTC native driver with emscripten")
@@ -49,13 +54,8 @@ if (WEBRTC_C_DRIVER)
 
   target_compile_definitions(raylib_server PUBLIC SOAK_WEBRTC_C_DRIVER)
 
-  target_link_libraries(raylib_server ${LIBFACILIO_LIBRARY_PATH})
-  target_link_libraries(raylib_server ${LIBCRYPTO_LIBRARY_PATH})
-  target_link_libraries(raylib_server ${LIBSSL_LIBRARY_PATH})
   target_link_libraries(raylib_server ${LIBDATACHANNEL_LIBRARY_PATH})
 
-  target_include_directories(raylib_server PUBLIC "${LIBFACILIO_INCLUDE_PATH}")
-  target_include_directories(raylib_server PUBLIC "${OPENSSL_INCLUDE_PATH}")
   target_include_directories(raylib_server PUBLIC "${LIBDATACHANNEL_INCLUDE_PATH}")
 
   if (USE_HTTPS)
@@ -63,9 +63,9 @@ if (WEBRTC_C_DRIVER)
     target_compile_definitions(raylib_server PUBLIC NBN_HTTPS_KEY_PEM="localhost.key")
     target_compile_definitions(raylib_server PUBLIC NBN_HTTPS_CERT_PEM="localhost.crt")
   endif (USE_HTTPS)
-endif (WEBRTC_C_DRIVER)
+endif (WEBRTC_NATIVE)
 
-unset(WEBRTC_C_DRIVER)
+unset(WEBRTC_NATIVE)
 
 # Use HTTPS (for WebRTC drivers)
 if (USE_HTTPS)
@@ -80,16 +80,17 @@ unset(USE_HTTPS)
 if (EMSCRIPTEN)
     set(ASYNCIFY_IMPORTS "[\"__js_game_server_start\", \"__js_game_client_start\", \"__js_game_client_close\"]")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s ALLOW_MEMORY_GROWTH=1 -s TOTAL_MEMORY=30MB -s EXIT_RUNTIME=1 -s ASSERTIONS=1 -s ASYNCIFY -s ASYNCIFY_IMPORTS=\"${ASYNCIFY_IMPORTS}\"")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --js-library ${CMAKE_CURRENT_SOURCE_DIR}/../../net_drivers/webrtc/js/api.js")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --js-library ${CMAKE_CURRENT_SOURCE_DIR}/../../webrtc/js/api.js")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s USE_GLFW=3 --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/shell.html")
     set_target_properties(raylib_client PROPERTIES SUFFIX ".html")
 
     add_custom_command(
         TARGET raylib_client
         POST_BUILD
-        COMMAND browserify ${CMAKE_CURRENT_SOURCE_DIR}/../../net_drivers/webrtc/js/nbnet.js -o nbnet_bundle.js)
+        COMMAND browserify ${CMAKE_CURRENT_SOURCE_DIR}/../../webrtc/js/nbnet.js -o nbnet_bundle.js)
 endif()
 
 if (APPLE)
   target_link_libraries(raylib_client "-framework OpenGL -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo")
+  target_link_libraries(raylib_server "-framework OpenGL -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo")
 endif (APPLE)

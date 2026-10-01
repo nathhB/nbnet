@@ -1,4 +1,3 @@
-*.js
 *.wasm
 .vscode
 .ccls
@@ -18,3 +17,7 @@ _deps
 build
 build_web
 .DS_Store
+.clangd
+.clang-format
+.cache
+compile_flags.txt
