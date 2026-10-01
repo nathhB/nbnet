@@ -344,23 +344,23 @@ static void NBN_Dynamic_Array_Add(NBN_Dynamic_Array *arr, void *item) {
 		NBN_Dynamic_Array_Grow(arr, arr->capacity * 2);
 	}
 
-	void *ptr = arr->items + (arr->count * arr->elem_size);
+	void *ptr = (uint8_t *)arr->items + (arr->count * arr->elem_size);
 
 	memcpy(ptr, item, arr->elem_size);
 	arr->count++;
 }
 
-static void *NBN_Dynamic_Array_GetAt(NBN_Dynamic_Array *arr, int index) {
+static void *NBN_Dynamic_Array_GetAt(NBN_Dynamic_Array *arr, unsigned int index) {
 	if (index < 0 || index >= arr->count) {
 		return NULL;
 	}
 
-	return arr->items + (index * arr->elem_size);
+	return (uint8_t *)arr->items + (index * arr->elem_size);
 }
 
 static void NBN_Dynamic_Array_DeleteAt(NBN_Dynamic_Array *arr, int index) {
-	void *last_item = arr->items + ((arr->count - 1) * arr->elem_size);
-	void *ptr = arr->items + (index * arr->elem_size);
+	void *last_item = (uint8_t *)arr->items + ((arr->count - 1) * arr->elem_size);
+	void *ptr = (uint8_t *)arr->items + (index * arr->elem_size);
 
 	memcpy(ptr, last_item, arr->elem_size);
 
